@@ -1,0 +1,2510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Module 2: Collection Eco System — Goa DRS Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230EA5E9'><rect width='24' height='24' rx='4'/><path d='M6 12l4 4 8-8' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <style>
+/* ========================================
+   Goa DRS Training — Catalyst Design System
+   ======================================== */
+
+/* --- Design Tokens --- */
+:root {
+  --bg: #FFFFFF;
+  --surface: #F8FAFC;
+  --accent: #0EA5E9;
+  --accent-light: #E0F2FE;
+  --accent-dark: #0284C7;
+  --success: #22C55E;
+  --success-light: #DCFCE7;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --error: #EF4444;
+  --error-light: #FEF2F2;
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --text-light: #94A3B8;
+  --border: #E2E8F0;
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --topbar-h: 64px;
+  --sidebar-w: 300px;
+  --content-max: 800px;
+  --transition: 0.2s ease;
+}
+
+/* --- Reset & Base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* --- Typography --- */
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.3; }
+h1 { font-size: 28px; font-weight: 800; }
+h2 { font-size: 22px; }
+h3 { font-size: 18px; }
+h4 { font-size: 16px; font-weight: 600; }
+p { margin-bottom: 12px; }
+strong { font-weight: 600; }
+
+.mono { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+.mono-bold { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+/* --- Layout: Shell --- */
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* --- Topbar --- */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 100;
+}
+
+.topbar-brand { display: flex; align-items: center; gap: 12px; }
+
+.topbar-logo {
+  width: 36px; height: 36px;
+  background: var(--accent); border-radius: var(--radius-xs);
+  display: flex; align-items: center; justify-content: center;
+}
+.topbar-logo svg { width: 20px; height: 20px; fill: none; stroke: white; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.topbar-title { font-size: 16px; font-weight: 700; color: var(--text); }
+
+.topbar-stats { display: flex; align-items: center; gap: 20px; }
+
+.stat-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 700; color: var(--text);
+}
+.stat-badge .icon { font-size: 16px; }
+.stat-badge.xp { color: var(--accent); }
+.stat-badge.stars { color: var(--warning); }
+
+/* --- Layout: Body --- */
+.app-body { display: flex; margin-top: var(--topbar-h); min-height: calc(100vh - var(--topbar-h)); }
+
+/* --- Sidebar --- */
+.sidebar {
+  width: var(--sidebar-w); background: var(--bg);
+  border-right: 1px solid var(--border);
+  padding: 24px 20px;
+  position: fixed; top: var(--topbar-h); left: 0; bottom: 0;
+  overflow-y: auto; z-index: 50;
+}
+
+.sidebar-header { margin-bottom: 8px; }
+
+.sidebar-module-tag {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--accent-dark); background: var(--accent-light);
+  padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 8px;
+}
+.sidebar-module-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.sidebar-progress-text { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+/* --- Sidebar: Progress Bar --- */
+.progress-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin-bottom: 24px; }
+.progress-bar-fill { height: 100%; background: var(--accent); border-radius: 5px; transition: width 0.4s ease; }
+
+/* --- Sidebar: Chapter Path --- */
+.chapter-path { list-style: none; }
+
+.chapter-node {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 10px 0; cursor: pointer; position: relative;
+  transition: opacity var(--transition);
+}
+.chapter-node.locked { opacity: 0.5; cursor: not-allowed; }
+
+.chapter-node:not(:last-child)::after {
+  content: ''; position: absolute; left: 17px; top: 44px; bottom: -10px;
+  width: 2px; background: var(--border);
+}
+.chapter-node.completed:not(:last-child)::after { background: var(--success); }
+.chapter-node.active:not(:last-child)::after { background: var(--accent); }
+
+.node-circle {
+  width: 36px; height: 36px; min-width: 36px; border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+  color: var(--text-muted); background: var(--bg); transition: all var(--transition);
+}
+.chapter-node.active .node-circle { border-color: var(--accent); background: var(--accent); color: white; }
+.chapter-node.completed .node-circle { border-color: var(--success); background: var(--success); color: white; }
+
+.node-circle .check-icon { display: none; }
+.chapter-node.completed .node-circle .check-icon { display: block; }
+.chapter-node.completed .node-circle .node-number { display: none; }
+
+.node-info { flex: 1; padding-top: 2px; }
+.node-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.chapter-node.locked .node-title { color: var(--text-light); }
+.node-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+.node-stars { color: var(--warning); letter-spacing: 1px; }
+
+/* --- Main Content Area --- */
+.main-content {
+  flex: 1; margin-left: var(--sidebar-w); padding: 32px;
+  display: flex; justify-content: center;
+}
+.content-wrapper { width: 100%; max-width: var(--content-max); }
+
+/* --- Cards --- */
+.card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 24px; margin-bottom: 16px; transition: all var(--transition);
+}
+.card:hover { box-shadow: var(--shadow-md); }
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 24px; border-radius: var(--radius-sm);
+  font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; transition: all var(--transition); text-decoration: none;
+}
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-primary:disabled { background: var(--border); color: var(--text-light); cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-outline { background: transparent; color: var(--text); border: 2px solid var(--border); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { background: #16a34a; }
+.btn-lg { padding: 14px 32px; font-size: 16px; }
+.btn-sm { padding: 8px 16px; font-size: 13px; }
+.btn-block { width: 100%; }
+
+/* --- Tags / Pills --- */
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.tag-accent { background: var(--accent-light); color: var(--accent-dark); }
+.tag-success { background: var(--success-light); color: #15803d; }
+.tag-warning { background: var(--warning-light); color: #92400e; }
+
+/* --- Chapter View --- */
+.chapter-view { display: none; }
+.chapter-view.active { display: block; }
+.chapter-header { margin-bottom: 16px; }
+.chapter-tag { margin-bottom: 8px; }
+.chapter-title { font-size: 26px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.chapter-meta { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-muted); }
+.chapter-meta .icon { margin-right: 4px; }
+
+/* ========================================
+   Chapter Progress Bar (segments)
+   ======================================== */
+
+.chapter-progress {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.progress-seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.4s ease, opacity 0.4s ease;
+}
+
+.progress-seg.filled { background: var(--accent); }
+.progress-seg.current { background: var(--accent); opacity: 0.4; }
+.progress-seg.quiz-correct { background: var(--success); }
+.progress-seg.quiz-wrong { background: var(--warning); }
+
+/* ========================================
+   Content Carousel
+   ======================================== */
+
+.carousel-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.carousel-header {
+  padding: 20px 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chunk-counter {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  background: var(--accent-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.chunk-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.carousel-body {
+  padding: 20px 24px;
+}
+
+.carousel-body p { margin-bottom: 14px; font-size: 15px; line-height: 1.75; color: var(--text); }
+.carousel-body p:last-child { margin-bottom: 0; }
+.carousel-body strong { font-weight: 600; color: var(--text); }
+.carousel-body ol, .carousel-body ul { margin: 12px 0 16px 24px; font-size: 15px; line-height: 1.75; }
+.carousel-body li { margin-bottom: 6px; }
+.carousel-body em { font-style: italic; color: var(--text-muted); font-size: 13px; }
+
+/* Inline image in content */
+.content-image {
+  display: block;
+  max-width: 220px;
+  margin: 16px auto;
+  border-radius: var(--radius-xs);
+}
+
+/* Wider image for operational photos */
+.content-image-wide {
+  display: block;
+  max-width: 360px;
+  width: 100%;
+  margin: 16px auto;
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow);
+}
+
+/* Key Insight (shown on last chunk) */
+.key-insight {
+  background: var(--accent-light);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  padding: 16px 20px;
+  margin: 4px 24px 20px;
+}
+.key-insight-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent-dark); margin-bottom: 6px;
+}
+.key-insight-text { font-size: 15px; font-weight: 500; color: var(--text); font-style: italic; }
+
+.carousel-nav {
+  padding: 0 24px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Slide animation */
+.chunk-slide-right { animation: slideInRight 0.3s ease; }
+.chunk-slide-left { animation: slideInLeft 0.3s ease; }
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ========================================
+   Quiz Ready Transition
+   ======================================== */
+
+.quiz-ready-section {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.quiz-ready-section .ready-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.quiz-ready-section h3 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.quiz-ready-section p {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+/* --- Timer Bar --- */
+.timer-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+.timer-display { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--text); }
+.timer-par { font-size: 12px; color: var(--text-muted); }
+
+/* ========================================
+   Quiz Section (Sequential)
+   ======================================== */
+
+.quiz-section { margin-top: 0; }
+
+.quiz-progress {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.quiz-progress-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+
+.quiz-progress-dots { display: flex; gap: 8px; }
+.quiz-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--border); transition: all 0.3s ease;
+}
+.quiz-dot.current { background: var(--accent); transform: scale(1.3); box-shadow: 0 0 0 3px var(--accent-light); }
+.quiz-dot.correct { background: var(--success); }
+.quiz-dot.wrong { background: var(--error); }
+
+/* --- Question Card --- */
+.question-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
+  transition: border-color var(--transition);
+}
+.question-card.answered-correct { border-color: var(--success); }
+.question-card.answered-wrong { border-color: var(--error); }
+
+.question-number {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent-dark); margin-bottom: 8px;
+}
+.question-text { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 16px; line-height: 1.5; }
+
+/* --- Quiz Options --- */
+.options-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+
+.option-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px 16px; border: 2px solid var(--border); border-radius: 14px;
+  background: var(--bg); cursor: pointer; transition: all var(--transition);
+  text-align: left; font-family: 'Poppins', sans-serif; font-size: 14px; color: var(--text);
+}
+.option-btn:hover:not(.disabled) { border-color: var(--accent); background: var(--accent-light); }
+.option-btn.selected { border-color: var(--accent); background: var(--accent-light); }
+.option-btn.correct { border-color: var(--success); background: var(--success-light); cursor: default; }
+.option-btn.wrong { border-color: var(--error); background: var(--error-light); cursor: default; }
+.option-btn.disabled { cursor: default; opacity: 0.6; }
+.option-btn.disabled.correct { opacity: 1; }
+
+.option-letter {
+  width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px; color: var(--text-muted); transition: all var(--transition);
+}
+.option-btn.correct .option-letter { background: var(--success); color: white; }
+.option-btn.wrong .option-letter { background: var(--error); color: white; }
+
+.option-text { flex: 1; font-size: 14px; line-height: 1.4; }
+
+/* ========================================
+   Explanation — Color-Coded Callout
+   ======================================== */
+
+.explanation {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: var(--radius-xs);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  display: none;
+  border-left: 4px solid var(--border);
+  background: var(--surface);
+}
+
+.explanation.visible { display: block; animation: fadeIn 0.3s ease; }
+
+.explanation.correct-exp {
+  background: var(--success-light);
+  border-left-color: var(--success);
+}
+
+.explanation.wrong-exp {
+  background: var(--error-light);
+  border-left-color: var(--error);
+}
+
+.exp-prefix {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.exp-prefix.correct { color: #15803d; }
+.exp-prefix.wrong { color: var(--error); }
+
+/* --- Ordering Question --- */
+.order-list { list-style: none; display: flex; flex-direction: column; gap: 8px; counter-reset: order-counter; }
+
+.order-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border: 2px solid var(--border); border-radius: 14px;
+  background: var(--bg); cursor: grab; transition: all var(--transition);
+  font-size: 14px; user-select: none;
+}
+.order-item:active { cursor: grabbing; }
+
+.order-item .order-num {
+  width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; color: var(--text-muted);
+}
+.order-item.correct-position { border-color: var(--success); background: var(--success-light); }
+.order-item.correct-position .order-num { background: var(--success); color: white; }
+.order-item.wrong-position { border-color: var(--error); background: var(--error-light); }
+.order-item.dragging { opacity: 0.5; border-color: var(--accent); }
+.order-item.drag-over { border-color: var(--accent); background: var(--accent-light); }
+
+/* --- Retry Transition --- */
+.retry-transition { text-align: center; padding: 40px 20px; animation: slideUp 0.4s ease; }
+.retry-transition .retry-icon { font-size: 48px; margin-bottom: 16px; }
+.retry-transition h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.retry-transition p { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
+.retry-transition .retry-round-info { font-size: 12px; color: var(--text-light); margin-bottom: 24px; }
+
+/* --- Retry Banner --- */
+.retry-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; background: var(--warning-light);
+  border-radius: var(--radius-xs); margin-bottom: 20px;
+  font-size: 14px; font-weight: 500; color: #92400e;
+  animation: fadeIn 0.3s ease;
+}
+.retry-banner .icon { font-size: 18px; }
+
+.quiz-actions { margin-top: 20px; }
+.question-enter { animation: slideUp 0.3s ease; }
+
+/* ========================================
+   Completion Overlay
+   ======================================== */
+
+.completion-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(8px);
+  z-index: 200; align-items: center; justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+.completion-overlay.visible { display: flex; }
+
+.completion-card {
+  background: var(--bg); border-radius: 20px; padding: 40px;
+  max-width: 440px; width: 90%; text-align: center;
+  box-shadow: var(--shadow-lg); animation: slideUp 0.4s ease;
+}
+
+/* Mascot placeholder */
+.mascot-area { margin-bottom: 12px; }
+.mascot-img {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--accent-light);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 42px;
+}
+
+.completion-stars { font-size: 36px; margin-bottom: 12px; letter-spacing: 4px; }
+.completion-title { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.completion-message { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; line-height: 1.6; }
+
+.completion-stats { display: flex; justify-content: center; gap: 24px; margin-bottom: 24px; }
+.completion-stat { text-align: center; }
+.completion-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--text); }
+.completion-stat-value.xp { color: var(--accent); }
+.completion-stat-value.time { color: var(--text); }
+.completion-stat-value.speed { color: var(--warning); }
+.completion-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+/* --- Module Overview --- */
+.module-overview { display: none; }
+.module-overview.active { display: block; }
+
+.module-hero { margin-bottom: 32px; }
+.module-hero-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.module-hero-desc { font-size: 15px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px; }
+
+.module-stats-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.module-stat-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: var(--surface);
+  border-radius: 20px; font-size: 13px; color: var(--text-muted);
+}
+.module-stat-pill .icon { font-size: 14px; }
+
+/* --- Chapter List Cards (Overview) --- */
+.chapter-list-card {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 12px; cursor: pointer; transition: all var(--transition);
+}
+.chapter-list-card:hover:not(.locked) { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.chapter-list-card.locked { opacity: 0.5; cursor: not-allowed; }
+.chapter-list-card.completed { border-color: var(--success); background: linear-gradient(to right, var(--success-light), var(--bg)); }
+
+.chapter-list-num {
+  width: 40px; height: 40px; min-width: 40px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; color: var(--text-muted);
+}
+.chapter-list-card.completed .chapter-list-num { background: var(--success); color: white; }
+.chapter-list-card.active .chapter-list-num { background: var(--accent); color: white; }
+
+.chapter-list-info { flex: 1; }
+.chapter-list-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.chapter-list-meta { font-size: 12px; color: var(--text-muted); }
+.chapter-list-right { display: flex; align-items: center; gap: 8px; }
+.chapter-list-stars { font-size: 14px; color: var(--warning); letter-spacing: 2px; }
+.chapter-list-arrow { color: var(--text-light); font-size: 18px; }
+
+/* --- Module Complete View --- */
+.module-complete { display: none; text-align: center; padding: 40px 0; }
+.module-complete.active { display: block; }
+.module-complete-badge {
+  width: 100px; height: 100px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 24px; font-size: 48px;
+  box-shadow: 0 4px 20px rgba(14, 165, 233, 0.3);
+}
+.module-complete-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.module-complete-subtitle { font-size: 15px; color: var(--text-muted); margin-bottom: 32px; }
+
+/* --- Sprint Tracker --- */
+.sprint-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; background: var(--warning-light);
+  border-radius: var(--radius-xs); font-size: 12px; font-weight: 600;
+  color: #92400e; margin-bottom: 24px;
+}
+.sprint-bar .icon { font-size: 14px; }
+
+/* --- Animations --- */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+.animate-in { animation: slideUp 0.3s ease; }
+
+/* --- Mobile --- */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { display: none; }
+  .sidebar.mobile-open { display: block; width: 280px; box-shadow: var(--shadow-lg); }
+  .main-content { margin-left: 0; padding: 20px 16px; }
+  .topbar { padding: 0 16px; }
+  .mobile-menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border: none; background: none;
+    cursor: pointer; font-size: 20px; color: var(--text);
+  }
+  .completion-card { padding: 28px 20px; }
+  .completion-stats { gap: 16px; }
+  .chapter-title { font-size: 22px; }
+  h1 { font-size: 24px; }
+  .carousel-header { padding: 16px 16px 0; }
+  .carousel-body { padding: 16px; }
+  .carousel-nav { padding: 0 16px 16px; }
+  .key-insight { margin: 4px 16px 16px; }
+  .content-image-wide { max-width: 100%; }
+}
+
+@media (min-width: 769px) { .mobile-menu-btn { display: none; } }
+
+/* --- Utility --- */
+.hidden { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- === TOPBAR === -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <button class="mobile-menu-btn" aria-label="Menu">&#9776;</button>
+        <div class="topbar-logo">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <span class="topbar-title">Goa DRS Training</span>
+      </div>
+      <div class="topbar-stats">
+        <div class="stat-badge xp"><span class="icon">&#9889;</span> <span id="xp-value">0</span> XP</div>
+        <div class="stat-badge stars"><span class="icon">&#9733;</span> <span id="stars-value">0</span></div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- === SIDEBAR === -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-module-tag">Module 2</span>
+          <div class="sidebar-module-title">Collection Eco System</div>
+          <div class="sidebar-progress-text">0 of 7 chapters</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <ul class="chapter-path"></ul>
+        <div style="margin-top: 24px;">
+          <button class="btn btn-outline btn-sm btn-block" onclick="App.goToOverview()">&#8592; Module Overview</button>
+        </div>
+      </nav>
+
+      <!-- === MAIN CONTENT === -->
+      <main class="main-content">
+        <div class="content-wrapper">
+
+          <!-- Sprint Bar -->
+          <div class="sprint-bar hidden"></div>
+
+          <!-- === MODULE OVERVIEW === -->
+          <div class="module-overview active">
+            <div class="module-hero">
+              <h1 class="module-hero-title">Module 2: Collection Eco System</h1>
+              <p class="module-hero-desc">
+                Understand how Goa's waste flows today, then see how DRS layers a digital collection network on top. Four types of collection points, partner models, ragpicker integration, HoReCa pickups, and the phased deployment plan.
+              </p>
+              <div class="module-stats-row">
+                <div class="module-stat-pill"><span class="icon">&#128214;</span> 7 chapters</div>
+                <div class="module-stat-pill"><span class="icon">&#10067;</span> 21 questions</div>
+                <div class="module-stat-pill"><span class="icon">&#9201;</span> ~35 minutes</div>
+                <div class="module-stat-pill"><span class="icon">&#9889;</span> 660 XP possible</div>
+              </div>
+            </div>
+            <div id="chapter-list"></div>
+          </div>
+
+          <!-- === CHAPTER VIEW === -->
+          <div class="chapter-view">
+            <!-- Chapter Header -->
+            <div class="chapter-header">
+              <span class="tag tag-accent chapter-tag">Chapter 1 of 7</span>
+              <h2 class="chapter-title">Loading...</h2>
+              <div class="chapter-meta"></div>
+            </div>
+
+            <!-- Timer -->
+            <div class="timer-bar">
+              <div>
+                <span style="font-size:13px; color: var(--text-muted);">&#9201; </span>
+                <span class="timer-display mono-bold">0:00</span>
+              </div>
+              <div class="timer-par">Par: 5:00</div>
+            </div>
+
+            <!-- Progress Bar (segments) -->
+            <div class="chapter-progress" id="chapter-progress"></div>
+
+            <!-- Content Carousel -->
+            <div class="carousel-card" id="carousel-card">
+              <div class="carousel-header">
+                <span class="chunk-counter" id="chunk-counter">1 of 4</span>
+                <h3 class="chunk-title" id="chunk-title">Loading...</h3>
+              </div>
+              <div class="carousel-body" id="chunk-content"></div>
+              <div class="key-insight hidden" id="carousel-insight">
+                <div class="key-insight-label">&#128161; Key Insight</div>
+                <div class="key-insight-text" id="carousel-insight-text"></div>
+              </div>
+              <div class="carousel-nav">
+                <button class="btn btn-outline btn-sm" id="chunk-prev" onclick="App.prevChunk()">&#8592; Back</button>
+                <button class="btn btn-primary" id="chunk-next" onclick="App.nextChunk()">Next &#8594;</button>
+              </div>
+            </div>
+
+            <!-- Quiz Ready Transition -->
+            <div class="quiz-ready-section card hidden" id="quiz-ready">
+              <div class="ready-icon">&#127919;</div>
+              <h3>Ready for the quiz?</h3>
+              <p>3 questions about what you just read. Get them all right on the first try for 3 stars.</p>
+              <button class="btn btn-primary btn-lg" onclick="App.startQuiz()">Let's go &#8594;</button>
+            </div>
+
+            <!-- Quiz Sequential (hidden until started) -->
+            <div class="quiz-section hidden" id="quiz-section">
+              <div class="quiz-progress">
+                <span class="quiz-progress-text" id="quiz-progress-text">Question 1 of 3</span>
+                <div class="quiz-progress-dots" id="quiz-dots"></div>
+              </div>
+
+              <div class="retry-banner hidden" id="retry-banner">
+                <span class="icon">&#128260;</span>
+                <span id="retry-text">Let's revisit the ones you missed.</span>
+              </div>
+
+              <div id="current-question"></div>
+
+              <div class="quiz-actions">
+                <button class="btn btn-primary btn-lg btn-block" id="quiz-check-btn" disabled onclick="App.checkAnswer()">Check Answer</button>
+                <button class="btn btn-success btn-lg btn-block hidden" id="quiz-continue-btn" onclick="App.continueQuiz()">Continue &#8594;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- === MODULE COMPLETE === -->
+          <div class="module-complete">
+            <div class="module-complete-badge">&#127891;</div>
+            <h1 class="module-complete-title">Module 2 Complete!</h1>
+            <p class="module-complete-subtitle"></p>
+            <div class="completion-stats"></div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 24px;">
+              You now understand the full collection ecosystem. Next up: Module 3 — Collection Devices & Other Hardware.
+            </p>
+            <a href="/static/training/module-3/index.html" class="btn-next-module" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#0EA5E9;color:#fff;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;transition:background 0.2s;">Start Module 3 →</a>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- === COMPLETION OVERLAY === -->
+  <div class="completion-overlay">
+    <div class="completion-card">
+      <div class="mascot-area"><div class="mascot-img" id="mascot-img">&#127881;</div></div>
+      <div class="completion-stars">&#9733;&#9733;&#9733;</div>
+      <h2 class="completion-title">Perfect!</h2>
+      <p class="completion-message">You absolutely crushed it!</p>
+      <div class="completion-stats">
+        <div class="completion-stat">
+          <div class="completion-stat-value xp">+80</div>
+          <div class="completion-stat-label">XP Earned</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value time">2:30</div>
+          <div class="completion-stat-label">Time</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value speed">&#9889; Under par!</div>
+          <div class="completion-stat-label">Speed</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+        <button class="btn btn-primary btn-lg btn-block btn-next">Next Chapter &#8594;</button>
+        <button class="btn-quit" onclick="window.location.href='/'" style="background:none;border:1px solid #E2E8F0;padding:8px 16px;border-radius:8px;font-size:13px;color:#64748B;cursor:pointer;font-family:inherit;">Exit Training</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- === GAMIFICATION ENGINE === -->
+  <script>
+const Gamification = (() => {
+  const STORAGE_KEY = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('storageKey') || 'goa_drs_training';
+  })();
+
+  function getDefaultState() {
+    return {
+      trainee: { name: '', startDate: new Date().toISOString().split('T')[0], totalXP: 0, totalStars: 0, totalTimeSeconds: 0 },
+      modules: {},
+      session: { chaptersThisSession: 0, currentModule: null, currentChapter: null }
+    };
+  }
+
+  function loadState() {
+    try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : getDefaultState(); }
+    catch { return getDefaultState(); }
+  }
+
+  function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  let state = loadState();
+
+  function ensureModule(moduleId) {
+    if (!state.modules[moduleId]) state.modules[moduleId] = { status: 'in_progress', chapters: {} };
+    return state.modules[moduleId];
+  }
+
+  function getChapter(moduleId, chapterId) {
+    const mod = ensureModule(moduleId);
+    return mod.chapters[chapterId] || null;
+  }
+
+  // Timer
+  let timerInterval = null, timerStart = null, timerElapsed = 0, timerCallback = null;
+
+  function startTimer(onTick) {
+    timerStart = Date.now(); timerElapsed = 0; timerCallback = onTick;
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      timerElapsed = Math.floor((Date.now() - timerStart) / 1000);
+      if (timerCallback) timerCallback(timerElapsed);
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (!timerStart) return 9999;
+    timerElapsed = Math.floor((Date.now() - timerStart) / 1000);
+    return timerElapsed;
+  }
+
+  function getElapsed() { return timerStart ? Math.floor((Date.now() - timerStart) / 1000) : timerElapsed; }
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // Stars: 0 retry rounds = 3, 1 retry round = 2, 2+ = 1
+  function calculateStars(retryRoundsUsed) {
+    if (retryRoundsUsed === 0) return 3;
+    if (retryRoundsUsed === 1) return 2;
+    return 1;
+  }
+
+  function calculateXP(stars, timeSeconds, parTimeSeconds) {
+    let xp = 20;
+    if (stars === 3) xp += 15;
+    else if (stars === 2) xp += 5;
+    // Speed bonus: up to 50 XP based on time vs par
+    if (parTimeSeconds > 0) {
+      const ratio = Math.min(timeSeconds / parTimeSeconds, 2);
+      xp += Math.max(0, Math.round(50 * (1 - ratio / 2)));
+    }
+    return xp;
+  }
+
+  function completeChapter(moduleId, chapterId, retryRoundsUsed, timeSeconds, parTimeSeconds) {
+    const mod = ensureModule(moduleId);
+    const stars = calculateStars(retryRoundsUsed);
+    let baseXP = calculateXP(stars, timeSeconds, parTimeSeconds);
+    const underPar = timeSeconds <= parTimeSeconds;
+
+    // Streak tracking (resets after 10 min gap)
+    const now = Date.now();
+    const lastTime = state.session.lastCompletionTime || 0;
+    const minutesSince = (now - lastTime) / 1000 / 60;
+    if (!lastTime || minutesSince > 10) {
+      state.session.streak = 1;
+    } else {
+      state.session.streak = (state.session.streak || 0) + 1;
+    }
+    state.session.lastCompletionTime = now;
+
+    // Streak multiplier: 1.0x base, +0.1x per level, cap 2.0x
+    const streak = state.session.streak;
+    const streakMultiplier = Math.min(1 + ((streak - 1) * 0.1), 2.0);
+    const xp = Math.round(baseXP * streakMultiplier);
+
+    const existing = mod.chapters[chapterId];
+    if (!existing || xp > (existing.xp || 0)) {
+      mod.chapters[chapterId] = { stars, xp, timeSeconds, completed: true };
+    }
+
+    recalculateTotals();
+    state.session.chaptersThisSession++;
+    state.session.currentModule = moduleId;
+    state.session.currentChapter = chapterId;
+    saveState(state);
+
+    return { stars, xp, baseXP, timeSeconds, underPar, streak, streakMultiplier };
+  }
+
+  function recalculateTotals() {
+    let totalXP = 0, totalStars = 0, totalTime = 0;
+    for (const mod of Object.values(state.modules)) {
+      for (const ch of Object.values(mod.chapters)) {
+        if (ch.completed) { totalXP += ch.xp; totalStars += ch.stars; totalTime += ch.timeSeconds; }
+      }
+      const completedCount = Object.values(mod.chapters).filter(c => c.completed).length;
+      if (mod.totalChapters && completedCount >= mod.totalChapters) { totalXP += 100; mod.status = 'completed'; }
+    }
+    state.trainee.totalXP = totalXP;
+    state.trainee.totalStars = totalStars;
+    state.trainee.totalTimeSeconds = totalTime;
+  }
+
+  function setModuleChapterCount(moduleId, count) { ensureModule(moduleId).totalChapters = count; saveState(state); }
+
+  function getModuleProgress(moduleId) {
+    const mod = state.modules[moduleId];
+    if (!mod) return { completed: 0, total: 0, percentage: 0 };
+    const total = mod.totalChapters || 0;
+    const completed = Object.values(mod.chapters).filter(c => c.completed).length;
+    return { completed, total, percentage: total > 0 ? Math.round((completed / total) * 100) : 0 };
+  }
+
+  function isChapterUnlocked(moduleId, chapterId) {
+    if (chapterId === 0) return true;
+    const prev = getChapter(moduleId, chapterId - 1);
+    return prev && prev.completed;
+  }
+
+  function isModuleComplete(moduleId) {
+    const mod = state.modules[moduleId];
+    if (!mod || !mod.totalChapters) return false;
+    return Object.values(mod.chapters).filter(c => c.completed).length >= mod.totalChapters;
+  }
+
+  function getSprintCount() { return state.session.chaptersThisSession; }
+  function getSprintMessage() {
+    const c = state.session.chaptersThisSession;
+    if (c === 0) return null;
+    if (c === 1) return "1 chapter completed this session!";
+    if (c < 4) return `${c} chapters completed this session!`;
+    return `${c} chapters completed \u2014 you're on fire!`;
+  }
+
+  function setTraineeName(name) { state.trainee.name = name; saveState(state); }
+  function getTraineeName() { return state.trainee.name; }
+  function getTotalXP() { return state.trainee.totalXP; }
+  function getTotalStars() { return state.trainee.totalStars; }
+  function getState() { return state; }
+  function getStreak() { return state.session.streak || 0; }
+  function reset() { state = getDefaultState(); saveState(state); }
+
+  async function hydrateFromServer() {
+    try {
+      const resp = await fetch('/api/training/progress', { credentials: 'include' });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.found && data.progress_json && data.progress_json !== '{}') {
+        const serverState = JSON.parse(data.progress_json);
+        const localXP = state.trainee ? (state.trainee.totalXP || 0) : 0;
+        const serverXP = serverState.trainee ? (serverState.trainee.totalXP || 0) : 0;
+        if (serverXP > localXP) {
+          localStorage.setItem(STORAGE_KEY, data.progress_json);
+          state = JSON.parse(data.progress_json);
+        }
+      }
+    } catch (e) { /* offline fallback — localStorage still works */ }
+  }
+
+  return {
+    loadState, hydrateFromServer, startTimer, stopTimer, getElapsed, formatTime,
+    calculateStars, calculateXP, completeChapter, setModuleChapterCount,
+    getChapter, getModuleProgress, isChapterUnlocked, isModuleComplete,
+    getSprintCount, getSprintMessage, setTraineeName, getTraineeName,
+    getTotalXP, getTotalStars, getState, getStreak, reset
+  };
+})();
+  </script>
+
+  <!-- === APP ENGINE (Carousel + Sequential Quiz) === -->
+  <script>
+const App = (() => {
+  let moduleData = null;
+  let currentView = 'overview';
+  let currentChapterId = null;
+
+  // Carousel state
+  let currentChunkIndex = 0;
+  let totalChunks = 0;
+
+  // Progress bar state
+  let progressStates = [];
+
+  // Quiz sequential state
+  let questionsForRound = [];
+  let currentQPos = 0;
+  let retryRound = 0;
+  let wrongThisRound = [];
+  let totalRetryRoundsUsed = 0;
+  let selectedAnswer = null;
+  let currentQuestionEvaluated = false;
+  let questionDotStates = [];
+
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  // ==========================================
+  // INIT
+  // ==========================================
+  function init(data) {
+    // Access gate: require Module 1 completed
+    const _sk = (() => { const p = new URLSearchParams(window.location.search); return p.get('storageKey') || 'goa_drs_training'; })();
+    const rawState = JSON.parse(localStorage.getItem(_sk) || '{}');
+    const prevModule = (rawState.modules || {})[1];
+    if (!prevModule || prevModule.status !== 'completed') {
+      const _skParam = _sk !== 'goa_drs_training' ? '?storageKey=' + encodeURIComponent(_sk) : '';
+      document.querySelector('.app-container').innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center;font-family:Poppins,sans-serif;">
+          <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+          <h2 style="font-size:20px;font-weight:700;margin-bottom:8px;color:#1e293b;">Module Locked</h2>
+          <p style="color:#64748b;margin-bottom:24px;max-width:320px;">Complete <strong>Module 1: Consumer</strong> first to unlock this module.</p>
+          <a href="/static/training/module-1/index.html${_skParam}" style="background:#0ea5e9;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Go to Module 1</a>
+        </div>`;
+      return;
+    }
+
+    moduleData = data;
+    Gamification.setModuleChapterCount(data.id, data.chapters.length);
+    updateTopbar();
+    renderSidebar();
+    showOverview();
+    setupMobileMenu();
+  }
+
+  function updateTopbar() {
+    const xpEl = $('#xp-value');
+    const starsEl = $('#stars-value');
+    if (xpEl) xpEl.textContent = Gamification.getTotalXP();
+    if (starsEl) starsEl.textContent = Gamification.getTotalStars();
+  }
+
+  function setupMobileMenu() {
+    const btn = $('.mobile-menu-btn');
+    const sidebar = $('.sidebar');
+    if (btn && sidebar) {
+      btn.addEventListener('click', () => sidebar.classList.toggle('mobile-open'));
+      $('.main-content').addEventListener('click', () => sidebar.classList.remove('mobile-open'));
+    }
+  }
+
+  // ==========================================
+  // SIDEBAR
+  // ==========================================
+  function renderSidebar() {
+    const pathEl = $('.chapter-path');
+    if (!pathEl) return;
+
+    const progress = Gamification.getModuleProgress(moduleData.id);
+    const progressText = $('.sidebar-progress-text');
+    if (progressText) progressText.textContent = `${progress.completed} of ${progress.total} chapters`;
+    const progressFill = $('.progress-bar-fill');
+    if (progressFill) progressFill.style.width = `${progress.percentage}%`;
+
+    pathEl.innerHTML = moduleData.chapters.map((ch, i) => {
+      const chData = Gamification.getChapter(moduleData.id, i);
+      const unlocked = Gamification.isChapterUnlocked(moduleData.id, i);
+      const completed = chData && chData.completed;
+      const isActive = currentView === 'chapter' && currentChapterId === i;
+      let cls = 'chapter-node';
+      if (completed) cls += ' completed';
+      else if (isActive) cls += ' active';
+      else if (!unlocked) cls += ' locked';
+
+      const stars = completed ? renderStarsText(chData.stars) : '';
+      const meta = completed
+        ? `<span class="node-stars">${stars}</span> <span>${Gamification.formatTime(chData.timeSeconds)}</span>`
+        : `${ch.readingTime} | ${ch.quizCount} Qs`;
+
+      return `
+        <li class="${cls}" data-chapter="${i}" onclick="App.onChapterNodeClick(${i})">
+          <div class="node-circle">
+            <span class="node-number">${i + 1}</span>
+            <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div class="node-info">
+            <div class="node-title">${ch.title}</div>
+            <div class="node-meta">${meta}</div>
+          </div>
+        </li>
+      `;
+    }).join('');
+  }
+
+  function renderStarsText(count) {
+    return '\u2605'.repeat(count) + '\u2606'.repeat(3 - count);
+  }
+
+  // ==========================================
+  // OVERVIEW
+  // ==========================================
+  function showOverview() {
+    currentView = 'overview';
+    currentChapterId = null;
+    hideAllViews();
+    const overview = $('.module-overview');
+    if (overview) overview.classList.add('active');
+    renderOverviewChapters();
+    renderSidebar();
+    renderSprintBar();
+  }
+
+  function renderOverviewChapters() {
+    const listEl = $('#chapter-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = moduleData.chapters.map((ch, i) => {
+      const chData = Gamification.getChapter(moduleData.id, i);
+      const unlocked = Gamification.isChapterUnlocked(moduleData.id, i);
+      const completed = chData && chData.completed;
+
+      let cls = 'chapter-list-card';
+      if (completed) cls += ' completed';
+      else if (unlocked && !completed) cls += ' active';
+      else cls += ' locked';
+
+      const stars = completed ? `<span class="chapter-list-stars">${renderStarsText(chData.stars)}</span>` : '';
+      const meta = completed
+        ? `${Gamification.formatTime(chData.timeSeconds)} | ${chData.xp} XP`
+        : `${ch.readingTime} | ${ch.quizCount} questions`;
+
+      return `
+        <div class="${cls}" onclick="App.onChapterClick(${i})" data-chapter="${i}">
+          <div class="chapter-list-num">${completed ? '\u2713' : i + 1}</div>
+          <div class="chapter-list-info">
+            <div class="chapter-list-title">${ch.title}</div>
+            <div class="chapter-list-meta">${meta}</div>
+          </div>
+          <div class="chapter-list-right">
+            ${stars}
+            <span class="chapter-list-arrow">${unlocked ? '\u2192' : '\uD83D\uDD12'}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderSprintBar() {
+    const sprintEl = $('.sprint-bar');
+    if (!sprintEl) return;
+    const msg = Gamification.getSprintMessage();
+    if (msg) {
+      sprintEl.innerHTML = `<span class="icon">\u26A1</span> ${msg}`;
+      sprintEl.classList.remove('hidden');
+    } else {
+      sprintEl.classList.add('hidden');
+    }
+  }
+
+  // ==========================================
+  // CHAPTER VIEW — CAROUSEL
+  // ==========================================
+  function showChapter(chapterId) {
+    const chapter = moduleData.chapters[chapterId];
+    if (!chapter) return;
+
+    currentView = 'chapter';
+    currentChapterId = chapterId;
+
+    // Reset carousel state
+    currentChunkIndex = 0;
+    totalChunks = chapter.contentChunks.length;
+
+    // Reset quiz state
+    questionsForRound = [];
+    currentQPos = 0;
+    retryRound = 0;
+    wrongThisRound = [];
+    totalRetryRoundsUsed = 0;
+    selectedAnswer = null;
+    currentQuestionEvaluated = false;
+    questionDotStates = chapter.questions.map(() => 'pending');
+
+    // Reset progress bar
+    const totalSegs = totalChunks + chapter.questions.length;
+    progressStates = new Array(totalSegs).fill('pending');
+    progressStates[0] = 'current';
+
+    hideAllViews();
+    const view = $('.chapter-view');
+    if (view) view.classList.add('active');
+
+    renderChapterHeader(chapter, chapterId);
+    renderProgressBar();
+    showChunk(0, 'none');
+
+    // Hide quiz sections
+    const quizReady = $('#quiz-ready');
+    if (quizReady) quizReady.classList.add('hidden');
+    const quizSection = $('#quiz-section');
+    if (quizSection) quizSection.classList.add('hidden');
+    const carouselCard = $('#carousel-card');
+    if (carouselCard) carouselCard.classList.remove('hidden');
+
+    renderSidebar();
+    Gamification.startTimer((elapsed) => {
+      const timerEl = $('.timer-display');
+      if (timerEl) timerEl.textContent = Gamification.formatTime(elapsed);
+    });
+
+    window.scrollTo(0, 0);
+  }
+
+  function renderChapterHeader(chapter, chapterId) {
+    const tagEl = $('.chapter-tag');
+    if (tagEl) tagEl.textContent = `Chapter ${chapterId + 1} of ${moduleData.chapters.length}`;
+    const titleEl = $('.chapter-title');
+    if (titleEl) titleEl.textContent = chapter.title;
+    const metaEl = $('.chapter-meta');
+    if (metaEl) metaEl.innerHTML = `
+      <span>\uD83D\uDCD6 ${chapter.readingTime}</span>
+      <span>\u2753 ${chapter.quizCount} questions</span>
+      <span>\u23F1 Par: ${Gamification.formatTime(chapter.parTimeSeconds)}</span>
+    `;
+    const parEl = $('.timer-par');
+    if (parEl) parEl.textContent = `Par: ${Gamification.formatTime(chapter.parTimeSeconds)}`;
+  }
+
+  // ==========================================
+  // PROGRESS BAR
+  // ==========================================
+  function renderProgressBar() {
+    const barEl = $('#chapter-progress');
+    if (!barEl) return;
+
+    barEl.innerHTML = progressStates.map((state, i) => {
+      let cls = 'progress-seg';
+      if (state === 'done' || state === 'filled') cls += ' filled';
+      else if (state === 'current') cls += ' current';
+      else if (state === 'quiz-correct') cls += ' quiz-correct';
+      else if (state === 'quiz-wrong') cls += ' quiz-wrong';
+      return `<div class="${cls}"></div>`;
+    }).join('');
+  }
+
+  function updateProgressForChunk(chunkIdx) {
+    for (let i = 0; i < chunkIdx; i++) {
+      progressStates[i] = 'done';
+    }
+    progressStates[chunkIdx] = 'current';
+    for (let i = chunkIdx + 1; i < progressStates.length; i++) {
+      if (progressStates[i] !== 'quiz-correct' && progressStates[i] !== 'quiz-wrong') {
+        progressStates[i] = 'pending';
+      }
+    }
+    renderProgressBar();
+  }
+
+  function updateProgressForQuizReady() {
+    for (let i = 0; i < totalChunks; i++) {
+      progressStates[i] = 'done';
+    }
+    renderProgressBar();
+  }
+
+  function updateProgressForQuiz(qOriginalIndex, result) {
+    const segIdx = totalChunks + qOriginalIndex;
+    progressStates[segIdx] = result === 'correct' ? 'quiz-correct' : 'quiz-wrong';
+    renderProgressBar();
+  }
+
+  // ==========================================
+  // CONTENT CHUNKS
+  // ==========================================
+  function showChunk(index, direction) {
+    const chapter = moduleData.chapters[currentChapterId];
+    const chunk = chapter.contentChunks[index];
+    if (!chunk) return;
+
+    currentChunkIndex = index;
+
+    const counterEl = $('#chunk-counter');
+    if (counterEl) counterEl.textContent = `${index + 1} of ${totalChunks}`;
+    const titleEl = $('#chunk-title');
+    if (titleEl) titleEl.textContent = chunk.title;
+    const contentEl = $('#chunk-content');
+    if (contentEl) {
+      contentEl.innerHTML = chunk.html;
+      if (direction !== 'none') {
+        contentEl.classList.remove('chunk-slide-right', 'chunk-slide-left');
+        void contentEl.offsetWidth;
+        contentEl.classList.add(direction === 'right' ? 'chunk-slide-right' : 'chunk-slide-left');
+      }
+    }
+
+    // Show key insight only on last chunk
+    const insightEl = $('#carousel-insight');
+    const insightText = $('#carousel-insight-text');
+    if (insightEl && insightText) {
+      if (index === totalChunks - 1) {
+        insightText.textContent = chapter.keyInsight;
+        insightEl.classList.remove('hidden');
+      } else {
+        insightEl.classList.add('hidden');
+      }
+    }
+
+    // Update nav buttons
+    const prevBtn = $('#chunk-prev');
+    const nextBtn = $('#chunk-next');
+    if (prevBtn) {
+      prevBtn.style.visibility = index === 0 ? 'hidden' : 'visible';
+    }
+    if (nextBtn) {
+      if (index === totalChunks - 1) {
+        nextBtn.textContent = 'Ready for quiz \u2192';
+        nextBtn.className = 'btn btn-success';
+      } else {
+        nextBtn.textContent = 'Next \u2192';
+        nextBtn.className = 'btn btn-primary';
+      }
+    }
+
+    updateProgressForChunk(index);
+  }
+
+  function nextChunk() {
+    if (currentChunkIndex < totalChunks - 1) {
+      showChunk(currentChunkIndex + 1, 'right');
+      const carousel = $('#carousel-card');
+      if (carousel) carousel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      showQuizReady();
+    }
+  }
+
+  function prevChunk() {
+    if (currentChunkIndex > 0) {
+      showChunk(currentChunkIndex - 1, 'left');
+      const carousel = $('#carousel-card');
+      if (carousel) carousel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function showQuizReady() {
+    const carousel = $('#carousel-card');
+    if (carousel) carousel.classList.add('hidden');
+    const quizReady = $('#quiz-ready');
+    if (quizReady) {
+      quizReady.classList.remove('hidden');
+      quizReady.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    updateProgressForQuizReady();
+  }
+
+  // ==========================================
+  // QUIZ — SEQUENTIAL FLOW
+  // ==========================================
+  function startQuiz() {
+    const quizReady = $('#quiz-ready');
+    if (quizReady) quizReady.classList.add('hidden');
+    const quizSection = $('#quiz-section');
+    if (quizSection) quizSection.classList.remove('hidden');
+
+    const chapter = moduleData.chapters[currentChapterId];
+    questionsForRound = chapter.questions.map((_, i) => i);
+    currentQPos = 0;
+    retryRound = 0;
+    wrongThisRound = [];
+
+    const retryBanner = $('#retry-banner');
+    if (retryBanner) retryBanner.classList.add('hidden');
+
+    showCurrentQuestion();
+    quizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function showCurrentQuestion() {
+    const chapter = moduleData.chapters[currentChapterId];
+    const qIndex = questionsForRound[currentQPos];
+    const question = chapter.questions[qIndex];
+
+    selectedAnswer = null;
+    currentQuestionEvaluated = false;
+
+    updateQuizProgress();
+
+    const container = $('#current-question');
+    if (!container) return;
+
+    if (question.type === 'ordering') {
+      container.innerHTML = renderOrderingQuestion(question, qIndex);
+    } else {
+      container.innerHTML = renderMCQQuestion(question, qIndex);
+    }
+    container.classList.remove('question-enter');
+    void container.offsetWidth;
+    container.classList.add('question-enter');
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) {
+      checkBtn.classList.remove('hidden');
+      checkBtn.disabled = question.type !== 'ordering';
+      checkBtn.textContent = 'Check Answer';
+    }
+    if (continueBtn) continueBtn.classList.add('hidden');
+  }
+
+  function updateQuizProgress() {
+    const totalInRound = questionsForRound.length;
+    const currentNum = currentQPos + 1;
+
+    const progressText = $('#quiz-progress-text');
+    if (progressText) {
+      const roundLabel = retryRound > 0 ? ` (Retry ${retryRound} of 3)` : '';
+      progressText.textContent = `Question ${currentNum} of ${totalInRound}${roundLabel}`;
+    }
+
+    const dotsEl = $('#quiz-dots');
+    if (dotsEl) {
+      dotsEl.innerHTML = questionsForRound.map((qIdx, pos) => {
+        let cls = 'quiz-dot';
+        if (pos < currentQPos) {
+          cls += questionDotStates[qIdx] === 'correct' ? ' correct' : ' wrong';
+        } else if (pos === currentQPos) {
+          cls += ' current';
+        }
+        return `<span class="${cls}"></span>`;
+      }).join('');
+    }
+  }
+
+  function renderMCQQuestion(q, qi) {
+    const isRetry = retryRound > 0;
+    const retryTag = isRetry ? `<span class="tag tag-warning" style="margin-left:8px;">RETRY</span>` : '';
+
+    const options = q.options.map((opt, oi) => {
+      const letter = String.fromCharCode(65 + oi);
+      return `
+        <button class="option-btn" data-question="${qi}" data-option="${oi}" onclick="App.selectOption(${qi}, ${oi})">
+          <span class="option-letter">${letter}</span>
+          <span class="option-text">${opt.text}</span>
+        </button>
+      `;
+    }).join('');
+
+    return `
+      <div class="question-card" id="question-${qi}">
+        <div class="question-number">Question ${qi + 1}${retryTag}</div>
+        <div class="question-text">${q.text}</div>
+        <div class="options-list">${options}</div>
+        <div class="explanation" id="explanation-${qi}"></div>
+      </div>
+    `;
+  }
+
+  function renderOrderingQuestion(q, qi) {
+    const isRetry = retryRound > 0;
+    const retryTag = isRetry ? `<span class="tag tag-warning" style="margin-left:8px;">RETRY</span>` : '';
+
+    let items = [...q.items];
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    if (items.every((item, idx) => item === q.correctOrder[idx])) {
+      [items[0], items[1]] = [items[1], items[0]];
+    }
+
+    const itemsHtml = items.map((item, ii) => `
+      <div class="order-item" draggable="true" data-question="${qi}" data-index="${ii}"
+           ondragstart="App.dragStart(event)" ondragover="App.dragOver(event)"
+           ondrop="App.drop(event, ${qi})" ondragend="App.dragEnd(event)">
+        <span class="order-num">${ii + 1}</span>
+        <span class="order-text">${item}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="question-card" id="question-${qi}">
+        <div class="question-number">Question ${qi + 1}${retryTag}</div>
+        <div class="question-text">${q.text}</div>
+        <div class="order-list" id="order-list-${qi}">${itemsHtml}</div>
+        <div class="explanation" id="explanation-${qi}"></div>
+      </div>
+    `;
+  }
+
+  // ==========================================
+  // DRAG & DROP
+  // ==========================================
+  let dragItem = null;
+
+  function dragStart(e) {
+    if (currentQuestionEvaluated) return;
+    dragItem = e.target.closest('.order-item');
+    if (dragItem) { dragItem.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+  }
+  function dragOver(e) {
+    e.preventDefault();
+    const target = e.target.closest('.order-item');
+    if (target && target !== dragItem) target.classList.add('drag-over');
+  }
+  function dragEnd(e) {
+    if (dragItem) dragItem.classList.remove('dragging');
+    $$('.order-item').forEach(el => el.classList.remove('drag-over'));
+  }
+  function drop(e, qi) {
+    e.preventDefault();
+    if (currentQuestionEvaluated) return;
+    const target = e.target.closest('.order-item');
+    if (!target || !dragItem || target === dragItem) return;
+    target.classList.remove('drag-over');
+    const list = target.parentNode;
+    const items = [...list.children];
+    const fromIdx = items.indexOf(dragItem);
+    const toIdx = items.indexOf(target);
+    if (fromIdx < toIdx) list.insertBefore(dragItem, target.nextSibling);
+    else list.insertBefore(dragItem, target);
+    [...list.children].forEach((item, i) => { item.querySelector('.order-num').textContent = i + 1; });
+  }
+
+  // ==========================================
+  // ANSWER SELECTION & CHECKING
+  // ==========================================
+  function selectOption(qi, oi) {
+    if (currentQuestionEvaluated) return;
+    selectedAnswer = oi;
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) {
+      questionEl.querySelectorAll('.option-btn').forEach((btn, i) => {
+        btn.classList.toggle('selected', i === oi);
+      });
+    }
+    const checkBtn = $('#quiz-check-btn');
+    if (checkBtn) checkBtn.disabled = false;
+  }
+
+  function checkAnswer() {
+    if (currentQuestionEvaluated) return;
+    currentQuestionEvaluated = true;
+
+    const chapter = moduleData.chapters[currentChapterId];
+    const qIndex = questionsForRound[currentQPos];
+    const question = chapter.questions[qIndex];
+
+    let isCorrect;
+    if (question.type === 'ordering') {
+      isCorrect = evaluateOrdering(question, qIndex);
+    } else {
+      isCorrect = evaluateMCQ(question, qIndex);
+    }
+
+    showExplanation(qIndex, isCorrect, question.explanation);
+
+    questionDotStates[qIndex] = isCorrect ? 'correct' : 'wrong';
+    updateQuizProgress();
+
+    updateProgressForQuiz(qIndex, isCorrect ? 'correct' : 'wrong');
+
+    if (!isCorrect) wrongThisRound.push(qIndex);
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) checkBtn.classList.add('hidden');
+    if (continueBtn) {
+      continueBtn.classList.remove('hidden');
+      const isLastInRound = currentQPos >= questionsForRound.length - 1;
+      if (isLastInRound && wrongThisRound.length > 0 && retryRound < 3) {
+        continueBtn.textContent = 'Review Mistakes \u2192';
+      } else if (isLastInRound) {
+        continueBtn.textContent = 'See Results \u2192';
+      } else {
+        continueBtn.textContent = 'Continue \u2192';
+      }
+    }
+  }
+
+  function showExplanation(qi, isCorrect, explanationText) {
+    const expEl = document.getElementById(`explanation-${qi}`);
+    if (!expEl) return;
+
+    const prefix = isCorrect ? '\u2713 Correct!' : '\u2717 Not quite.';
+    const prefixClass = isCorrect ? 'correct' : 'wrong';
+    const expClass = isCorrect ? 'correct-exp' : 'wrong-exp';
+
+    expEl.innerHTML = `<span class="exp-prefix ${prefixClass}">${prefix}</span>${explanationText}`;
+    expEl.classList.add('visible', expClass);
+  }
+
+  function evaluateMCQ(q, qi) {
+    const correct = q.options.findIndex(o => o.correct);
+    const isCorrect = selectedAnswer === correct;
+
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) {
+      questionEl.classList.add(isCorrect ? 'answered-correct' : 'answered-wrong');
+      questionEl.querySelectorAll('.option-btn').forEach((btn, i) => {
+        btn.classList.add('disabled');
+        if (i === correct) btn.classList.add('correct');
+        if (i === selectedAnswer && !isCorrect) btn.classList.add('wrong');
+      });
+    }
+    return isCorrect;
+  }
+
+  function evaluateOrdering(q, qi) {
+    const listEl = document.getElementById(`order-list-${qi}`);
+    if (!listEl) return false;
+    const items = [...listEl.children];
+    let allCorrect = true;
+    items.forEach((item, i) => {
+      item.setAttribute('draggable', 'false');
+      item.style.cursor = 'default';
+      const text = item.querySelector('.order-text').textContent;
+      if (text === q.correctOrder[i]) item.classList.add('correct-position');
+      else { item.classList.add('wrong-position'); allCorrect = false; }
+    });
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) questionEl.classList.add(allCorrect ? 'answered-correct' : 'answered-wrong');
+    return allCorrect;
+  }
+
+  // ==========================================
+  // CONTINUE / RETRY / FINISH
+  // ==========================================
+  function continueQuiz() {
+    currentQPos++;
+    if (currentQPos < questionsForRound.length) {
+      showCurrentQuestion();
+      const quizSection = $('#quiz-section');
+      if (quizSection) quizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      if (wrongThisRound.length === 0 || retryRound >= 3) {
+        finishQuiz();
+      } else {
+        showRetryTransition();
+      }
+    }
+  }
+
+  function showRetryTransition() {
+    retryRound++;
+    totalRetryRoundsUsed = retryRound;
+
+    const wrongCount = wrongThisRound.length;
+    const container = $('#current-question');
+    container.innerHTML = `
+      <div class="retry-transition">
+        <div class="retry-icon">\uD83D\uDD04</div>
+        <h3>Almost there!</h3>
+        <p>You missed ${wrongCount} question${wrongCount > 1 ? 's' : ''}. Let's try ${wrongCount > 1 ? 'them' : 'it'} again.</p>
+        <p class="retry-round-info">Attempt ${retryRound + 1} of 4</p>
+        <button class="btn btn-primary btn-lg" onclick="App.beginRetryRound()">Let's go \u2192</button>
+      </div>
+    `;
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) checkBtn.classList.add('hidden');
+    if (continueBtn) continueBtn.classList.add('hidden');
+  }
+
+  function beginRetryRound() {
+    questionsForRound = [...wrongThisRound];
+    wrongThisRound = [];
+    currentQPos = 0;
+
+    questionsForRound.forEach(qi => { questionDotStates[qi] = 'pending'; });
+
+    questionsForRound.forEach(qi => {
+      progressStates[totalChunks + qi] = 'pending';
+    });
+    renderProgressBar();
+
+    const retryBanner = $('#retry-banner');
+    if (retryBanner) {
+      retryBanner.classList.remove('hidden');
+      const retryText = $('#retry-text');
+      if (retryText) retryText.textContent = `Retry ${retryRound} of 3 \u2014 Get ${questionsForRound.length > 1 ? 'these' : 'this'} right!`;
+    }
+
+    showCurrentQuestion();
+  }
+
+  function finishQuiz() {
+    const timeSeconds = Gamification.stopTimer();
+    const chapter = moduleData.chapters[currentChapterId];
+
+    const result = Gamification.completeChapter(
+      moduleData.id, currentChapterId, totalRetryRoundsUsed, timeSeconds, chapter.parTimeSeconds
+    );
+
+    updateTopbar();
+
+    // Sync progress to backend after every chapter
+    try {
+      const syncState = Gamification.getState();
+      const mods = syncState.modules || {};
+      const trainee = syncState.trainee || {};
+      let mc = 0, cc = 0, cm = 0;
+      for (const [id, m] of Object.entries(mods)) {
+        if (m.status === 'completed') mc++;
+        cc += Object.values(m.chapters || {}).filter(c => c.completed).length;
+        if (Object.values(m.chapters || {}).some(c => c.completed)) cm = Math.max(cm, parseInt(id));
+      }
+      fetch('/api/training/sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ total_xp: trainee.totalXP || 0, total_stars: trainee.totalStars || 0, modules_completed: mc, chapters_completed: cc, total_time_seconds: trainee.totalTimeSeconds || 0, current_module: cm, progress_json: JSON.stringify(syncState) })
+      }).catch(() => {});
+    } catch (e) {}
+
+    setTimeout(() => showCompletion(result, currentChapterId), 400);
+  }
+
+  // ==========================================
+  // COMPLETION OVERLAY
+  // ==========================================
+  function showCompletion(result, chapterId) {
+    const overlay = $('.completion-overlay');
+    if (!overlay) return;
+
+    const chapter = moduleData.chapters[chapterId];
+    const starsText = '\u2605'.repeat(result.stars) + '\u2606'.repeat(3 - result.stars);
+    const speedText = (() => {
+      const ratio = chapter.parTimeSeconds > 0 ? result.timeSeconds / chapter.parTimeSeconds : 2;
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      if (ratio <= 0.3) return pick(['\u26A1 Are you Flash?!', '\uD83D\uDE80 Did you just teleport?', '\uD83C\uDFC6 Someone call Guinness!', '\uD83D\uDD25 Speed demon unleashed!']);
+      if (ratio <= 0.6) return pick(['\uD83C\uDF89 Schedule your parade!', '\uD83D\uDCA8 Lightning fast!', '\uD83D\uDE0E Quick AND accurate!', '\uD83C\uDFAF Smoother than butter!']);
+      if (ratio <= 1.0) return pick(['\uD83D\uDCAA Solid speed!', '\u2728 Clean and efficient!', '\uD83D\uDE80 Right on the money!', '\uD83D\uDC4D Smooth operator!']);
+      if (ratio <= 1.5) return pick(['\uD83D\uDCDA Steady and thorough!', '\uD83C\uDF1F Good pace!', '\uD83E\uDDE0 Building strong!', '\uD83D\uDC4F Taking it in properly!']);
+      return pick(['\uD83E\uDDE0 Deep learning mode!', '\uD83D\uDCDA Thoroughness is power!', '\uD83C\uDF31 Mastery takes time!', '\uD83D\uDCAA No rush, you got this!']);
+    })();
+
+    let message;
+    if (chapter.completionMessages) {
+      if (result.stars === 3) message = chapter.completionMessages.perfect;
+      else if (result.stars === 2) message = chapter.completionMessages.good;
+      else message = chapter.completionMessages.passed;
+    } else {
+      message = 'Great work! Keep going.';
+    }
+
+    const mascotEl = $('#mascot-img');
+    if (mascotEl) {
+      if (result.stars === 3) mascotEl.textContent = '\uD83C\uDF89';
+      else if (result.stars === 2) mascotEl.textContent = '\uD83D\uDCAA';
+      else mascotEl.textContent = '\uD83E\uDD14';
+    }
+
+    overlay.querySelector('.completion-stars').textContent = starsText;
+    overlay.querySelector('.completion-title').textContent =
+      result.stars === 3 ? 'Perfect!' : result.stars === 2 ? 'Great Job!' : 'Chapter Complete!';
+    overlay.querySelector('.completion-message').textContent = message;
+    overlay.querySelector('.completion-stat-value.xp').textContent = `+${result.xp}`;
+    overlay.querySelector('.completion-stat-value.time').textContent = Gamification.formatTime(result.timeSeconds);
+    overlay.querySelector('.completion-stat-value.speed').textContent = speedText;
+
+    // Show streak badge if streak > 1
+    let streakEl = overlay.querySelector('.streak-badge');
+    if (!streakEl) {
+      streakEl = document.createElement('div');
+      streakEl.className = 'streak-badge';
+      streakEl.style.cssText = 'margin-top:12px;padding:6px 16px;background:#FEF3C7;border-radius:20px;font-size:13px;font-weight:600;color:#92400E;display:inline-block;';
+      overlay.querySelector('.completion-stats').after(streakEl);
+    }
+    if (result.streak > 1) {
+      streakEl.textContent = '\uD83D\uDD25 ' + result.streak + ' streak! (' + result.streakMultiplier.toFixed(1) + 'x XP)';
+      streakEl.style.display = 'inline-block';
+    } else {
+      streakEl.style.display = 'none';
+    }
+
+    const nextBtn = overlay.querySelector('.btn-next');
+    const isModuleComplete = Gamification.isModuleComplete(moduleData.id);
+
+    if (isModuleComplete) {
+      nextBtn.textContent = 'Complete Module \u2192';
+      nextBtn.onclick = () => { overlay.classList.remove('visible'); showModuleComplete(); };
+    } else {
+      nextBtn.textContent = 'Next Chapter \u2192';
+      nextBtn.onclick = () => { overlay.classList.remove('visible'); showChapter(chapterId + 1); };
+    }
+
+    overlay.classList.add('visible');
+  }
+
+  // ==========================================
+  // MODULE COMPLETE
+  // ==========================================
+  function showModuleComplete() {
+    currentView = 'module-complete';
+    hideAllViews();
+    const view = $('.module-complete');
+    if (view) view.classList.add('active');
+
+    const progress = Gamification.getModuleProgress(moduleData.id);
+    const state = Gamification.getState();
+    const moduleStars = Object.values(state.modules[moduleData.id].chapters)
+      .reduce((sum, ch) => sum + (ch.stars || 0), 0);
+    const moduleXP = Object.values(state.modules[moduleData.id].chapters)
+      .reduce((sum, ch) => sum + (ch.xp || 0), 0) + 100;
+
+    const msgEl = view.querySelector('.module-complete-subtitle');
+    if (msgEl) msgEl.textContent = "You've mastered the collection ecosystem. Four CP types, partner networks, HoReCa pickups, and deployment phases \u2014 all covered.";
+
+    const statsEl = view.querySelector('.completion-stats');
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <div class="completion-stat">
+          <div class="completion-stat-value xp">${moduleXP}</div>
+          <div class="completion-stat-label">Total XP</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value" style="color: var(--warning)">${moduleStars}/${progress.total * 3}</div>
+          <div class="completion-stat-label">Stars</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value time">${Gamification.formatTime(state.trainee.totalTimeSeconds)}</div>
+          <div class="completion-stat-label">Total Time</div>
+        </div>
+      `;
+    }
+
+    // Sync progress to backend
+    try {
+      const syncState = Gamification.getState();
+      const modules = syncState.modules || {};
+      const trainee = syncState.trainee || {};
+      let modulesCompleted = 0, chaptersCompleted = 0, currentMod = 0;
+      for (const [modId, mod] of Object.entries(modules)) {
+        if (mod.status === 'completed') modulesCompleted++;
+        chaptersCompleted += Object.values(mod.chapters || {}).filter(c => c.completed).length;
+        if (Object.values(mod.chapters || {}).some(c => c.completed)) currentMod = Math.max(currentMod, parseInt(modId));
+      }
+      fetch('/api/training/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          total_xp: trainee.totalXP || 0,
+          total_stars: trainee.totalStars || 0,
+          modules_completed: modulesCompleted,
+          chapters_completed: chaptersCompleted,
+          total_time_seconds: trainee.totalTimeSeconds || 0,
+          current_module: currentMod,
+          progress_json: JSON.stringify(syncState)
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
+    renderSidebar();
+    updateTopbar();
+  }
+
+  // ==========================================
+  // NAVIGATION
+  // ==========================================
+  function hideAllViews() {
+    $$('.module-overview, .chapter-view, .module-complete').forEach(el => el.classList.remove('active'));
+    const overlay = $('.completion-overlay');
+    if (overlay) overlay.classList.remove('visible');
+  }
+
+  function onChapterClick(chapterId) {
+    if (!Gamification.isChapterUnlocked(moduleData.id, chapterId)) return;
+    showChapter(chapterId);
+    const sidebar = $('.sidebar');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+  }
+
+  function onChapterNodeClick(chapterId) { onChapterClick(chapterId); }
+
+  function goToOverview() {
+    Gamification.stopTimer();
+    showOverview();
+  }
+
+  // ==========================================
+  // PUBLIC API
+  // ==========================================
+  return {
+    init, showOverview, showChapter,
+    nextChunk, prevChunk,
+    selectOption, checkAnswer, continueQuiz,
+    startQuiz, beginRetryRound,
+    onChapterClick, onChapterNodeClick, goToOverview,
+    dragStart, dragOver, dragEnd, drop
+  };
+})();
+  </script>
+
+  <!-- === MODULE DATA === -->
+  <script>
+    const MODULE_DATA = {
+      id: 2,
+      title: "Collection",
+      subtitle: "Collection Eco System",
+      chapters: [
+        // ============================================================
+        // CHAPTER 1: How Goa Handles Waste Today
+        // ============================================================
+        {
+          id: 0,
+          title: "How Goa Handles Waste Today",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "Goa\u2019s waste already flows through a chain \u2014 ragpickers, kabaddiwalas, processors, recyclers \u2014 and DRS works with them, not against them.",
+          completionMessages: {
+            perfect: "WMOs, ragpickers, kabaddiwalas, processors, recyclers \u2014 you know the full chain before DRS even enters the picture.",
+            good: "Formal and informal, tenders and trades \u2014 the existing waste system is clicking.",
+            passed: "The core: there\u2019s already a system in place. DRS adds a digital layer to it."
+          },
+          contentChunks: [
+            {
+              title: "The Invisible Chain",
+              html: `<p>Every day, Goa generates waste. Someone collects it, someone sorts it, someone sells it. Most people never see the system behind it.</p>
+                     <p>But it\u2019s there. Running across <strong>191 village panchayats</strong>, <strong>13 municipalities</strong>, and every street in between. An economy built on what gets thrown away. Before we look at how DRS sets up collection, let\u2019s understand the system that already exists.</p>`
+            },
+            {
+              title: "The Formal Side",
+              html: `<p><strong>Village Panchayats</strong> roll out tenders for waste management. Companies apply. The winning contractor becomes the <strong>Waste Management Operator (WMO)</strong> for that entire panchayat.</p>
+                     <p>The panchayat pays the WMO. The WMO hires workers. Those workers go door to door collecting waste. Collection is just the beginning.</p>`
+            },
+            {
+              title: "The Informal Side",
+              html: `<p>Here\u2019s where it gets interesting. Those WMO workers? They segregate valuable waste into separate bags. Then they sell it per kg to the local informal market. Additional income on top of their salary.</p>
+                     <p>And beyond them: <strong>ragpickers</strong> pick up what\u2019s valuable. <strong>Kabaddiwalas</strong> aggregate and sort at a material level (Plastic, Metal, Glass etc.,). <strong>Processors</strong> sort further at an SKU X Color level and bale. <strong>Traders</strong> sell to <strong>recyclers</strong>. An entire supply chain running with very minimal digital record.</p>`
+            },
+            {
+              title: "The Foundation",
+              html: `<p>Three types of ragpickers work Goa\u2019s streets: <strong>independent ones</strong> who roam freely, <strong>kabadiwala-affiliated ones</strong> bound to a specific aggregator, and <strong>WMO workers</strong> employed by waste contractors.</p>
+                     <p>This system already has manpower, infrastructure, and logistics. DRS taps into this existing network.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "Who hires Waste Management Operators in a village panchayat?",
+              options: [
+                { text: "The Village Panchayat through a tender process", correct: true },
+                { text: "Recykal directly", correct: false },
+                { text: "The State Government", correct: false },
+                { text: "Individual households", correct: false }
+              ],
+              explanation: "Village Panchayats roll out tenders for waste management, and the winning contractor becomes the WMO for that panchayat."
+            },
+            {
+              type: "mcq",
+              text: "In the informal waste chain, who aggregates material collected by ragpickers?",
+              options: [
+                { text: "Recyclers", correct: false },
+                { text: "Processors", correct: false },
+                { text: "Kabaddiwalas", correct: true },
+                { text: "Traders", correct: false }
+              ],
+              explanation: "Kabaddiwalas are the aggregators in the informal chain \u2014 they collect material from ragpickers and supply it to processors."
+            },
+            {
+              type: "mcq",
+              text: "DRS replaces Goa\u2019s existing informal waste collection system.",
+              options: [
+                { text: "True", correct: false },
+                { text: "False", correct: true }
+              ],
+              explanation: "DRS works with the existing ecosystem \u2014 partnering with ragpickers, kabaddiwalas, and processors rather than replacing them."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 2: The Four Types
+        // ============================================================
+        {
+          id: 1,
+          title: "The Four Types",
+          readingTime: "2.5 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "Four types of collection points \u2014 but the consumer experience is the same: scan, return, get your deposit back.",
+          completionMessages: {
+            perfect: "Re/Non-Re, Small/Large \u2014 you\u2019ve got the 2\u00D72 matrix mapped cold.",
+            good: "Four types, four reasons. The ownership-space logic is clicking.",
+            passed: "The core idea: different locations need different setups. That\u2019s the foundation."
+          },
+          contentChunks: [
+            {
+              title: "One Size Fits None",
+              html: `<p>You can\u2019t collect bottles the same way everywhere. A beach parking lot isn\u2019t a kirana store. A bus stand isn\u2019t a collection warehouse. Different locations need different setups.</p>
+                     <p>So DRS uses <strong>four types</strong> of collection points. Each one designed for where it sits.</p>`
+            },
+            {
+              title: "The Matrix",
+              html: `<p>Two parameters split the four types: <strong>Ownership</strong> and <strong>Capabilities</strong>.</p>
+                     <p><strong>Re vs Non-Re:</strong> \u201CRe\u201D means <strong>Recykal-owned</strong> \u2014 the premise, device, and manpower are all on Recykal\u2019s payroll. \u201CNon-Re\u201D means <strong>partner-owned</strong> \u2014 a third party provides the space and people.</p>
+                     <p><strong>Small vs Large:</strong> Small means limited capacity, collection only. Large means processing capable \u2014 sorting, segregating, maybe even baling.</p>`
+            },
+            {
+              title: "What Makes Them Different?",
+              html: `<p>Four differentiating factors: <strong>ownership of the premise</strong>, <strong>manpower</strong>, <strong>supply of electricity and wifi</strong>, and <strong>area of the premise</strong> (how much space you have).</p>
+                     <p>A 2\u00D72 grid. Re Small. Re Large. Non-Re Small. Non-Re Large. Four combinations, four approaches.</p>`
+            },
+            {
+              title: "Four Types, One Goal",
+              html: `<p><strong>Re Small</strong> = an RVM on a panchayat footpath. <strong>Re Large</strong> = a manned collection center at a railway station. <strong>Non-Re Small</strong> = your neighborhood kirana store with a device. <strong>Non-Re Large</strong> = a kabadiwala\u2019s warehouse with onboarded ragpickers.</p>
+                     <p>Different setups. Same outcome: bottles come in, deposits go out, material moves to recycling.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What does \u201CRe\u201D in \u201CRe Small\u201D stand for?",
+              options: [
+                { text: "Recycling", correct: false },
+                { text: "Return", correct: false },
+                { text: "Recykal-owned", correct: true },
+                { text: "Registered", correct: false }
+              ],
+              explanation: "\u201CRe\u201D indicates that Recykal owns and operates the collection point \u2014 the premise, device, and manpower are all on Recykal\u2019s payroll."
+            },
+            {
+              type: "mcq",
+              text: "What\u2019s the main difference between Small and Large collection points?",
+              options: [
+                { text: "The number of consumers they serve", correct: false },
+                { text: "Large can process and sort material, Small cannot", correct: true },
+                { text: "Small is automated, Large is manual", correct: false },
+                { text: "Large is always indoors, Small is always outdoors", correct: false }
+              ],
+              explanation: "The Small/Large distinction is about processing capability. Large collection points can sort, segregate, and sometimes bale material. Small ones only collect."
+            },
+            {
+              type: "mcq",
+              text: "All collection points are owned and operated by Recykal.",
+              options: [
+                { text: "True", correct: false },
+                { text: "False", correct: true }
+              ],
+              explanation: "Only \u201CRe\u201D collection points are Recykal-owned. \u201CNon-Re\u201D collection points are partner-owned \u2014 third parties provide the premise and manpower."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 3: Recykal Collection Points
+        // ============================================================
+        {
+          id: 2,
+          title: "Recykal Collection Points",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "RVMs collect. Retearn Points collect AND sort. That\u2019s the difference between Small and Large.",
+          completionMessages: {
+            perfect: "300 RVMs, 25 Retearn Points, FastScan segregation \u2014 Recykal\u2019s own network is crystal clear.",
+            good: "Automated vs manned, single bag vs sorted bins \u2014 the Re Small/Re Large split makes sense.",
+            passed: "RVMs = automated, Retearn Points = manned with sorting. That\u2019s the core difference."
+          },
+          contentChunks: [
+            {
+              title: "The Machines",
+              html: `<p>Re Small = <strong>RVM (Reverse Vending Machine)</strong>. Fully automated. Feed bottles in, get your refund. Around 300 of them rolling out across Goa \u2014 at least one in every village panchayat, at least five in every municipality.</p>
+                     <img src="RVM.jpeg" alt="Reverse Vending Machine (RVM)" class="content-image-wide">
+                     <p>Recykal deploys manpower alongside RVMs initially to guide consumers. As adoption increases, machines run solo.</p>`
+            },
+            {
+              title: "One Bag at a Time",
+              html: `<p>Inside an RVM, everything goes into one active bag. Glass, PET, Tetra Pak \u2014 all mixed together. No segregation. The machine scans the QR, validates the material, issues the refund. But sorting happens later, elsewhere.</p>
+                     <p>That\u2019s why it\u2019s \u201CSmall.\u201D Limited capacity. Collection only.</p>`
+            },
+            {
+              title: "The Manned Centers",
+              html: `<p>Re Large = <strong>Retearn Points</strong>. A medium-sized modular collection point, around 80 square feet, with a person inside holding a <strong>FastScan</strong> (a handheld scanner).</p>
+                     <img src="ReKlaim Center 1.jpeg" alt="Retearn Point collection center" class="content-image-wide">
+                     <p>25 Retearn Points planned initially for dense, high-traffic areas. Large beach parking lots. Bus stands. Railway stations. Tourist attractions. Places where bottles pile up fast.</p>`
+            },
+            {
+              title: "Sorted at Source",
+              html: `<p>Multiple bags active at the same time. Glass goes in the glass bin. PET in the PET bin. Tetra Pak in its own bin. The handler sorts material as it comes in.</p>
+                     <img src="ReKlaim Center 2.jpeg" alt="Sorting area at Retearn Point" class="content-image-wide">
+                     <p>Some Retearn Points even have equipment to bale and pack material right there. Re Large does what RVMs can\u2019t \u2014 segregation before the material even leaves the collection point.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What device is used at Re Large collection points?",
+              options: [
+                { text: "Soundbox", correct: false },
+                { text: "RVM", correct: false },
+                { text: "FastScan", correct: true },
+                { text: "ReKlaim Go", correct: false }
+              ],
+              explanation: "Re Large collection points (Retearn Points) are manned, and handlers use a FastScan handheld scanner to process returns."
+            },
+            {
+              type: "mcq",
+              text: "Why does Recykal deploy manpower alongside RVMs initially?",
+              options: [
+                { text: "To repair the machines when they break", correct: false },
+                { text: "To guide consumers until adoption increases", correct: true },
+                { text: "To manually sort the material inside", correct: false },
+                { text: "Because RVMs can\u2019t process refunds automatically", correct: false }
+              ],
+              explanation: "RVMs are fully automated, but Recykal deploys manpower initially to help consumers learn how to use them. As adoption grows, machines can run solo."
+            },
+            {
+              type: "mcq",
+              text: "What happens to material inside an RVM?",
+              options: [
+                { text: "It gets sorted by material type immediately", correct: false },
+                { text: "It gets baled and packed", correct: false },
+                { text: "It all goes into one bag with no segregation", correct: true },
+                { text: "It gets shredded on the spot", correct: false }
+              ],
+              explanation: "RVMs have one active bag inside. Everything \u2014 glass, PET, Tetra Pak \u2014 goes in mixed. Sorting happens later at a processing facility."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 4: Partner Collection Points
+        // ============================================================
+        {
+          id: 3,
+          title: "Partner Collection Points",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "DRS turns existing businesses into collection points and existing waste workers into earning partners.",
+          completionMessages: {
+            perfect: "Franchise model, tiered handling fees, informal ecosystem integration \u2014 partner CPs decoded.",
+            good: "Kirana stores earn handling fees, kabaddiwalas earn more by adding value. The partner logic clicks.",
+            passed: "The big idea: DRS works with existing businesses and waste networks."
+          },
+          contentChunks: [
+            {
+              title: "Your Neighborhood Store",
+              html: `<p>A kirana store. A petrol pump. A supermarket like DMart or Reliance Mart. Give them a device \u2014 Soundbox, FastScan, or even a small RVM depending on space \u2014 and they become a collection point.</p>
+                     <p>These are <strong>Non-Re Small</strong> partners. They provide the space, the manpower, the electricity, the internet. Recykal provides the device. Partner pays a security deposit.</p>`
+            },
+            {
+              title: "The Franchise Deal",
+              html: `<p>Why would a store do this? Because they earn a <strong>handling fee</strong> for every unit collected. Alternate income stream. Payment happens per unit or as a one-time lump sum weekly or monthly.</p>
+                     <p>The handling fee compensates for rental space, electricity, internet, and staff time. Term: 1 year, renewable. Target: <strong>300+ franchise partners</strong> across Goa.</p>`
+            },
+            {
+              title: "The Existing System",
+              html: `<p>Remember the kabaddiwalas from Chapter 1? They already aggregate Goa\u2019s waste. DRS partners with them as <strong>Non-Re Large</strong> collection points.</p>
+                     <p>Two components: a warehouse for processing, and collection manpower \u2014 ragpickers doing door-to-door pickup. The kabadiwala provides details of their ragpickers. Recykal onboards them in the system, gives them ReKlaim Go devices or the Handler app. They become mobile collection points.</p>`
+            },
+            {
+              title: "Earn More, Do More",
+              html: `<p>Here\u2019s the deal for Non-Re Large partners: <strong>tiered handling fees</strong> based on value added. Collect material? You get a collection fee. Sort it by material type? Add a sorting fee. Process and bale it? Add a processing fee.</p>
+                     <p>Payout cycles: daily, on material receipt at the central processing center, or monthly. Term: 5 years with a 3-year lock-in. Recykal deploys manpower at Non-Re Large sites to monitor and prevent loopholes. Material ownership stays with Recykal.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What does a Non-Re Small partner earn for collecting DRS material?",
+              options: [
+                { text: "A fixed monthly salary", correct: false },
+                { text: "A per-unit handling fee", correct: true },
+                { text: "A percentage of the deposit refunded to consumers", correct: false },
+                { text: "Nothing \u2014 they volunteer", correct: false }
+              ],
+              explanation: "Non-Re Small partners earn a handling fee for every unit collected, compensating them for space, electricity, internet, and staff time."
+            },
+            {
+              type: "mcq",
+              text: "Why can\u2019t registered collection partners return material at Non-Re Small CPs?",
+              options: [
+                { text: "It creates ownership tracking confusion in the system", correct: true },
+                { text: "Non-Re Small CPs don\u2019t have enough space", correct: false },
+                { text: "It\u2019s illegal under DRS rules", correct: false },
+                { text: "Non-Re Small partners refuse to accept bulk returns", correct: false }
+              ],
+              explanation: "If a collection partner returns material at a Non-Re Small CP, the ownership chain becomes Partner \u2192 Non-Re Small \u2192 Recykal, which creates confusion. Partners return to Recykal-owned CPs (Re Small or Re Large) or Non-Re Large instead."
+            },
+            {
+              type: "mcq",
+              text: "Non-Re Large partners must build new infrastructure to participate in DRS.",
+              options: [
+                { text: "True", correct: false },
+                { text: "False", correct: true }
+              ],
+              explanation: "Non-Re Large partners are existing kabaddiwalas, processors, and traders who already have warehouses and manpower. DRS works with their existing infrastructure."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 5: The People Network
+        // ============================================================
+        {
+          id: 4,
+          title: "The People Network",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "DRS doesn\u2019t wait for bottles to come to a collection point \u2014 it sends people to where the bottles are.",
+          completionMessages: {
+            perfect: "Ragpickers, WMO workers, collection partners, unclaimed bottles \u2014 you know every collection channel.",
+            good: "Door-to-door, mobile CPs, found bottles \u2014 the people network is clicking.",
+            passed: "The key: collection doesn\u2019t just happen at fixed points. People carry the system to the bottles."
+          },
+          contentChunks: [
+            {
+              title: "Meet the Collectors",
+              html: `<p>Three types of ragpickers already work Goa\u2019s streets: <strong>independent ones</strong> who roam freely, <strong>kabadiwala-affiliated ones</strong> bound to a specific aggregator, and <strong>WMO workers</strong> employed by waste contractors.</p>
+                     <p>DRS registers the independent ragpickers. Gives them a smartphone with ReKlaim Go or the Handler app. They become mobile collection points. New income stream, same streets.</p>`
+            },
+            {
+              title: "At Your Doorstep",
+              html: `<p>A WMO worker knocks. You hand over your bottles. They ask for your UPI QR, DRS App QR, or phone number. You provide it. They scan every bottle. Complete the transaction.</p>
+                     <p>System validates. Computes deposit. Issues instant refund to your account. The worker tracks units collected. Returns bottles to the central processing center in bulk. Handling fee gets paid.</p>`
+            },
+            {
+              title: "The Intermediary",
+              html: `<p>Any individual can register as a <strong>collection partner</strong> \u2014 ragpickers, delivery partners, even part-time college students looking for extra income. Two requirements: a smartphone and a bank account.</p>
+                     <p>Here\u2019s their workflow: scan the consumer\u2019s UPI QR to start the transaction. Scan each bottle\u2019s DRS QR \u2014 the deposit goes straight from escrow to the consumer. The partner then drops collected material at any Recykal-owned CP or Non-Re Large point and earns a <strong>handling fee</strong> per unit. They\u2019re the bridge between consumers and the collection network.</p>`
+            },
+            {
+              title: "Finders, Keepers",
+              html: `<p>A bottle on the road with an active deposit? Unclaimed DRS material. Whoever brings it into the system gets the <strong>full deposit</strong>.</p>
+                     <p>That\u2019s 10x what informal waste pickup pays today. Suddenly, litter becomes currency. Streets get cleaner. Ragpickers earn more.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "ordering",
+              text: "Put the door-to-door collection steps in the correct order:",
+              items: [
+                "Worker asks for consumer\u2019s UPI QR or phone number",
+                "Worker scans all DRS material",
+                "System validates and issues instant refund to consumer",
+                "Material returned to CPC in bulk and handling fee paid"
+              ],
+              correctOrder: [
+                "Worker asks for consumer\u2019s UPI QR or phone number",
+                "Worker scans all DRS material",
+                "System validates and issues instant refund to consumer",
+                "Material returned to CPC in bulk and handling fee paid"
+              ],
+              explanation: "UPI info first (so the system knows where to send the refund), then scanning, then instant refund, then bulk return and payment \u2014 same logic as the consumer return process."
+            },
+            {
+              type: "mcq",
+              text: "What happens when someone brings unclaimed DRS material (found on the road) into the system?",
+              options: [
+                { text: "They get half the deposit amount", correct: false },
+                { text: "They get the full deposit amount", correct: true },
+                { text: "They get a fixed handling fee", correct: false },
+                { text: "They get nothing \u2014 only original purchasers can claim deposits", correct: false }
+              ],
+              explanation: "Unclaimed DRS material found as litter can be returned by anyone for the full deposit \u2014 this is 10x what ragpickers earn from informal waste pickup today."
+            },
+            {
+              type: "mcq",
+              text: "Who can register as a collection partner in DRS?",
+              options: [
+                { text: "Only kabaddiwalas with existing warehouses", correct: false },
+                { text: "Only WMO-employed workers", correct: false },
+                { text: "Anyone with a smartphone and a bank account", correct: true },
+                { text: "Only Recykal employees", correct: false }
+              ],
+              explanation: "Collection partners can be ragpickers, delivery partners, or even part-time college students. The only requirements are a smartphone and a formal bank account."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 6: HoReCa & Bulk Collection
+        // ============================================================
+        {
+          id: 5,
+          title: "HoReCa & Bulk Collection",
+          readingTime: "2.5 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "HoReCa establishments don\u2019t go to collection points \u2014 collection comes to them, via the Bulk Waste Generator App.",
+          completionMessages: {
+            perfect: "Bulk Waste Generator App, scheduled pickups, instant refunds at scale \u2014 HoReCa collection nailed.",
+            good: "Hotels and restaurants don\u2019t go to CPs \u2014 CPs come to them. The bulk collection model is clear.",
+            passed: "The key: HoReCa gets pickup service through the Bulk Waste Generator App."
+          },
+          contentChunks: [
+            {
+              title: "The Big Generators",
+              html: `<p>Hotels. Restaurants. Cafes. Resorts. Casinos. Bars. Large apartment complexes. These are <strong>HoReCa</strong> establishments \u2014 short for <strong>Ho</strong>tels, <strong>Re</strong>staurants, <strong>Ca</strong>fes. They generate hundreds of empty bottles and cans every single day.</p>
+                     <p>A single restaurant can accumulate more DRS waste in one evening than a household does in a month. They\u2019re not regular consumers. They\u2019re bulk waste generators.</p>`
+            },
+            {
+              title: "The Problem",
+              html: `<p>Imagine running a busy restaurant in Panaji. You\u2019ve got 200 empty beer bottles from last night. The nearest collection point is a couple of kilometers away. Are you going to load them up and drive there?</p>
+                     <p>Probably not. Especially in the early days when collection point density is still building up. HoReCa establishments need collection to come to them.</p>`
+            },
+            {
+              title: "The Pickup",
+              html: `<p>Here\u2019s how it works. The establishment registers on the <strong>Bulk Waste Generator App</strong>. They set up a digital identity \u2014 address, point of contact, contact number. When they\u2019ve accumulated enough empties, they request a pickup.</p>
+                     <p>A vehicle arrives with bags and a scanner. The pickup team scans every DRS QR code on the spot. The system validates, computes the deposit, and the refund hits the HoReCa\u2019s account instantly. Same process as a consumer return, just at a much larger scale.</p>`
+            },
+            {
+              title: "Full Visibility",
+              html: `<p>The app tracks everything. Every pickup, every bag, every payment. You can see when your next pickup is scheduled, track where your bags are being processed, and view your complete payment history.</p>
+                     <p>For the operations team, HoReCa pickups are handled through Non-Re Large partners who deploy fleet with drivers and helpers. Scheduled, route-optimized, and digitally tracked end to end.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What makes HoReCa different from regular consumers in DRS?",
+              options: [
+                { text: "They pay a higher deposit", correct: false },
+                { text: "They generate bulk waste and get a pickup service", correct: true },
+                { text: "They don\u2019t get deposit refunds", correct: false },
+                { text: "They can only return glass bottles", correct: false }
+              ],
+              explanation: "HoReCa establishments generate hundreds of bottles daily. Instead of visiting collection points, they register on the Bulk Waste Generator App and request pickups."
+            },
+            {
+              type: "mcq",
+              text: "What\u2019s the first thing a HoReCa establishment does to join the DRS pickup service?",
+              options: [
+                { text: "Buy an RVM", correct: false },
+                { text: "Register on the Bulk Waste Generator App", correct: true },
+                { text: "Contact a kabadiwala", correct: false },
+                { text: "Visit the nearest Retearn Point", correct: false }
+              ],
+              explanation: "HoReCa establishments register on the Bulk Waste Generator App, set up their digital identity, and then they can start requesting pickups."
+            },
+            {
+              type: "mcq",
+              text: "HoReCa establishments must bring their empty bottles to a collection point to get their deposit back.",
+              options: [
+                { text: "True", correct: false },
+                { text: "False", correct: true }
+              ],
+              explanation: "HoReCa establishments get reverse logistics service \u2014 a pickup vehicle comes to them with bags and a scanner. They don\u2019t need to visit a collection point."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 7: Covering Every Corner
+        // ============================================================
+        {
+          id: 6,
+          title: "Covering Every Corner",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "Every bottle is tracked from the moment it enters a bag until it reaches the CPC \u2014 five stages, zero gaps.",
+          completionMessages: {
+            perfect: "300 RVMs, 100/191 panchayats contacted, 5-stage bag lifecycle \u2014 you\u2019ve got the full map.",
+            good: "The numbers, the ground approach, and the phased rollout are clear. Every panchayat covered.",
+            passed: "The core: 300+ collection points, boots on the ground, phased deployment. The coverage plan is set."
+          },
+          contentChunks: [
+            {
+              title: "The Numbers",
+              html: `<p>Around <strong>300 RVMs</strong>. <strong>25 Retearn Points</strong>. <strong>300+ franchise partners</strong> targeted. <strong>400+ aggregators</strong> identified for partnerships. All spread across 3,702 square kilometers. Goa\u2019s collection network by the numbers.</p>
+                     <p><em>(Note: These are tentative deployment figures and may change during rollout.)</em></p>`
+            },
+            {
+              title: "Boots on the Ground",
+              html: `<p>Setting up 300+ collection points doesn\u2019t happen from a boardroom. Here\u2019s how the team does it.</p>
+                     <p>The <strong>Scheme Administrator (SA)</strong> meets the <strong>Director of Panchayats</strong> to explain what DRS is and what the government mandate requires. The Director passes this down to <strong>Block Development Officers (BDOs)</strong> \u2014 Goa has 12 blocks, each BDO managing multiple panchayats under them.</p>
+                     <p>The team then meets each BDO, explains the scheme, and coordinates visits to individual <strong>Panchayat Secretaries and Sarpanches</strong>. As of February 2026, the team has contacted <strong>100 out of 191 village panchayats</strong>. Work in progress, panchayat by panchayat.</p>`
+            },
+            {
+              title: "Track Every Bag",
+              html: `<p>Each bag gets a unique ID. Five stages in the <strong>bag lifecycle</strong>:</p>
+                     <ol>
+                       <li><strong>Bag Mapped</strong> \u2014 ID assigned during distribution</li>
+                       <li><strong>Bag Fill Initiated</strong> \u2014 scanned before filling starts</li>
+                       <li><strong>Bag Fill Complete</strong> \u2014 scanned when max capacity reached</li>
+                       <li><strong>In Transit</strong> \u2014 scanned during pickup</li>
+                       <li><strong>Received at CPC</strong> \u2014 scanned at the central processing center dock</li>
+                     </ol>
+                     <p>Five scans. Zero blind spots.</p>`
+            },
+            {
+              title: "Phase by Phase",
+              html: `<p>Deployment happens in three phases. <strong>Phase 1:</strong> Panchayat RVMs roll out first \u2014 the mandatory base. <strong>Phase 2:</strong> Retearn Points and franchise partners come online. <strong>Phase 3:</strong> Informal ecosystem and aggregators integrate.</p>
+                     <p>Goa has 191 village panchayats, 13 <strong>ULBs (Urban Local Bodies)</strong>, and 1 <strong>CCP (Corporation of the City of Panaji)</strong>. The government mandate: at least one automated collection point in every panchayat. At least five in every municipality.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "How many automated collection points (RVMs) are mandated across Goa?",
+              options: [
+                { text: "191 (one per village panchayat)", correct: false },
+                { text: "Around 300", correct: true },
+                { text: "500", correct: false },
+                { text: "25", correct: false }
+              ],
+              explanation: "The government mandates around 300 RVMs \u2014 at least one in every village panchayat and at least five in every municipality. (Note: This is a tentative deployment figure.)"
+            },
+            {
+              type: "mcq",
+              text: "What role do Block Development Officers (BDOs) play in setting up collection points?",
+              options: [
+                { text: "They operate the RVMs", correct: false },
+                { text: "They coordinate between the Director of Panchayats and individual panchayats", correct: true },
+                { text: "They manufacture the collection devices", correct: false },
+                { text: "They fund the collection points", correct: false }
+              ],
+              explanation: "Each BDO manages multiple panchayats. The SA team meets BDOs to coordinate visits to Panchayat Secretaries and Sarpanches for setting up collection points."
+            },
+            {
+              type: "ordering",
+              text: "Put the bag lifecycle stages in the correct order:",
+              items: [
+                "Bag Mapped",
+                "Bag Fill Initiated",
+                "Bag Fill Complete",
+                "In Transit",
+                "Received at CPC"
+              ],
+              correctOrder: [
+                "Bag Mapped",
+                "Bag Fill Initiated",
+                "Bag Fill Complete",
+                "In Transit",
+                "Received at CPC"
+              ],
+              explanation: "Each bag is tracked through five stages \u2014 from initial ID mapping, through filling and pickup, all the way to arrival at the central processing center."
+            }
+          ]
+        }
+      ]
+    };
+
+    // Initialize — hydrate from server first (cross-browser persistence)
+    (async () => {
+      await Gamification.hydrateFromServer();
+      App.init(MODULE_DATA);
+
+      // Propagate storageKey to cross-module links
+      const params = new URLSearchParams(window.location.search);
+      const sk = params.get('storageKey');
+      if (sk) {
+        document.querySelectorAll('a[href*="/training/module-"]').forEach(a => {
+          const url = new URL(a.href, window.location.origin);
+          url.searchParams.set('storageKey', sk);
+          a.href = url.pathname + url.search;
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

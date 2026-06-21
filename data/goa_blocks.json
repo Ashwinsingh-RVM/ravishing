@@ -1,0 +1,130 @@
+{
+  "blocks": [
+    {
+      "id": 1,
+      "name": "Tiswadi",
+      "district": "North Goa",
+      "headquarters": "Panaji",
+      "estimated_vps": 15,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 2,
+      "name": "Bardez",
+      "district": "North Goa",
+      "headquarters": "Mapusa",
+      "estimated_vps": 20,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 3,
+      "name": "Pernem",
+      "district": "North Goa",
+      "headquarters": "Pernem",
+      "estimated_vps": 12,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 4,
+      "name": "Bicholim",
+      "district": "North Goa",
+      "headquarters": "Bicholim",
+      "estimated_vps": 14,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 5,
+      "name": "Satari",
+      "district": "North Goa",
+      "headquarters": "Valpoi",
+      "estimated_vps": 10,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 6,
+      "name": "Ponda",
+      "district": "North Goa",
+      "headquarters": "Ponda",
+      "estimated_vps": 18,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 7,
+      "name": "Salcete",
+      "district": "South Goa",
+      "headquarters": "Margao",
+      "estimated_vps": 22,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 8,
+      "name": "Mormugao",
+      "district": "South Goa",
+      "headquarters": "Vasco da Gama",
+      "estimated_vps": 8,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 9,
+      "name": "Quepem",
+      "district": "South Goa",
+      "headquarters": "Quepem",
+      "estimated_vps": 10,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 10,
+      "name": "Sanguem",
+      "district": "South Goa",
+      "headquarters": "Sanguem",
+      "estimated_vps": 12,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 11,
+      "name": "Canacona",
+      "district": "South Goa",
+      "headquarters": "Chaudi",
+      "estimated_vps": 8,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    },
+    {
+      "id": 12,
+      "name": "Dharbandora",
+      "district": "South Goa",
+      "headquarters": "Dharbandora",
+      "estimated_vps": 6,
+      "bdo_name": "",
+      "bdo_phone": "",
+      "bdo_email": ""
+    }
+  ],
+  "metadata": {
+    "total_blocks": 12,
+    "north_goa_blocks": 6,
+    "south_goa_blocks": 6,
+    "estimated_total_vps": 155
+  }
+}

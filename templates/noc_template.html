@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            line-height: 1.8;
+            color: #000;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+        .letterhead-placeholder {
+            border: 2px dashed #999;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            text-decoration: underline;
+            margin: 30px 0;
+        }
+        .ref-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .content {
+            text-align: justify;
+        }
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .details-table td {
+            padding: 8px;
+            border: 1px solid #000;
+        }
+        .details-table td:first-child {
+            width: 40%;
+            font-weight: bold;
+        }
+        .signature-section {
+            margin-top: 60px;
+        }
+        .signature-block {
+            float: right;
+            text-align: center;
+            width: 250px;
+        }
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 60px;
+            padding-top: 5px;
+        }
+        .stamp-placeholder {
+            border: 1px dashed #999;
+            width: 120px;
+            height: 120px;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 12px;
+        }
+        .footer-note {
+            clear: both;
+            margin-top: 100px;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="letterhead-placeholder">
+        <p><strong>[VILLAGE PANCHAYAT LETTERHEAD]</strong></p>
+        <p>{{village_panchayat_name}} Village Panchayat</p>
+        <p>{{block_name}} Block, {{district}} District, Goa</p>
+    </div>
+
+    <div class="ref-section">
+        <div>Ref No.: VP/DRS/NOC/{{year}}/____</div>
+        <div>Date: ________________</div>
+    </div>
+
+    <div class="title">NO OBJECTION CERTIFICATE</div>
+
+    <p>To Whom It May Concern,</p>
+
+    <div class="content">
+        <p>This is to certify that <strong>{{village_panchayat_name}} Village Panchayat</strong>,
+        {{block_name}} Block, {{district}} District, Goa, has no objection to the installation
+        and operation of a <strong>Reverse Vending Machine (RVM)</strong> under the
+        <strong>Goa Deposit Return Scheme (DRS)</strong> within the premises under its jurisdiction.</p>
+
+        <p>The following space has been identified and allocated for the installation of the RVM:</p>
+
+        <table class="details-table">
+            <tr>
+                <td>Location Description</td>
+                <td>{{location_address}}</td>
+            </tr>
+            <tr>
+                <td>GPS Coordinates (if available)</td>
+                <td>Latitude: __________ Longitude: __________</td>
+            </tr>
+            <tr>
+                <td>Area Allocated</td>
+                <td>Approximately _______ sq. ft.</td>
+            </tr>
+            <tr>
+                <td>Electricity Availability</td>
+                <td>☐ Available  ☐ To be arranged</td>
+            </tr>
+            <tr>
+                <td>Internet Connectivity</td>
+                <td>☐ Available  ☐ To be arranged</td>
+            </tr>
+            <tr>
+                <td>Shed/Shelter</td>
+                <td>☐ Available  ☐ To be constructed</td>
+            </tr>
+        </table>
+
+        <p>The Village Panchayat agrees to:</p>
+        <ol>
+            <li>Provide the above-mentioned space for the installation and operation of the RVM</li>
+            <li>Facilitate the provision of electricity and internet connectivity</li>
+            <li>Ensure the security of the installed equipment</li>
+            <li>Cooperate with the DRS implementation team for maintenance and operations</li>
+        </ol>
+
+        <p>This NOC is issued for the purpose of facilitating the Goa Deposit Return Scheme
+        implementation and is valid until revoked by the Village Panchayat with prior notice.</p>
+    </div>
+
+    <div class="signature-section">
+        <div class="signature-block">
+            <div class="stamp-placeholder">
+                Official<br>Stamp
+            </div>
+            <div class="signature-line">
+                Signature of Secretary/Sarpanch<br>
+                Name: ___________________<br>
+                Designation: _____________<br>
+                Date: ___________________
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-note">
+        <p><em>Note: This NOC should be printed on the official letterhead of the Village Panchayat
+        and signed by the authorized signatory with the official stamp.</em></p>
+    </div>
+</body>
+</html>

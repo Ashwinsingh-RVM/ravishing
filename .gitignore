@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs / caches / coverage
+*.log
+logs/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Audio uploads (transcription scratch)
+*.wav
+*.mp3
+*.m4a
+*.ogg
+uploads/
+
+# Large screenshot/feedback artifacts (not needed to run)
+Visual Feedback/
+frontend/vp_data.json
+
+# Secrets — never commit these
+.env
+oauth_tokens.json

@@ -1,0 +1,2426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Module 0: Basic Training — Goa DRS Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230EA5E9'><rect width='24' height='24' rx='4'/><path d='M6 12l4 4 8-8' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <style>
+/* ========================================
+   Goa DRS Training — Catalyst Design System
+   ======================================== */
+
+/* --- Design Tokens --- */
+:root {
+  --bg: #FFFFFF;
+  --surface: #F8FAFC;
+  --accent: #0EA5E9;
+  --accent-light: #E0F2FE;
+  --accent-dark: #0284C7;
+  --success: #22C55E;
+  --success-light: #DCFCE7;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --error: #EF4444;
+  --error-light: #FEF2F2;
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --text-light: #94A3B8;
+  --border: #E2E8F0;
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --topbar-h: 64px;
+  --sidebar-w: 300px;
+  --content-max: 800px;
+  --transition: 0.2s ease;
+}
+
+/* --- Reset & Base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* --- Typography --- */
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.3; }
+h1 { font-size: 28px; font-weight: 800; }
+h2 { font-size: 22px; }
+h3 { font-size: 18px; }
+h4 { font-size: 16px; font-weight: 600; }
+p { margin-bottom: 12px; }
+strong { font-weight: 600; }
+
+.mono { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+.mono-bold { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+/* --- Layout: Shell --- */
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* --- Topbar --- */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 100;
+}
+
+.topbar-brand { display: flex; align-items: center; gap: 12px; }
+
+.topbar-logo {
+  width: 36px; height: 36px;
+  background: var(--accent); border-radius: var(--radius-xs);
+  display: flex; align-items: center; justify-content: center;
+}
+.topbar-logo svg { width: 20px; height: 20px; fill: none; stroke: white; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.topbar-title { font-size: 16px; font-weight: 700; color: var(--text); }
+
+.topbar-stats { display: flex; align-items: center; gap: 20px; }
+
+.stat-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 700; color: var(--text);
+}
+.stat-badge .icon { font-size: 16px; }
+.stat-badge.xp { color: var(--accent); }
+.stat-badge.stars { color: var(--warning); }
+
+/* --- Layout: Body --- */
+.app-body { display: flex; margin-top: var(--topbar-h); min-height: calc(100vh - var(--topbar-h)); }
+
+/* --- Sidebar --- */
+.sidebar {
+  width: var(--sidebar-w); background: var(--bg);
+  border-right: 1px solid var(--border);
+  padding: 24px 20px;
+  position: fixed; top: var(--topbar-h); left: 0; bottom: 0;
+  overflow-y: auto; z-index: 50;
+}
+
+.sidebar-header { margin-bottom: 8px; }
+
+.sidebar-module-tag {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--accent-dark); background: var(--accent-light);
+  padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 8px;
+}
+.sidebar-module-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.sidebar-progress-text { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+/* --- Sidebar: Progress Bar --- */
+.progress-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin-bottom: 24px; }
+.progress-bar-fill { height: 100%; background: var(--accent); border-radius: 5px; transition: width 0.4s ease; }
+
+/* --- Sidebar: Chapter Path --- */
+.chapter-path { list-style: none; }
+
+.chapter-node {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 10px 0; cursor: pointer; position: relative;
+  transition: opacity var(--transition);
+}
+.chapter-node.locked { opacity: 0.5; cursor: not-allowed; }
+
+.chapter-node:not(:last-child)::after {
+  content: ''; position: absolute; left: 17px; top: 44px; bottom: -10px;
+  width: 2px; background: var(--border);
+}
+.chapter-node.completed:not(:last-child)::after { background: var(--success); }
+.chapter-node.active:not(:last-child)::after { background: var(--accent); }
+
+.node-circle {
+  width: 36px; height: 36px; min-width: 36px; border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+  color: var(--text-muted); background: var(--bg); transition: all var(--transition);
+}
+.chapter-node.active .node-circle { border-color: var(--accent); background: var(--accent); color: white; }
+.chapter-node.completed .node-circle { border-color: var(--success); background: var(--success); color: white; }
+
+.node-circle .check-icon { display: none; }
+.chapter-node.completed .node-circle .check-icon { display: block; }
+.chapter-node.completed .node-circle .node-number { display: none; }
+
+.node-info { flex: 1; padding-top: 2px; }
+.node-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.chapter-node.locked .node-title { color: var(--text-light); }
+.node-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+.node-stars { color: var(--warning); letter-spacing: 1px; }
+
+/* --- Main Content Area --- */
+.main-content {
+  flex: 1; margin-left: var(--sidebar-w); padding: 32px;
+  display: flex; justify-content: center;
+}
+.content-wrapper { width: 100%; max-width: var(--content-max); }
+
+/* --- Cards --- */
+.card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 24px; margin-bottom: 16px; transition: all var(--transition);
+}
+.card:hover { box-shadow: var(--shadow-md); }
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 24px; border-radius: var(--radius-sm);
+  font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; transition: all var(--transition); text-decoration: none;
+}
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-primary:disabled { background: var(--border); color: var(--text-light); cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-outline { background: transparent; color: var(--text); border: 2px solid var(--border); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { background: #16a34a; }
+.btn-lg { padding: 14px 32px; font-size: 16px; }
+.btn-sm { padding: 8px 16px; font-size: 13px; }
+.btn-block { width: 100%; }
+
+/* --- Tags / Pills --- */
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.tag-accent { background: var(--accent-light); color: var(--accent-dark); }
+.tag-success { background: var(--success-light); color: #15803d; }
+.tag-warning { background: var(--warning-light); color: #92400e; }
+
+/* --- Chapter View --- */
+.chapter-view { display: none; }
+.chapter-view.active { display: block; }
+.chapter-header { margin-bottom: 16px; }
+.chapter-tag { margin-bottom: 8px; }
+.chapter-title { font-size: 26px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.chapter-meta { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-muted); }
+.chapter-meta .icon { margin-right: 4px; }
+
+/* ========================================
+   Chapter Progress Bar (7 segments)
+   ======================================== */
+
+.chapter-progress {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.progress-seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.4s ease, opacity 0.4s ease;
+}
+
+.progress-seg.filled { background: var(--accent); }
+.progress-seg.current { background: var(--accent); opacity: 0.4; }
+.progress-seg.quiz-correct { background: var(--success); }
+.progress-seg.quiz-wrong { background: var(--warning); }
+
+/* ========================================
+   Content Carousel
+   ======================================== */
+
+.carousel-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.carousel-header {
+  padding: 20px 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chunk-counter {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  background: var(--accent-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.chunk-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.carousel-body {
+  padding: 20px 24px;
+}
+
+.carousel-body p { margin-bottom: 14px; font-size: 15px; line-height: 1.75; color: var(--text); }
+.carousel-body p:last-child { margin-bottom: 0; }
+.carousel-body strong { font-weight: 600; color: var(--text); }
+.carousel-body ol, .carousel-body ul { margin: 12px 0 16px 24px; font-size: 15px; line-height: 1.75; }
+.carousel-body li { margin-bottom: 6px; }
+
+/* Key Insight (shown on last chunk) */
+.key-insight {
+  background: var(--accent-light);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  padding: 16px 20px;
+  margin: 4px 24px 20px;
+}
+.key-insight-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent-dark); margin-bottom: 6px;
+}
+.key-insight-text { font-size: 15px; font-weight: 500; color: var(--text); font-style: italic; }
+
+.carousel-nav {
+  padding: 0 24px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Slide animation */
+.chunk-slide-right { animation: slideInRight 0.3s ease; }
+.chunk-slide-left { animation: slideInLeft 0.3s ease; }
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ========================================
+   Quiz Ready Transition
+   ======================================== */
+
+.quiz-ready-section {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.quiz-ready-section .ready-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.quiz-ready-section h3 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.quiz-ready-section p {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+/* --- Timer Bar --- */
+.timer-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+.timer-display { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--text); }
+.timer-par { font-size: 12px; color: var(--text-muted); }
+
+/* ========================================
+   Quiz Section (Sequential)
+   ======================================== */
+
+.quiz-section { margin-top: 0; }
+
+.quiz-progress {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.quiz-progress-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+
+.quiz-progress-dots { display: flex; gap: 8px; }
+.quiz-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--border); transition: all 0.3s ease;
+}
+.quiz-dot.current { background: var(--accent); transform: scale(1.3); box-shadow: 0 0 0 3px var(--accent-light); }
+.quiz-dot.correct { background: var(--success); }
+.quiz-dot.wrong { background: var(--error); }
+
+/* --- Question Card --- */
+.question-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
+  transition: border-color var(--transition);
+}
+.question-card.answered-correct { border-color: var(--success); }
+.question-card.answered-wrong { border-color: var(--error); }
+
+.question-number {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent-dark); margin-bottom: 8px;
+}
+.question-text { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 16px; line-height: 1.5; }
+
+/* --- Quiz Options --- */
+.options-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+
+.option-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px 16px; border: 2px solid var(--border); border-radius: 14px;
+  background: var(--bg); cursor: pointer; transition: all var(--transition);
+  text-align: left; font-family: 'Poppins', sans-serif; font-size: 14px; color: var(--text);
+}
+.option-btn:hover:not(.disabled) { border-color: var(--accent); background: var(--accent-light); }
+.option-btn.selected { border-color: var(--accent); background: var(--accent-light); }
+.option-btn.correct { border-color: var(--success); background: var(--success-light); cursor: default; }
+.option-btn.wrong { border-color: var(--error); background: var(--error-light); cursor: default; }
+.option-btn.disabled { cursor: default; opacity: 0.6; }
+.option-btn.disabled.correct { opacity: 1; }
+
+.option-letter {
+  width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px; color: var(--text-muted); transition: all var(--transition);
+}
+.option-btn.correct .option-letter { background: var(--success); color: white; }
+.option-btn.wrong .option-letter { background: var(--error); color: white; }
+
+.option-text { flex: 1; font-size: 14px; line-height: 1.4; }
+
+/* ========================================
+   Explanation — Color-Coded Callout
+   ======================================== */
+
+.explanation {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: var(--radius-xs);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  display: none;
+  border-left: 4px solid var(--border);
+  background: var(--surface);
+}
+
+.explanation.visible { display: block; animation: fadeIn 0.3s ease; }
+
+.explanation.correct-exp {
+  background: var(--success-light);
+  border-left-color: var(--success);
+}
+
+.explanation.wrong-exp {
+  background: var(--error-light);
+  border-left-color: var(--error);
+}
+
+.exp-prefix {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.exp-prefix.correct { color: #15803d; }
+.exp-prefix.wrong { color: var(--error); }
+
+/* --- Ordering Question --- */
+.order-list { list-style: none; display: flex; flex-direction: column; gap: 8px; counter-reset: order-counter; }
+
+.order-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border: 2px solid var(--border); border-radius: 14px;
+  background: var(--bg); cursor: grab; transition: all var(--transition);
+  font-size: 14px; user-select: none;
+}
+.order-item:active { cursor: grabbing; }
+
+.order-item .order-num {
+  width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; color: var(--text-muted);
+}
+.order-item.correct-position { border-color: var(--success); background: var(--success-light); }
+.order-item.correct-position .order-num { background: var(--success); color: white; }
+.order-item.wrong-position { border-color: var(--error); background: var(--error-light); }
+.order-item.dragging { opacity: 0.5; border-color: var(--accent); }
+.order-item.drag-over { border-color: var(--accent); background: var(--accent-light); }
+
+/* --- Retry Transition --- */
+.retry-transition { text-align: center; padding: 40px 20px; animation: slideUp 0.4s ease; }
+.retry-transition .retry-icon { font-size: 48px; margin-bottom: 16px; }
+.retry-transition h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.retry-transition p { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
+.retry-transition .retry-round-info { font-size: 12px; color: var(--text-light); margin-bottom: 24px; }
+
+/* --- Retry Banner --- */
+.retry-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; background: var(--warning-light);
+  border-radius: var(--radius-xs); margin-bottom: 20px;
+  font-size: 14px; font-weight: 500; color: #92400e;
+  animation: fadeIn 0.3s ease;
+}
+.retry-banner .icon { font-size: 18px; }
+
+.quiz-actions { margin-top: 20px; }
+.question-enter { animation: slideUp 0.3s ease; }
+
+/* ========================================
+   Completion Overlay
+   ======================================== */
+
+.completion-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(8px);
+  z-index: 200; align-items: center; justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+.completion-overlay.visible { display: flex; }
+
+.completion-card {
+  background: var(--bg); border-radius: 20px; padding: 40px;
+  max-width: 440px; width: 90%; text-align: center;
+  box-shadow: var(--shadow-lg); animation: slideUp 0.4s ease;
+}
+
+/* Mascot placeholder */
+.mascot-area { margin-bottom: 12px; }
+.mascot-img {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--accent-light);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 42px;
+}
+
+.completion-stars { font-size: 36px; margin-bottom: 12px; letter-spacing: 4px; }
+.completion-title { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.completion-message { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; line-height: 1.6; }
+
+.completion-stats { display: flex; justify-content: center; gap: 24px; margin-bottom: 24px; }
+.completion-stat { text-align: center; }
+.completion-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--text); }
+.completion-stat-value.xp { color: var(--accent); }
+.completion-stat-value.time { color: var(--text); }
+.completion-stat-value.speed { color: var(--warning); }
+.completion-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+/* --- Module Overview --- */
+.module-overview { display: none; }
+.module-overview.active { display: block; }
+
+.module-hero { margin-bottom: 32px; }
+.module-hero-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.module-hero-desc { font-size: 15px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px; }
+
+.module-stats-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.module-stat-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: var(--surface);
+  border-radius: 20px; font-size: 13px; color: var(--text-muted);
+}
+.module-stat-pill .icon { font-size: 14px; }
+
+/* --- Chapter List Cards (Overview) --- */
+.chapter-list-card {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 12px; cursor: pointer; transition: all var(--transition);
+}
+.chapter-list-card:hover:not(.locked) { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.chapter-list-card.locked { opacity: 0.5; cursor: not-allowed; }
+.chapter-list-card.completed { border-color: var(--success); background: linear-gradient(to right, var(--success-light), var(--bg)); }
+
+.chapter-list-num {
+  width: 40px; height: 40px; min-width: 40px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; color: var(--text-muted);
+}
+.chapter-list-card.completed .chapter-list-num { background: var(--success); color: white; }
+.chapter-list-card.active .chapter-list-num { background: var(--accent); color: white; }
+
+.chapter-list-info { flex: 1; }
+.chapter-list-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.chapter-list-meta { font-size: 12px; color: var(--text-muted); }
+.chapter-list-right { display: flex; align-items: center; gap: 8px; }
+.chapter-list-stars { font-size: 14px; color: var(--warning); letter-spacing: 2px; }
+.chapter-list-arrow { color: var(--text-light); font-size: 18px; }
+
+/* --- Module Complete View --- */
+.module-complete { display: none; text-align: center; padding: 40px 0; }
+.module-complete.active { display: block; }
+.module-complete-badge {
+  width: 100px; height: 100px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 24px; font-size: 48px;
+  box-shadow: 0 4px 20px rgba(14, 165, 233, 0.3);
+}
+.module-complete-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.module-complete-subtitle { font-size: 15px; color: var(--text-muted); margin-bottom: 32px; }
+
+/* --- Sprint Tracker --- */
+.sprint-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; background: var(--warning-light);
+  border-radius: var(--radius-xs); font-size: 12px; font-weight: 600;
+  color: #92400e; margin-bottom: 24px;
+}
+.sprint-bar .icon { font-size: 14px; }
+
+/* --- Animations --- */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+.animate-in { animation: slideUp 0.3s ease; }
+
+/* --- Mobile --- */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { display: none; }
+  .sidebar.mobile-open { display: block; width: 280px; box-shadow: var(--shadow-lg); }
+  .main-content { margin-left: 0; padding: 20px 16px; }
+  .topbar { padding: 0 16px; }
+  .mobile-menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border: none; background: none;
+    cursor: pointer; font-size: 20px; color: var(--text);
+  }
+  .completion-card { padding: 28px 20px; }
+  .completion-stats { gap: 16px; }
+  .chapter-title { font-size: 22px; }
+  h1 { font-size: 24px; }
+  .carousel-header { padding: 16px 16px 0; }
+  .carousel-body { padding: 16px; }
+  .carousel-nav { padding: 0 16px 16px; }
+  .key-insight { margin: 4px 16px 16px; }
+}
+
+@media (min-width: 769px) { .mobile-menu-btn { display: none; } }
+
+/* --- Utility --- */
+.hidden { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- === TOPBAR === -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <button class="mobile-menu-btn" aria-label="Menu">&#9776;</button>
+        <div class="topbar-logo">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <span class="topbar-title">Goa DRS Training</span>
+      </div>
+      <div class="topbar-stats">
+        <div class="stat-badge xp"><span class="icon">&#9889;</span> <span id="xp-value">0</span> XP</div>
+        <div class="stat-badge stars"><span class="icon">&#9733;</span> <span id="stars-value">0</span></div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- === SIDEBAR === -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-module-tag">Module 0</span>
+          <div class="sidebar-module-title">Basic Training</div>
+          <div class="sidebar-progress-text">0 of 6 chapters</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <ul class="chapter-path"></ul>
+        <div style="margin-top: 24px;">
+          <button class="btn btn-outline btn-sm btn-block" onclick="App.goToOverview()">&#8592; Module Overview</button>
+        </div>
+      </nav>
+
+      <!-- === MAIN CONTENT === -->
+      <main class="main-content">
+        <div class="content-wrapper">
+
+          <!-- Sprint Bar -->
+          <div class="sprint-bar hidden"></div>
+
+          <!-- === MODULE OVERVIEW === -->
+          <div class="module-overview active">
+            <div class="module-hero">
+              <h1 class="module-hero-title">Module 0: Basic Training</h1>
+              <p class="module-hero-desc">
+                Get a solid foundation of <em>what</em> the Goa DRS is, <em>why</em> it exists, <em>who</em> the key players are, and <em>how</em> money and materials flow through the system.
+              </p>
+              <div class="module-stats-row">
+                <div class="module-stat-pill"><span class="icon">&#128214;</span> 6 chapters</div>
+                <div class="module-stat-pill"><span class="icon">&#10067;</span> 18 questions</div>
+                <div class="module-stat-pill"><span class="icon">&#9201;</span> ~27 minutes</div>
+                <div class="module-stat-pill"><span class="icon">&#9889;</span> 580 XP possible</div>
+              </div>
+            </div>
+            <div id="chapter-list"></div>
+          </div>
+
+          <!-- === CHAPTER VIEW === -->
+          <div class="chapter-view">
+            <!-- Chapter Header -->
+            <div class="chapter-header">
+              <span class="tag tag-accent chapter-tag">Chapter 1 of 6</span>
+              <h2 class="chapter-title">Loading...</h2>
+              <div class="chapter-meta"></div>
+            </div>
+
+            <!-- Timer -->
+            <div class="timer-bar">
+              <div>
+                <span style="font-size:13px; color: var(--text-muted);">&#9201; </span>
+                <span class="timer-display mono-bold">0:00</span>
+              </div>
+              <div class="timer-par">Par: 4:00</div>
+            </div>
+
+            <!-- Progress Bar (7 segments) -->
+            <div class="chapter-progress" id="chapter-progress"></div>
+
+            <!-- Content Carousel -->
+            <div class="carousel-card" id="carousel-card">
+              <div class="carousel-header">
+                <span class="chunk-counter" id="chunk-counter">1 of 4</span>
+                <h3 class="chunk-title" id="chunk-title">Loading...</h3>
+              </div>
+              <div class="carousel-body" id="chunk-content"></div>
+              <div class="key-insight hidden" id="carousel-insight">
+                <div class="key-insight-label">&#128161; Key Insight</div>
+                <div class="key-insight-text" id="carousel-insight-text"></div>
+              </div>
+              <div class="carousel-nav">
+                <button class="btn btn-outline btn-sm" id="chunk-prev" onclick="App.prevChunk()">&#8592; Back</button>
+                <button class="btn btn-primary" id="chunk-next" onclick="App.nextChunk()">Next &#8594;</button>
+              </div>
+            </div>
+
+            <!-- Quiz Ready Transition -->
+            <div class="quiz-ready-section card hidden" id="quiz-ready">
+              <div class="ready-icon">&#127919;</div>
+              <h3>Ready for the quiz?</h3>
+              <p>3 questions about what you just read. Get them all right on the first try for 3 stars.</p>
+              <button class="btn btn-primary btn-lg" onclick="App.startQuiz()">Let's go &#8594;</button>
+            </div>
+
+            <!-- Quiz Sequential (hidden until started) -->
+            <div class="quiz-section hidden" id="quiz-section">
+              <div class="quiz-progress">
+                <span class="quiz-progress-text" id="quiz-progress-text">Question 1 of 3</span>
+                <div class="quiz-progress-dots" id="quiz-dots"></div>
+              </div>
+
+              <div class="retry-banner hidden" id="retry-banner">
+                <span class="icon">&#128260;</span>
+                <span id="retry-text">Let's revisit the ones you missed.</span>
+              </div>
+
+              <div id="current-question"></div>
+
+              <div class="quiz-actions">
+                <button class="btn btn-primary btn-lg btn-block" id="quiz-check-btn" disabled onclick="App.checkAnswer()">Check Answer</button>
+                <button class="btn btn-success btn-lg btn-block hidden" id="quiz-continue-btn" onclick="App.continueQuiz()">Continue &#8594;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- === MODULE COMPLETE === -->
+          <div class="module-complete">
+            <div class="module-complete-badge">&#127891;</div>
+            <h1 class="module-complete-title">Module 0 Complete!</h1>
+            <p class="module-complete-subtitle"></p>
+            <div class="completion-stats"></div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 24px;">
+              You now understand the foundations of the Goa DRS. Next up: Module 1 — Consumer.
+            </p>
+            <a href="/static/training/module-1/index.html" class="btn-next-module" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#0EA5E9;color:#fff;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;transition:background 0.2s;">Start Module 1 →</a>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- === COMPLETION OVERLAY === -->
+  <div class="completion-overlay">
+    <div class="completion-card">
+      <div class="mascot-area"><div class="mascot-img" id="mascot-img">&#127881;</div></div>
+      <div class="completion-stars">&#9733;&#9733;&#9733;</div>
+      <h2 class="completion-title">Perfect!</h2>
+      <p class="completion-message">You absolutely crushed it!</p>
+      <div class="completion-stats">
+        <div class="completion-stat">
+          <div class="completion-stat-value xp">+80</div>
+          <div class="completion-stat-label">XP Earned</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value time">2:30</div>
+          <div class="completion-stat-label">Time</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value speed">&#9889; Under par!</div>
+          <div class="completion-stat-label">Speed</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+        <button class="btn btn-primary btn-lg btn-block btn-next">Next Chapter &#8594;</button>
+        <button class="btn-quit" onclick="window.location.href='/'" style="background:none;border:1px solid #E2E8F0;padding:8px 16px;border-radius:8px;font-size:13px;color:#64748B;cursor:pointer;font-family:inherit;">Exit Training</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- === GAMIFICATION ENGINE === -->
+  <script>
+const Gamification = (() => {
+  const STORAGE_KEY = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('storageKey') || 'goa_drs_training';
+  })();
+
+  function getDefaultState() {
+    return {
+      trainee: { name: '', startDate: new Date().toISOString().split('T')[0], totalXP: 0, totalStars: 0, totalTimeSeconds: 0 },
+      modules: {},
+      session: { chaptersThisSession: 0, currentModule: null, currentChapter: null }
+    };
+  }
+
+  function loadState() {
+    try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : getDefaultState(); }
+    catch { return getDefaultState(); }
+  }
+
+  function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  let state = loadState();
+
+  function ensureModule(moduleId) {
+    if (!state.modules[moduleId]) state.modules[moduleId] = { status: 'in_progress', chapters: {} };
+    return state.modules[moduleId];
+  }
+
+  function getChapter(moduleId, chapterId) {
+    const mod = ensureModule(moduleId);
+    return mod.chapters[chapterId] || null;
+  }
+
+  // Timer
+  let timerInterval = null, timerStart = null, timerElapsed = 0, timerCallback = null;
+
+  function startTimer(onTick) {
+    timerStart = Date.now(); timerElapsed = 0; timerCallback = onTick;
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      timerElapsed = Math.floor((Date.now() - timerStart) / 1000);
+      if (timerCallback) timerCallback(timerElapsed);
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (!timerStart) return 9999;
+    timerElapsed = Math.floor((Date.now() - timerStart) / 1000);
+    return timerElapsed;
+  }
+
+  function getElapsed() { return timerStart ? Math.floor((Date.now() - timerStart) / 1000) : timerElapsed; }
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // Stars: 0 retry rounds = 3, 1 retry round = 2, 2+ = 1
+  function calculateStars(retryRoundsUsed) {
+    if (retryRoundsUsed === 0) return 3;
+    if (retryRoundsUsed === 1) return 2;
+    return 1;
+  }
+
+  function calculateXP(stars, timeSeconds, parTimeSeconds) {
+    let xp = 20;
+    if (stars === 3) xp += 15;
+    else if (stars === 2) xp += 5;
+    // Speed bonus: up to 50 XP based on time vs par
+    if (parTimeSeconds > 0) {
+      const ratio = Math.min(timeSeconds / parTimeSeconds, 2);
+      xp += Math.max(0, Math.round(50 * (1 - ratio / 2)));
+    }
+    return xp;
+  }
+
+  function completeChapter(moduleId, chapterId, retryRoundsUsed, timeSeconds, parTimeSeconds) {
+    const mod = ensureModule(moduleId);
+    const stars = calculateStars(retryRoundsUsed);
+    let baseXP = calculateXP(stars, timeSeconds, parTimeSeconds);
+    const underPar = timeSeconds <= parTimeSeconds;
+
+    // Streak tracking (resets after 10 min gap)
+    const now = Date.now();
+    const lastTime = state.session.lastCompletionTime || 0;
+    const minutesSince = (now - lastTime) / 1000 / 60;
+    if (!lastTime || minutesSince > 10) {
+      state.session.streak = 1;
+    } else {
+      state.session.streak = (state.session.streak || 0) + 1;
+    }
+    state.session.lastCompletionTime = now;
+
+    // Streak multiplier: 1.0x base, +0.1x per level, cap 2.0x
+    const streak = state.session.streak;
+    const streakMultiplier = Math.min(1 + ((streak - 1) * 0.1), 2.0);
+    const xp = Math.round(baseXP * streakMultiplier);
+
+    const existing = mod.chapters[chapterId];
+    if (!existing || xp > (existing.xp || 0)) {
+      mod.chapters[chapterId] = { stars, xp, timeSeconds, completed: true };
+    }
+
+    recalculateTotals();
+    state.session.chaptersThisSession++;
+    state.session.currentModule = moduleId;
+    state.session.currentChapter = chapterId;
+    saveState(state);
+
+    return { stars, xp, baseXP, timeSeconds, underPar, streak, streakMultiplier };
+  }
+
+  function recalculateTotals() {
+    let totalXP = 0, totalStars = 0, totalTime = 0;
+    for (const mod of Object.values(state.modules)) {
+      for (const ch of Object.values(mod.chapters)) {
+        if (ch.completed) { totalXP += ch.xp; totalStars += ch.stars; totalTime += ch.timeSeconds; }
+      }
+      const completedCount = Object.values(mod.chapters).filter(c => c.completed).length;
+      if (mod.totalChapters && completedCount >= mod.totalChapters) { totalXP += 100; mod.status = 'completed'; }
+    }
+    state.trainee.totalXP = totalXP;
+    state.trainee.totalStars = totalStars;
+    state.trainee.totalTimeSeconds = totalTime;
+  }
+
+  function setModuleChapterCount(moduleId, count) { ensureModule(moduleId).totalChapters = count; saveState(state); }
+
+  function getModuleProgress(moduleId) {
+    const mod = state.modules[moduleId];
+    if (!mod) return { completed: 0, total: 0, percentage: 0 };
+    const total = mod.totalChapters || 0;
+    const completed = Object.values(mod.chapters).filter(c => c.completed).length;
+    return { completed, total, percentage: total > 0 ? Math.round((completed / total) * 100) : 0 };
+  }
+
+  function isChapterUnlocked(moduleId, chapterId) {
+    if (chapterId === 0) return true;
+    const prev = getChapter(moduleId, chapterId - 1);
+    return prev && prev.completed;
+  }
+
+  function isModuleComplete(moduleId) {
+    const mod = state.modules[moduleId];
+    if (!mod || !mod.totalChapters) return false;
+    return Object.values(mod.chapters).filter(c => c.completed).length >= mod.totalChapters;
+  }
+
+  function getSprintCount() { return state.session.chaptersThisSession; }
+  function getSprintMessage() {
+    const c = state.session.chaptersThisSession;
+    if (c === 0) return null;
+    if (c === 1) return "1 chapter completed this session!";
+    if (c < 4) return `${c} chapters completed this session!`;
+    return `${c} chapters completed \u2014 you're on fire!`;
+  }
+
+  function setTraineeName(name) { state.trainee.name = name; saveState(state); }
+  function getTraineeName() { return state.trainee.name; }
+  function getTotalXP() { return state.trainee.totalXP; }
+  function getTotalStars() { return state.trainee.totalStars; }
+  function getState() { return state; }
+  function getStreak() { return state.session.streak || 0; }
+  function reset() { state = getDefaultState(); saveState(state); }
+
+  async function hydrateFromServer() {
+    try {
+      const resp = await fetch('/api/training/progress', { credentials: 'include' });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.found && data.progress_json && data.progress_json !== '{}') {
+        const serverState = JSON.parse(data.progress_json);
+        const localXP = state.trainee ? (state.trainee.totalXP || 0) : 0;
+        const serverXP = serverState.trainee ? (serverState.trainee.totalXP || 0) : 0;
+        if (serverXP > localXP) {
+          localStorage.setItem(STORAGE_KEY, data.progress_json);
+          state = JSON.parse(data.progress_json);
+        }
+      }
+    } catch (e) { /* offline fallback — localStorage still works */ }
+  }
+
+  return {
+    loadState, hydrateFromServer, startTimer, stopTimer, getElapsed, formatTime,
+    calculateStars, calculateXP, completeChapter, setModuleChapterCount,
+    getChapter, getModuleProgress, isChapterUnlocked, isModuleComplete,
+    getSprintCount, getSprintMessage, setTraineeName, getTraineeName,
+    getTotalXP, getTotalStars, getState, getStreak, reset
+  };
+})();
+  </script>
+
+  <!-- === APP ENGINE (Carousel + Sequential Quiz) === -->
+  <script>
+const App = (() => {
+  let moduleData = null;
+  let currentView = 'overview';
+  let currentChapterId = null;
+
+  // Carousel state
+  let currentChunkIndex = 0;
+  let totalChunks = 0;
+
+  // Progress bar state: segments 0..(totalChunks-1) = content, totalChunks..(totalChunks+quizCount-1) = quiz
+  let progressStates = []; // 'pending' | 'done' | 'current' | 'quiz-correct' | 'quiz-wrong'
+
+  // Quiz sequential state
+  let questionsForRound = [];
+  let currentQPos = 0;
+  let retryRound = 0;
+  let wrongThisRound = [];
+  let totalRetryRoundsUsed = 0;
+  let selectedAnswer = null;
+  let currentQuestionEvaluated = false;
+  let questionDotStates = [];
+
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  // ==========================================
+  // INIT
+  // ==========================================
+  function init(data) {
+    moduleData = data;
+    Gamification.setModuleChapterCount(data.id, data.chapters.length);
+    updateTopbar();
+    renderSidebar();
+    showOverview();
+    setupMobileMenu();
+  }
+
+  function updateTopbar() {
+    const xpEl = $('#xp-value');
+    const starsEl = $('#stars-value');
+    if (xpEl) xpEl.textContent = Gamification.getTotalXP();
+    if (starsEl) starsEl.textContent = Gamification.getTotalStars();
+  }
+
+  function setupMobileMenu() {
+    const btn = $('.mobile-menu-btn');
+    const sidebar = $('.sidebar');
+    if (btn && sidebar) {
+      btn.addEventListener('click', () => sidebar.classList.toggle('mobile-open'));
+      $('.main-content').addEventListener('click', () => sidebar.classList.remove('mobile-open'));
+    }
+  }
+
+  // ==========================================
+  // SIDEBAR
+  // ==========================================
+  function renderSidebar() {
+    const pathEl = $('.chapter-path');
+    if (!pathEl) return;
+
+    const progress = Gamification.getModuleProgress(moduleData.id);
+    const progressText = $('.sidebar-progress-text');
+    if (progressText) progressText.textContent = `${progress.completed} of ${progress.total} chapters`;
+    const progressFill = $('.progress-bar-fill');
+    if (progressFill) progressFill.style.width = `${progress.percentage}%`;
+
+    pathEl.innerHTML = moduleData.chapters.map((ch, i) => {
+      const chData = Gamification.getChapter(moduleData.id, i);
+      const unlocked = Gamification.isChapterUnlocked(moduleData.id, i);
+      const completed = chData && chData.completed;
+      const isActive = currentView === 'chapter' && currentChapterId === i;
+      let cls = 'chapter-node';
+      if (completed) cls += ' completed';
+      else if (isActive) cls += ' active';
+      else if (!unlocked) cls += ' locked';
+
+      const stars = completed ? renderStarsText(chData.stars) : '';
+      const meta = completed
+        ? `<span class="node-stars">${stars}</span> <span>${Gamification.formatTime(chData.timeSeconds)}</span>`
+        : `${ch.readingTime} | ${ch.quizCount} Qs`;
+
+      return `
+        <li class="${cls}" data-chapter="${i}" onclick="App.onChapterNodeClick(${i})">
+          <div class="node-circle">
+            <span class="node-number">${i + 1}</span>
+            <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div class="node-info">
+            <div class="node-title">${ch.title}</div>
+            <div class="node-meta">${meta}</div>
+          </div>
+        </li>
+      `;
+    }).join('');
+  }
+
+  function renderStarsText(count) {
+    return '\u2605'.repeat(count) + '\u2606'.repeat(3 - count);
+  }
+
+  // ==========================================
+  // OVERVIEW
+  // ==========================================
+  function showOverview() {
+    currentView = 'overview';
+    currentChapterId = null;
+    hideAllViews();
+    const overview = $('.module-overview');
+    if (overview) overview.classList.add('active');
+    renderOverviewChapters();
+    renderSidebar();
+    renderSprintBar();
+  }
+
+  function renderOverviewChapters() {
+    const listEl = $('#chapter-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = moduleData.chapters.map((ch, i) => {
+      const chData = Gamification.getChapter(moduleData.id, i);
+      const unlocked = Gamification.isChapterUnlocked(moduleData.id, i);
+      const completed = chData && chData.completed;
+
+      let cls = 'chapter-list-card';
+      if (completed) cls += ' completed';
+      else if (unlocked && !completed) cls += ' active';
+      else cls += ' locked';
+
+      const stars = completed ? `<span class="chapter-list-stars">${renderStarsText(chData.stars)}</span>` : '';
+      const meta = completed
+        ? `${Gamification.formatTime(chData.timeSeconds)} | ${chData.xp} XP`
+        : `${ch.readingTime} | ${ch.quizCount} questions`;
+
+      return `
+        <div class="${cls}" onclick="App.onChapterClick(${i})" data-chapter="${i}">
+          <div class="chapter-list-num">${completed ? '\u2713' : i + 1}</div>
+          <div class="chapter-list-info">
+            <div class="chapter-list-title">${ch.title}</div>
+            <div class="chapter-list-meta">${meta}</div>
+          </div>
+          <div class="chapter-list-right">
+            ${stars}
+            <span class="chapter-list-arrow">${unlocked ? '\u2192' : '\uD83D\uDD12'}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderSprintBar() {
+    const sprintEl = $('.sprint-bar');
+    if (!sprintEl) return;
+    const msg = Gamification.getSprintMessage();
+    if (msg) {
+      sprintEl.innerHTML = `<span class="icon">\u26A1</span> ${msg}`;
+      sprintEl.classList.remove('hidden');
+    } else {
+      sprintEl.classList.add('hidden');
+    }
+  }
+
+  // ==========================================
+  // CHAPTER VIEW — CAROUSEL
+  // ==========================================
+  function showChapter(chapterId) {
+    const chapter = moduleData.chapters[chapterId];
+    if (!chapter) return;
+
+    currentView = 'chapter';
+    currentChapterId = chapterId;
+
+    // Reset carousel state
+    currentChunkIndex = 0;
+    totalChunks = chapter.contentChunks.length;
+
+    // Reset quiz state
+    questionsForRound = [];
+    currentQPos = 0;
+    retryRound = 0;
+    wrongThisRound = [];
+    totalRetryRoundsUsed = 0;
+    selectedAnswer = null;
+    currentQuestionEvaluated = false;
+    questionDotStates = chapter.questions.map(() => 'pending');
+
+    // Reset progress bar
+    const totalSegs = totalChunks + chapter.questions.length;
+    progressStates = new Array(totalSegs).fill('pending');
+    progressStates[0] = 'current';
+
+    hideAllViews();
+    const view = $('.chapter-view');
+    if (view) view.classList.add('active');
+
+    renderChapterHeader(chapter, chapterId);
+    renderProgressBar();
+    showChunk(0, 'none');
+
+    // Hide quiz sections
+    const quizReady = $('#quiz-ready');
+    if (quizReady) quizReady.classList.add('hidden');
+    const quizSection = $('#quiz-section');
+    if (quizSection) quizSection.classList.add('hidden');
+    const carouselCard = $('#carousel-card');
+    if (carouselCard) carouselCard.classList.remove('hidden');
+
+    renderSidebar();
+    Gamification.startTimer((elapsed) => {
+      const timerEl = $('.timer-display');
+      if (timerEl) timerEl.textContent = Gamification.formatTime(elapsed);
+    });
+
+    window.scrollTo(0, 0);
+  }
+
+  function renderChapterHeader(chapter, chapterId) {
+    const tagEl = $('.chapter-tag');
+    if (tagEl) tagEl.textContent = `Chapter ${chapterId + 1} of ${moduleData.chapters.length}`;
+    const titleEl = $('.chapter-title');
+    if (titleEl) titleEl.textContent = chapter.title;
+    const metaEl = $('.chapter-meta');
+    if (metaEl) metaEl.innerHTML = `
+      <span>\uD83D\uDCD6 ${chapter.readingTime}</span>
+      <span>\u2753 ${chapter.quizCount} questions</span>
+      <span>\u23F1 Par: ${Gamification.formatTime(chapter.parTimeSeconds)}</span>
+    `;
+    const parEl = $('.timer-par');
+    if (parEl) parEl.textContent = `Par: ${Gamification.formatTime(chapter.parTimeSeconds)}`;
+  }
+
+  // ==========================================
+  // PROGRESS BAR
+  // ==========================================
+  function renderProgressBar() {
+    const barEl = $('#chapter-progress');
+    if (!barEl) return;
+
+    barEl.innerHTML = progressStates.map((state, i) => {
+      let cls = 'progress-seg';
+      if (state === 'done' || state === 'filled') cls += ' filled';
+      else if (state === 'current') cls += ' current';
+      else if (state === 'quiz-correct') cls += ' quiz-correct';
+      else if (state === 'quiz-wrong') cls += ' quiz-wrong';
+      return `<div class="${cls}"></div>`;
+    }).join('');
+  }
+
+  function updateProgressForChunk(chunkIdx) {
+    // Mark all previous chunks as done
+    for (let i = 0; i < chunkIdx; i++) {
+      progressStates[i] = 'done';
+    }
+    progressStates[chunkIdx] = 'current';
+    // Reset future to pending
+    for (let i = chunkIdx + 1; i < progressStates.length; i++) {
+      if (progressStates[i] !== 'quiz-correct' && progressStates[i] !== 'quiz-wrong') {
+        progressStates[i] = 'pending';
+      }
+    }
+    renderProgressBar();
+  }
+
+  function updateProgressForQuizReady() {
+    // All content chunks done
+    for (let i = 0; i < totalChunks; i++) {
+      progressStates[i] = 'done';
+    }
+    renderProgressBar();
+  }
+
+  function updateProgressForQuiz(qOriginalIndex, result) {
+    const segIdx = totalChunks + qOriginalIndex;
+    progressStates[segIdx] = result === 'correct' ? 'quiz-correct' : 'quiz-wrong';
+    renderProgressBar();
+  }
+
+  // ==========================================
+  // CONTENT CHUNKS
+  // ==========================================
+  function showChunk(index, direction) {
+    const chapter = moduleData.chapters[currentChapterId];
+    const chunk = chapter.contentChunks[index];
+    if (!chunk) return;
+
+    currentChunkIndex = index;
+
+    const counterEl = $('#chunk-counter');
+    if (counterEl) counterEl.textContent = `${index + 1} of ${totalChunks}`;
+    const titleEl = $('#chunk-title');
+    if (titleEl) titleEl.textContent = chunk.title;
+    const contentEl = $('#chunk-content');
+    if (contentEl) {
+      contentEl.innerHTML = chunk.html;
+      // Animate
+      if (direction !== 'none') {
+        contentEl.classList.remove('chunk-slide-right', 'chunk-slide-left');
+        void contentEl.offsetWidth;
+        contentEl.classList.add(direction === 'right' ? 'chunk-slide-right' : 'chunk-slide-left');
+      }
+    }
+
+    // Show key insight only on last chunk
+    const insightEl = $('#carousel-insight');
+    const insightText = $('#carousel-insight-text');
+    if (insightEl && insightText) {
+      if (index === totalChunks - 1) {
+        insightText.textContent = chapter.keyInsight;
+        insightEl.classList.remove('hidden');
+      } else {
+        insightEl.classList.add('hidden');
+      }
+    }
+
+    // Update nav buttons
+    const prevBtn = $('#chunk-prev');
+    const nextBtn = $('#chunk-next');
+    if (prevBtn) {
+      prevBtn.style.visibility = index === 0 ? 'hidden' : 'visible';
+    }
+    if (nextBtn) {
+      if (index === totalChunks - 1) {
+        nextBtn.textContent = 'Ready for quiz \u2192';
+        nextBtn.className = 'btn btn-success';
+      } else {
+        nextBtn.textContent = 'Next \u2192';
+        nextBtn.className = 'btn btn-primary';
+      }
+    }
+
+    updateProgressForChunk(index);
+  }
+
+  function nextChunk() {
+    if (currentChunkIndex < totalChunks - 1) {
+      showChunk(currentChunkIndex + 1, 'right');
+      // Scroll to top of carousel
+      const carousel = $('#carousel-card');
+      if (carousel) carousel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      // Last chunk — show quiz ready
+      showQuizReady();
+    }
+  }
+
+  function prevChunk() {
+    if (currentChunkIndex > 0) {
+      showChunk(currentChunkIndex - 1, 'left');
+      const carousel = $('#carousel-card');
+      if (carousel) carousel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function showQuizReady() {
+    // Hide carousel, show quiz ready
+    const carousel = $('#carousel-card');
+    if (carousel) carousel.classList.add('hidden');
+    const quizReady = $('#quiz-ready');
+    if (quizReady) {
+      quizReady.classList.remove('hidden');
+      quizReady.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    updateProgressForQuizReady();
+  }
+
+  // ==========================================
+  // QUIZ — SEQUENTIAL FLOW
+  // ==========================================
+  function startQuiz() {
+    const quizReady = $('#quiz-ready');
+    if (quizReady) quizReady.classList.add('hidden');
+    const quizSection = $('#quiz-section');
+    if (quizSection) quizSection.classList.remove('hidden');
+
+    const chapter = moduleData.chapters[currentChapterId];
+    questionsForRound = chapter.questions.map((_, i) => i);
+    currentQPos = 0;
+    retryRound = 0;
+    wrongThisRound = [];
+
+    const retryBanner = $('#retry-banner');
+    if (retryBanner) retryBanner.classList.add('hidden');
+
+    showCurrentQuestion();
+    quizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function showCurrentQuestion() {
+    const chapter = moduleData.chapters[currentChapterId];
+    const qIndex = questionsForRound[currentQPos];
+    const question = chapter.questions[qIndex];
+
+    selectedAnswer = null;
+    currentQuestionEvaluated = false;
+
+    updateQuizProgress();
+
+    const container = $('#current-question');
+    if (!container) return;
+
+    if (question.type === 'ordering') {
+      container.innerHTML = renderOrderingQuestion(question, qIndex);
+    } else {
+      container.innerHTML = renderMCQQuestion(question, qIndex);
+    }
+    container.classList.remove('question-enter');
+    void container.offsetWidth;
+    container.classList.add('question-enter');
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) {
+      checkBtn.classList.remove('hidden');
+      checkBtn.disabled = question.type !== 'ordering';
+      checkBtn.textContent = 'Check Answer';
+    }
+    if (continueBtn) continueBtn.classList.add('hidden');
+  }
+
+  function updateQuizProgress() {
+    const totalInRound = questionsForRound.length;
+    const currentNum = currentQPos + 1;
+
+    const progressText = $('#quiz-progress-text');
+    if (progressText) {
+      const roundLabel = retryRound > 0 ? ` (Retry ${retryRound} of 3)` : '';
+      progressText.textContent = `Question ${currentNum} of ${totalInRound}${roundLabel}`;
+    }
+
+    const dotsEl = $('#quiz-dots');
+    if (dotsEl) {
+      dotsEl.innerHTML = questionsForRound.map((qIdx, pos) => {
+        let cls = 'quiz-dot';
+        if (pos < currentQPos) {
+          cls += questionDotStates[qIdx] === 'correct' ? ' correct' : ' wrong';
+        } else if (pos === currentQPos) {
+          cls += ' current';
+        }
+        return `<span class="${cls}"></span>`;
+      }).join('');
+    }
+  }
+
+  function renderMCQQuestion(q, qi) {
+    const isRetry = retryRound > 0;
+    const retryTag = isRetry ? `<span class="tag tag-warning" style="margin-left:8px;">RETRY</span>` : '';
+
+    const options = q.options.map((opt, oi) => {
+      const letter = String.fromCharCode(65 + oi);
+      return `
+        <button class="option-btn" data-question="${qi}" data-option="${oi}" onclick="App.selectOption(${qi}, ${oi})">
+          <span class="option-letter">${letter}</span>
+          <span class="option-text">${opt.text}</span>
+        </button>
+      `;
+    }).join('');
+
+    return `
+      <div class="question-card" id="question-${qi}">
+        <div class="question-number">Question ${qi + 1}${retryTag}</div>
+        <div class="question-text">${q.text}</div>
+        <div class="options-list">${options}</div>
+        <div class="explanation" id="explanation-${qi}"></div>
+      </div>
+    `;
+  }
+
+  function renderOrderingQuestion(q, qi) {
+    const isRetry = retryRound > 0;
+    const retryTag = isRetry ? `<span class="tag tag-warning" style="margin-left:8px;">RETRY</span>` : '';
+
+    let items = [...q.items];
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    if (items.every((item, idx) => item === q.correctOrder[idx])) {
+      [items[0], items[1]] = [items[1], items[0]];
+    }
+
+    const itemsHtml = items.map((item, ii) => `
+      <div class="order-item" draggable="true" data-question="${qi}" data-index="${ii}"
+           ondragstart="App.dragStart(event)" ondragover="App.dragOver(event)"
+           ondrop="App.drop(event, ${qi})" ondragend="App.dragEnd(event)">
+        <span class="order-num">${ii + 1}</span>
+        <span class="order-text">${item}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="question-card" id="question-${qi}">
+        <div class="question-number">Question ${qi + 1}${retryTag}</div>
+        <div class="question-text">${q.text}</div>
+        <div class="order-list" id="order-list-${qi}">${itemsHtml}</div>
+        <div class="explanation" id="explanation-${qi}"></div>
+      </div>
+    `;
+  }
+
+  // ==========================================
+  // DRAG & DROP
+  // ==========================================
+  let dragItem = null;
+
+  function dragStart(e) {
+    if (currentQuestionEvaluated) return;
+    dragItem = e.target.closest('.order-item');
+    if (dragItem) { dragItem.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+  }
+  function dragOver(e) {
+    e.preventDefault();
+    const target = e.target.closest('.order-item');
+    if (target && target !== dragItem) target.classList.add('drag-over');
+  }
+  function dragEnd(e) {
+    if (dragItem) dragItem.classList.remove('dragging');
+    $$('.order-item').forEach(el => el.classList.remove('drag-over'));
+  }
+  function drop(e, qi) {
+    e.preventDefault();
+    if (currentQuestionEvaluated) return;
+    const target = e.target.closest('.order-item');
+    if (!target || !dragItem || target === dragItem) return;
+    target.classList.remove('drag-over');
+    const list = target.parentNode;
+    const items = [...list.children];
+    const fromIdx = items.indexOf(dragItem);
+    const toIdx = items.indexOf(target);
+    if (fromIdx < toIdx) list.insertBefore(dragItem, target.nextSibling);
+    else list.insertBefore(dragItem, target);
+    [...list.children].forEach((item, i) => { item.querySelector('.order-num').textContent = i + 1; });
+  }
+
+  // ==========================================
+  // ANSWER SELECTION & CHECKING
+  // ==========================================
+  function selectOption(qi, oi) {
+    if (currentQuestionEvaluated) return;
+    selectedAnswer = oi;
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) {
+      questionEl.querySelectorAll('.option-btn').forEach((btn, i) => {
+        btn.classList.toggle('selected', i === oi);
+      });
+    }
+    const checkBtn = $('#quiz-check-btn');
+    if (checkBtn) checkBtn.disabled = false;
+  }
+
+  function checkAnswer() {
+    if (currentQuestionEvaluated) return;
+    currentQuestionEvaluated = true;
+
+    const chapter = moduleData.chapters[currentChapterId];
+    const qIndex = questionsForRound[currentQPos];
+    const question = chapter.questions[qIndex];
+
+    let isCorrect;
+    if (question.type === 'ordering') {
+      isCorrect = evaluateOrdering(question, qIndex);
+    } else {
+      isCorrect = evaluateMCQ(question, qIndex);
+    }
+
+    // Show explanation with color coding
+    showExplanation(qIndex, isCorrect, question.explanation);
+
+    // Update dot state
+    questionDotStates[qIndex] = isCorrect ? 'correct' : 'wrong';
+    updateQuizProgress();
+
+    // Update progress bar
+    updateProgressForQuiz(qIndex, isCorrect ? 'correct' : 'wrong');
+
+    if (!isCorrect) wrongThisRound.push(qIndex);
+
+    // Switch buttons
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) checkBtn.classList.add('hidden');
+    if (continueBtn) {
+      continueBtn.classList.remove('hidden');
+      const isLastInRound = currentQPos >= questionsForRound.length - 1;
+      if (isLastInRound && wrongThisRound.length > 0 && retryRound < 3) {
+        continueBtn.textContent = 'Review Mistakes \u2192';
+      } else if (isLastInRound) {
+        continueBtn.textContent = 'See Results \u2192';
+      } else {
+        continueBtn.textContent = 'Continue \u2192';
+      }
+    }
+  }
+
+  function showExplanation(qi, isCorrect, explanationText) {
+    const expEl = document.getElementById(`explanation-${qi}`);
+    if (!expEl) return;
+
+    const prefix = isCorrect ? '\u2713 Correct!' : '\u2717 Not quite.';
+    const prefixClass = isCorrect ? 'correct' : 'wrong';
+    const expClass = isCorrect ? 'correct-exp' : 'wrong-exp';
+
+    expEl.innerHTML = `<span class="exp-prefix ${prefixClass}">${prefix}</span>${explanationText}`;
+    expEl.classList.add('visible', expClass);
+  }
+
+  function evaluateMCQ(q, qi) {
+    const correct = q.options.findIndex(o => o.correct);
+    const isCorrect = selectedAnswer === correct;
+
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) {
+      questionEl.classList.add(isCorrect ? 'answered-correct' : 'answered-wrong');
+      questionEl.querySelectorAll('.option-btn').forEach((btn, i) => {
+        btn.classList.add('disabled');
+        if (i === correct) btn.classList.add('correct');
+        if (i === selectedAnswer && !isCorrect) btn.classList.add('wrong');
+      });
+    }
+    return isCorrect;
+  }
+
+  function evaluateOrdering(q, qi) {
+    const listEl = document.getElementById(`order-list-${qi}`);
+    if (!listEl) return false;
+    const items = [...listEl.children];
+    let allCorrect = true;
+    items.forEach((item, i) => {
+      item.setAttribute('draggable', 'false');
+      item.style.cursor = 'default';
+      const text = item.querySelector('.order-text').textContent;
+      if (text === q.correctOrder[i]) item.classList.add('correct-position');
+      else { item.classList.add('wrong-position'); allCorrect = false; }
+    });
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) questionEl.classList.add(allCorrect ? 'answered-correct' : 'answered-wrong');
+    return allCorrect;
+  }
+
+  // ==========================================
+  // CONTINUE / RETRY / FINISH
+  // ==========================================
+  function continueQuiz() {
+    currentQPos++;
+    if (currentQPos < questionsForRound.length) {
+      showCurrentQuestion();
+      const quizSection = $('#quiz-section');
+      if (quizSection) quizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      if (wrongThisRound.length === 0 || retryRound >= 3) {
+        finishQuiz();
+      } else {
+        showRetryTransition();
+      }
+    }
+  }
+
+  function showRetryTransition() {
+    retryRound++;
+    totalRetryRoundsUsed = retryRound;
+
+    const wrongCount = wrongThisRound.length;
+    const container = $('#current-question');
+    container.innerHTML = `
+      <div class="retry-transition">
+        <div class="retry-icon">\uD83D\uDD04</div>
+        <h3>Almost there!</h3>
+        <p>You missed ${wrongCount} question${wrongCount > 1 ? 's' : ''}. Let's try ${wrongCount > 1 ? 'them' : 'it'} again.</p>
+        <p class="retry-round-info">Attempt ${retryRound + 1} of 4</p>
+        <button class="btn btn-primary btn-lg" onclick="App.beginRetryRound()">Let's go \u2192</button>
+      </div>
+    `;
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) checkBtn.classList.add('hidden');
+    if (continueBtn) continueBtn.classList.add('hidden');
+  }
+
+  function beginRetryRound() {
+    questionsForRound = [...wrongThisRound];
+    wrongThisRound = [];
+    currentQPos = 0;
+
+    questionsForRound.forEach(qi => { questionDotStates[qi] = 'pending'; });
+
+    // Reset progress bar for retried questions
+    questionsForRound.forEach(qi => {
+      progressStates[totalChunks + qi] = 'pending';
+    });
+    renderProgressBar();
+
+    const retryBanner = $('#retry-banner');
+    if (retryBanner) {
+      retryBanner.classList.remove('hidden');
+      const retryText = $('#retry-text');
+      if (retryText) retryText.textContent = `Retry ${retryRound} of 3 \u2014 Get ${questionsForRound.length > 1 ? 'these' : 'this'} right!`;
+    }
+
+    showCurrentQuestion();
+  }
+
+  function finishQuiz() {
+    const timeSeconds = Gamification.stopTimer();
+    const chapter = moduleData.chapters[currentChapterId];
+
+    const result = Gamification.completeChapter(
+      moduleData.id, currentChapterId, totalRetryRoundsUsed, timeSeconds, chapter.parTimeSeconds
+    );
+
+    updateTopbar();
+
+    // Sync progress to backend after every chapter
+    try {
+      const syncState = Gamification.getState();
+      const mods = syncState.modules || {};
+      const trainee = syncState.trainee || {};
+      let mc = 0, cc = 0, cm = 0;
+      for (const [id, m] of Object.entries(mods)) {
+        if (m.status === 'completed') mc++;
+        cc += Object.values(m.chapters || {}).filter(c => c.completed).length;
+        if (Object.values(m.chapters || {}).some(c => c.completed)) cm = Math.max(cm, parseInt(id));
+      }
+      fetch('/api/training/sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ total_xp: trainee.totalXP || 0, total_stars: trainee.totalStars || 0, modules_completed: mc, chapters_completed: cc, total_time_seconds: trainee.totalTimeSeconds || 0, current_module: cm, progress_json: JSON.stringify(syncState) })
+      }).catch(() => {});
+    } catch (e) {}
+
+    setTimeout(() => showCompletion(result, currentChapterId), 400);
+  }
+
+  // ==========================================
+  // COMPLETION OVERLAY
+  // ==========================================
+  function showCompletion(result, chapterId) {
+    const overlay = $('.completion-overlay');
+    if (!overlay) return;
+
+    const chapter = moduleData.chapters[chapterId];
+    const starsText = '\u2605'.repeat(result.stars) + '\u2606'.repeat(3 - result.stars);
+    const speedText = (() => {
+      const ratio = chapter.parTimeSeconds > 0 ? result.timeSeconds / chapter.parTimeSeconds : 2;
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      if (ratio <= 0.3) return pick(['\u26A1 Are you Flash?!', '\uD83D\uDE80 Did you just teleport?', '\uD83C\uDFC6 Someone call Guinness!', '\uD83D\uDD25 Speed demon unleashed!']);
+      if (ratio <= 0.6) return pick(['\uD83C\uDF89 Schedule your parade!', '\uD83D\uDCA8 Lightning fast!', '\uD83D\uDE0E Quick AND accurate!', '\uD83C\uDFAF Smoother than butter!']);
+      if (ratio <= 1.0) return pick(['\uD83D\uDCAA Solid speed!', '\u2728 Clean and efficient!', '\uD83D\uDE80 Right on the money!', '\uD83D\uDC4D Smooth operator!']);
+      if (ratio <= 1.5) return pick(['\uD83D\uDCDA Steady and thorough!', '\uD83C\uDF1F Good pace!', '\uD83E\uDDE0 Building strong!', '\uD83D\uDC4F Taking it in properly!']);
+      return pick(['\uD83E\uDDE0 Deep learning mode!', '\uD83D\uDCDA Thoroughness is power!', '\uD83C\uDF31 Mastery takes time!', '\uD83D\uDCAA No rush, you got this!']);
+    })();
+
+    // Chapter-specific messages
+    let message;
+    if (chapter.completionMessages) {
+      if (result.stars === 3) message = chapter.completionMessages.perfect;
+      else if (result.stars === 2) message = chapter.completionMessages.good;
+      else message = chapter.completionMessages.passed;
+    } else {
+      message = 'Great work! Keep going.';
+    }
+
+    // Mascot expression based on stars
+    const mascotEl = $('#mascot-img');
+    if (mascotEl) {
+      if (result.stars === 3) mascotEl.textContent = '\uD83C\uDF89'; // party popper
+      else if (result.stars === 2) mascotEl.textContent = '\uD83D\uDCAA'; // flexed bicep
+      else mascotEl.textContent = '\uD83E\uDD14'; // thinking
+    }
+
+    overlay.querySelector('.completion-stars').textContent = starsText;
+    overlay.querySelector('.completion-title').textContent =
+      result.stars === 3 ? 'Perfect!' : result.stars === 2 ? 'Great Job!' : 'Chapter Complete!';
+    overlay.querySelector('.completion-message').textContent = message;
+    overlay.querySelector('.completion-stat-value.xp').textContent = `+${result.xp}`;
+    overlay.querySelector('.completion-stat-value.time').textContent = Gamification.formatTime(result.timeSeconds);
+    overlay.querySelector('.completion-stat-value.speed').textContent = speedText;
+
+    // Show streak badge if streak > 1
+    let streakEl = overlay.querySelector('.streak-badge');
+    if (!streakEl) {
+      streakEl = document.createElement('div');
+      streakEl.className = 'streak-badge';
+      streakEl.style.cssText = 'margin-top:12px;padding:6px 16px;background:#FEF3C7;border-radius:20px;font-size:13px;font-weight:600;color:#92400E;display:inline-block;';
+      overlay.querySelector('.completion-stats').after(streakEl);
+    }
+    if (result.streak > 1) {
+      streakEl.textContent = '\uD83D\uDD25 ' + result.streak + ' streak! (' + result.streakMultiplier.toFixed(1) + 'x XP)';
+      streakEl.style.display = 'inline-block';
+    } else {
+      streakEl.style.display = 'none';
+    }
+
+    const nextBtn = overlay.querySelector('.btn-next');
+    const isModuleComplete = Gamification.isModuleComplete(moduleData.id);
+
+    if (isModuleComplete) {
+      nextBtn.textContent = 'Complete Module \u2192';
+      nextBtn.onclick = () => { overlay.classList.remove('visible'); showModuleComplete(); };
+    } else {
+      nextBtn.textContent = 'Next Chapter \u2192';
+      nextBtn.onclick = () => { overlay.classList.remove('visible'); showChapter(chapterId + 1); };
+    }
+
+    overlay.classList.add('visible');
+  }
+
+  // ==========================================
+  // MODULE COMPLETE
+  // ==========================================
+  function showModuleComplete() {
+    currentView = 'module-complete';
+    hideAllViews();
+    const view = $('.module-complete');
+    if (view) view.classList.add('active');
+
+    const progress = Gamification.getModuleProgress(moduleData.id);
+    const state = Gamification.getState();
+    const moduleStars = Object.values(state.modules[moduleData.id].chapters)
+      .reduce((sum, ch) => sum + (ch.stars || 0), 0);
+    const moduleXP = Object.values(state.modules[moduleData.id].chapters)
+      .reduce((sum, ch) => sum + (ch.xp || 0), 0) + 100;
+
+    const msgEl = view.querySelector('.module-complete-subtitle');
+    if (msgEl) msgEl.textContent = "You've mastered the foundations. The operations team is lucky to have you.";
+
+    const statsEl = view.querySelector('.completion-stats');
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <div class="completion-stat">
+          <div class="completion-stat-value xp">${moduleXP}</div>
+          <div class="completion-stat-label">Total XP</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value" style="color: var(--warning)">${moduleStars}/${progress.total * 3}</div>
+          <div class="completion-stat-label">Stars</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value time">${Gamification.formatTime(state.trainee.totalTimeSeconds)}</div>
+          <div class="completion-stat-label">Total Time</div>
+        </div>
+      `;
+    }
+
+    // Sync progress to backend
+    try {
+      const syncState = Gamification.getState();
+      const modules = syncState.modules || {};
+      const trainee = syncState.trainee || {};
+      let modulesCompleted = 0, chaptersCompleted = 0, currentMod = 0;
+      for (const [modId, mod] of Object.entries(modules)) {
+        if (mod.status === 'completed') modulesCompleted++;
+        chaptersCompleted += Object.values(mod.chapters || {}).filter(c => c.completed).length;
+        if (Object.values(mod.chapters || {}).some(c => c.completed)) currentMod = Math.max(currentMod, parseInt(modId));
+      }
+      fetch('/api/training/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          total_xp: trainee.totalXP || 0,
+          total_stars: trainee.totalStars || 0,
+          modules_completed: modulesCompleted,
+          chapters_completed: chaptersCompleted,
+          total_time_seconds: trainee.totalTimeSeconds || 0,
+          current_module: currentMod,
+          progress_json: JSON.stringify(syncState)
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
+    renderSidebar();
+    updateTopbar();
+  }
+
+  // ==========================================
+  // NAVIGATION
+  // ==========================================
+  function hideAllViews() {
+    $$('.module-overview, .chapter-view, .module-complete').forEach(el => el.classList.remove('active'));
+    const overlay = $('.completion-overlay');
+    if (overlay) overlay.classList.remove('visible');
+  }
+
+  function onChapterClick(chapterId) {
+    if (!Gamification.isChapterUnlocked(moduleData.id, chapterId)) return;
+    showChapter(chapterId);
+    const sidebar = $('.sidebar');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+  }
+
+  function onChapterNodeClick(chapterId) { onChapterClick(chapterId); }
+
+  function goToOverview() {
+    Gamification.stopTimer();
+    showOverview();
+  }
+
+  // ==========================================
+  // PUBLIC API
+  // ==========================================
+  return {
+    init, showOverview, showChapter,
+    nextChunk, prevChunk,
+    selectOption, checkAnswer, continueQuiz,
+    startQuiz, beginRetryRound,
+    onChapterClick, onChapterNodeClick, goToOverview,
+    dragStart, dragOver, dragEnd, drop
+  };
+})();
+  </script>
+
+  <!-- === MODULE DATA === -->
+  <script>
+    const MODULE_DATA = {
+      id: 0,
+      title: "Basic Training",
+      subtitle: "DRS Foundations",
+      chapters: [
+        // ============================================================
+        // CHAPTER 1: What is the Goa DRS?
+        // ============================================================
+        {
+          id: 0,
+          title: "What is the Goa DRS?",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "Every DRS product has a unique digital identity (USI) \u2014 think of it as an Aadhaar for bottles.",
+          completionMessages: {
+            perfect: "Deposit, USI, refund \u2014 you could explain DRS to anyone on the street now.",
+            good: "The deposit-return loop is clicking. The four phases? You've got those mapped.",
+            passed: "DRS basics are in. The finer details will sharpen with practice."
+          },
+          contentChunks: [
+            {
+              title: "The Problem",
+              html: `<p>Think of the last time you bought a cold drink or a beer. You paid for the product, drank it, and tossed the bottle.</p>
+                     <p>That bottle likely ended up in a landfill or, worse, in the ocean. The <strong>Goa Deposit Return Scheme (DRS)</strong> flips that script entirely.</p>`
+            },
+            {
+              title: "How It Works",
+              html: `<p>When you buy a product in non-biodegradable packaging \u2014 a glass bottle, a PET bottle, an aluminium can, or a Tetra Pak \u2014 you pay a small <strong>refundable deposit</strong> on top of the product price.</p>
+                     <p>This deposit ranges from <strong>Rs. 2 to Rs. 10</strong> depending on the container.</p>
+                     <p>Once you\u2019ve finished the product, you return the empty container to any authorized collection point. Your deposit is instantly refunded to you via <strong>UPI</strong>. Simple as that.</p>`
+            },
+            {
+              title: "The Smart QR Code",
+              html: `<p>Here\u2019s what makes this system smart: every single DRS product has a <strong>Unique Serialized Identifier (USI)</strong> \u2014 a QR code printed on the packaging.</p>
+                     <p>Think of it as an <strong>Aadhaar card for bottles</strong>. This USI tracks the product from the moment it leaves the factory to the moment it\u2019s recycled. No container goes unaccounted for.</p>`
+            },
+            {
+              title: "The Rollout",
+              html: `<p>The rollout happens in <strong>four phases over 270 days</strong>. Phase 1 starts on Day 0 and covers all alcohol products in glass, PET, aluminium cans, and Tetra Pak. By Day 90, non-alcoholic beverages join. By Day 270, we\u2019re covering multi-layered plastics, flexible plastics, and liquid packaging boards.</p>
+                     <p>Some products are exempt in Phase 1: anything priced under Rs. 5, containers smaller than 10cc, cooked food from restaurants, and products from MSME-registered manufacturers.</p>
+                     <p>The entire system is managed by a <strong>System Operator (Recykal)</strong> who builds the infrastructure, runs the technology, and ensures everything works seamlessly. And here\u2019s the kicker: it costs the government <strong>nothing. Zero rupees.</strong></p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What does the consumer get back when they return a DRS product?",
+              options: [
+                { text: "A discount coupon for their next purchase", correct: false },
+                { text: "The deposit amount they paid", correct: true },
+                { text: "A receipt for tax purposes", correct: false },
+                { text: "Nothing \u2014 it\u2019s just environmentally responsible", correct: false }
+              ],
+              explanation: "The deposit you paid at purchase is fully refunded when you return the empty container. That\u2019s the core incentive of the DRS."
+            },
+            {
+              type: "mcq",
+              text: "Which of these products is included in Phase 1 (Day 0)?",
+              options: [
+                { text: "Glass alcohol bottles", correct: true },
+                { text: "Non-alcoholic soft drink bottles", correct: false },
+                { text: "Flexible plastic sachets", correct: false },
+                { text: "Paper coffee cups", correct: false }
+              ],
+              explanation: "Phase 1 covers all alcohol products in glass, PET, aluminium cans, and Tetra Pak. Non-alcoholic products come in Phase 2, flexible plastics in Phase 3."
+            },
+            {
+              type: "mcq",
+              text: "What is a USI?",
+              options: [
+                { text: "A barcode printed on the retail shelf", correct: false },
+                { text: "A unique QR code on every DRS product", correct: true },
+                { text: "A receipt given to the consumer at purchase", correct: false },
+                { text: "A serial number on the cash register", correct: false }
+              ],
+              explanation: "The Unique Serialized Identifier (USI) is a QR code printed on each product\u2019s packaging. It tracks the product\u2019s lifecycle from factory to recycling center."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 2: Why Goa? Why Now?
+        // ============================================================
+        {
+          id: 1,
+          title: "Why Goa? Why Now?",
+          readingTime: "2.5 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "Goa gets 10x more tourists than residents every year. DRS isn\u2019t just about locals \u2014 it\u2019s about managing waste from over a crore visitors.",
+          completionMessages: {
+            perfect: "1.54 crore tourists. Microplastics. Zero-Waste vision. You see the full picture.",
+            good: "The 'why' behind DRS is clear to you. That context makes everything else easier.",
+            passed: "Goa's waste challenge is real. Keep building \u2014 the details will click."
+          },
+          contentChunks: [
+            {
+              title: "The Tourist Tsunami",
+              html: `<p>Goa has a unique problem. It\u2019s not just a state \u2014 it\u2019s a destination.</p>
+                     <p>Every year, roughly <strong>1.54 crore tourists</strong> visit this 3,702 square kilometre coastal paradise. That\u2019s over ten times the resident population of <strong>15 lakh</strong>.</p>
+                     <p>Imagine your neighbourhood suddenly getting ten times more people every single day. The waste pressure is immense.</p>`
+            },
+            {
+              title: "The Wake-Up Call",
+              html: `<p>The consequences are already visible. In 2024, researchers found <strong>microplastic contamination in the Sal Estuary</strong> \u2014 in the water, in the sediment, and even in fishery products.</p>
+                     <p>These tiny plastic fragments don\u2019t just disappear. They enter the food chain, they pollute the ecosystem, and they threaten the very thing that makes Goa special: its natural beauty.</p>`
+            },
+            {
+              title: "India\u2019s First",
+              html: `<p>The state government decided enough was enough. Goa would become <strong>India\u2019s first state</strong> to implement a Deposit Return Scheme at the state level.</p>
+                     <p>Not a pilot in one city. Not a limited trial. A <strong>full-scale, end-to-end system</strong> covering every corner of the state.</p>`
+            },
+            {
+              title: "The Vision",
+              html: `<p>This isn\u2019t Goa\u2019s first attempt at tackling waste. The state already has the <strong>Goa Non-Biodegradable Garbage Act (1996)</strong>, amended in 2024 to include DRS provisions. Two major waste processing facilities exist: Saligao (250 TPD) and Cacora (100 TPD).</p>
+                     <p>DRS doesn\u2019t replace these systems \u2014 it complements them. It works alongside the existing <strong>Extended Producer Responsibility (EPR)</strong> framework, which already holds manufacturers accountable for their packaging waste.</p>
+                     <p>The vision is ambitious but clear: <strong>Zero-Waste, Zero-Landfill</strong> status. Goa wants to set the standard for the rest of India.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "How many tourists visit Goa annually?",
+              options: [
+                { text: "~10 lakh", correct: false },
+                { text: "~50 lakh", correct: false },
+                { text: "~1.5 crore", correct: true },
+                { text: "~3 crore", correct: false }
+              ],
+              explanation: "Approximately 1.54 crore tourists visit Goa each year, compared to a resident population of about 15 lakh \u2014 over 10 times more."
+            },
+            {
+              type: "mcq",
+              text: "True or False: Goa is the first city in India to implement DRS.",
+              options: [
+                { text: "True", correct: false },
+                { text: "False", correct: true }
+              ],
+              explanation: "Goa is the first STATE in India to implement DRS at the state level, not the first city. This is a full-scale rollout covering the entire state."
+            },
+            {
+              type: "mcq",
+              text: "What environmental issue triggered the DRS initiative?",
+              options: [
+                { text: "Air pollution from industrial emissions", correct: false },
+                { text: "Microplastic contamination in Sal Estuary", correct: true },
+                { text: "Deforestation in the Western Ghats", correct: false },
+                { text: "Groundwater depletion", correct: false }
+              ],
+              explanation: "Researchers found microplastic contamination in the Sal Estuary\u2019s water, sediment, and fishery products \u2014 a clear sign that plastic waste was entering the ecosystem."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 3: The Key Players
+        // ============================================================
+        {
+          id: 2,
+          title: "The Key Players",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "Think of it as two teams: the SA sets the rules and holds the money, the SO builds and runs everything.",
+          completionMessages: {
+            perfect: "SA, SO, PIBOs \u2014 you can name every player and their exact role. Impressive.",
+            good: "The ecosystem is complex, but you've got the key relationships down.",
+            passed: "The players are many. Revisit this one later \u2014 it'll make more sense as you go."
+          },
+          contentChunks: [
+            {
+              title: "The Referee",
+              html: `<p>Running a state-wide Deposit Return Scheme isn\u2019t a one-person job. It\u2019s a carefully orchestrated ecosystem with multiple players.</p>
+                     <p>At the top, you have the <strong>Scheme Administrator (SA)</strong> \u2014 the Goa Government\u2019s Directorate of Climate Change, Environment & Marine Science (GC&EMS).</p>
+                     <p>Think of the SA as the referee. They don\u2019t run the day-to-day operations, but they set the rules, monitor compliance, and hold the money. The SA opens and manages the <strong>Escrow Account</strong> where all deposit money is stored. They collect the RCF and ASPF from producers, run awareness campaigns, and levy penalties.</p>`
+            },
+            {
+              title: "The Builder",
+              html: `<p>Then you have the <strong>System Operator (SO)</strong> \u2014 Recykal. This is the team that builds and runs everything.</p>
+                     <p>The SO deploys all collection infrastructure: automated machines (RVMs), manual collection centers, and mobile units. They build the technology platform \u2014 consumer apps, collection agent apps, HoReCa (Hotel, Restaurant, Caf\u00E9) apps. They manage reverse logistics: picking up containers, sorting them, transporting them to the Central Processing Center, and ensuring they get recycled.</p>
+                     <p>Here\u2019s the catch: the SO funds everything. Zero cost to the government. Recykal signed a <strong>10-year contract</strong> and put up a <strong>Rs. 5 crore performance guarantee</strong>.</p>`
+            },
+            {
+              title: "The Brands",
+              html: `<p>Then there are the <strong>PIBOs</strong> \u2014 Producers, Importers, and Brand Owners.</p>
+                     <p>These are the companies that make or sell products in non-biodegradable packaging. They\u2019re responsible for applying the <strong>USI</strong> (the QR code) to every product before it enters the market. They also pay the <strong>RCF</strong> (Reverse Collection Fee) and <strong>ASPF</strong> (Annual System Participation Fee) to the SA.</p>`
+            },
+            {
+              title: "The Full Loop",
+              html: `<p><strong>Distributors</strong> move products from PIBOs to <strong>Retailers</strong>, who sell them to <strong>Consumers</strong> \u2014 you and me.</p>
+                     <p>When a consumer returns a container to a <strong>Collection Point</strong>, the deposit is refunded, and the material is sent to <strong>Handlers and Recyclers</strong> who process it back into usable materials.</p>
+                     <p>It\u2019s a loop. And every player has skin in the game.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "Who opens and manages the Escrow Account?",
+              options: [
+                { text: "Scheme Administrator (SA)", correct: true },
+                { text: "System Operator (SO)", correct: false },
+                { text: "Producers, Importers, Brand Owners (PIBOs)", correct: false },
+                { text: "Local government bodies", correct: false }
+              ],
+              explanation: "The SA (GC&EMS) opens and manages the Escrow Account. The SO never directly touches this money \u2014 it\u2019s a trust architecture."
+            },
+            {
+              type: "mcq",
+              text: "What does PIBO stand for?",
+              options: [
+                { text: "Producer, Importer, Brand Owner", correct: true },
+                { text: "Public Investment and Business Operator", correct: false },
+                { text: "Packaging Industry and Bottle Owners", correct: false },
+                { text: "Primary Investor in Bottle Operations", correct: false }
+              ],
+              explanation: "PIBO stands for Producer, Importer, Brand Owner \u2014 the companies responsible for products in non-biodegradable packaging."
+            },
+            {
+              type: "mcq",
+              text: "How long is the SO\u2019s contract?",
+              options: [
+                { text: "5 years", correct: false },
+                { text: "10 years", correct: true },
+                { text: "15 years", correct: false },
+                { text: "25 years", correct: false }
+              ],
+              explanation: "Recykal signed a 10-year contract as the System Operator, with a Rs. 5 crore performance guarantee."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 4: Follow the Money
+        // ============================================================
+        {
+          id: 3,
+          title: "Follow the Money",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "The SO never touches the Escrow directly. All deposit money flows through the SA \u2014 that\u2019s the trust architecture.",
+          completionMessages: {
+            perfect: "Escrow, RCF, EPR credits \u2014 you traced every rupee through the system. Finance team material.",
+            good: "The money trail is clicking. EPR and DRS working together? That\u2019s the breakthrough.",
+            passed: "Money flows can be tricky. The core deposit-refund loop is what matters most."
+          },
+          contentChunks: [
+            {
+              title: "Seed Money",
+              html: `<p>Money is the lifeblood of the DRS. Let\u2019s trace how it flows \u2014 from the moment a product enters the system to the moment a consumer gets their refund.</p>
+                     <p>It starts with the <strong>PIBO</strong> (the producer, importer, or brand owner). When they generate USIs for their products, they deposit the corresponding amount into the <strong>Escrow Account</strong>, managed by the Scheme Administrator.</p>
+                     <p>This is the seed money that backs every single deposit in the system.</p>`
+            },
+            {
+              title: "The Deposit Chain",
+              html: `<p>When a distributor buys products from the PIBO, they pay the PIBO the deposit amount. The PIBO uses this to recover what they put into escrow.</p>
+                     <p>When a retailer buys from the distributor, the retailer pays the deposit to the distributor. And finally, when you \u2014 the consumer \u2014 buy the product at the store, you pay the deposit to the retailer.</p>
+                     <p>Each party in the chain recovers their deposit from the next party downstream.</p>`
+            },
+            {
+              title: "The Refund",
+              html: `<p>Now comes the magic moment: you finish your drink and return the empty container to a collection point. The USI is scanned and validated. If it\u2019s a valid DRS product, your deposit is instantly refunded to your bank account via <strong>UPI</strong>. That refund comes from the Escrow Account.</p>
+                     <p>But deposits aren\u2019t the only money in the system. PIBOs also pay two fees to the SA:</p>
+                     <ol>
+                       <li><strong>RCF (Reverse Collection Fee)</strong>: A per-tonne fee that funds the SO\u2019s operations.</li>
+                       <li><strong>ASPF (Annual System Participation Fee)</strong>: An annual fee for administrative costs and public awareness campaigns.</li>
+                     </ol>`
+            },
+            {
+              title: "The Triple Lock",
+              html: `<p>Every brand that produces packaged goods already has an <strong>EPR (Extended Producer Responsibility)</strong> obligation. Under EPR, brands must ensure their packaging waste is collected and recycled. But most fulfilled this on paper \u2014 buying EPR credits without knowing if waste was actually collected.</p>
+                     <p>DRS changes that. When a PIBO pays the RCF, they receive <strong>direct EPR credits</strong>. Their DRS participation counts toward EPR compliance. Real collection, not just paperwork.</p>
+                     <p>This is the triple lock: <strong>EPR creates the obligation</strong>, <strong>DRS creates the mechanism</strong>, and <strong>RCF funds the operation</strong>. Together, they turn a regulatory checkbox into actual environmental impact.</p>
+                     <p>The SO never directly touches the Escrow Account. All deposit money flows through the SA. That separation is what builds trust in the system.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What do PIBOs receive in return for paying the Reverse Collection Fee (RCF)?",
+              options: [
+                { text: "A tax rebate from the government", correct: false },
+                { text: "Direct EPR credits for their packaging waste obligation", correct: true },
+                { text: "Ownership of the collected material", correct: false },
+                { text: "A discount on their next ASPF payment", correct: false }
+              ],
+              explanation: "When PIBOs pay RCF into the DRS system, they receive direct EPR credits. This means their DRS participation counts toward their Extended Producer Responsibility compliance \u2014 real collection on the ground, not just paperwork."
+            },
+            {
+              type: "mcq",
+              text: "Who pays the Reverse Collection Fee (RCF)?",
+              options: [
+                { text: "Consumers at the point of purchase", correct: false },
+                { text: "PIBOs (Producers, Importers, Brand Owners)", correct: true },
+                { text: "The Goa State Government", correct: false },
+                { text: "Retailers and distributors", correct: false }
+              ],
+              explanation: "PIBOs pay the RCF to the SA, who then remits it to the SO monthly. This fee funds the SO\u2019s operations."
+            },
+            {
+              type: "mcq",
+              text: "How does a consumer get their deposit refund?",
+              options: [
+                { text: "Cash handed over at the collection point", correct: false },
+                { text: "UPI transfer to their bank account", correct: true },
+                { text: "A discount coupon for their next purchase", correct: false },
+                { text: "A cheque mailed to their address", correct: false }
+              ],
+              explanation: "Refunds are instant and cashless \u2014 the deposit is transferred to the consumer\u2019s bank account via UPI once the USI is validated."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 5: Follow the Material
+        // ============================================================
+        {
+          id: 4,
+          title: "Follow the Material",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "From the moment a USI is printed to the moment the material is recycled \u2014 every step is tracked. That\u2019s full traceability.",
+          completionMessages: {
+            perfect: "USI to recycling \u2014 you traced the full lifecycle without missing a step.",
+            good: "The material journey is clear. Collection, processing, recycling \u2014 all mapped.",
+            passed: "The lifecycle is long. What matters: USI tracks everything from factory to recycler."
+          },
+          contentChunks: [
+            {
+              title: "Birth of a Bottle",
+              html: `<p>Let\u2019s trace the journey of a single glass bottle from factory to recycling center. It\u2019s a story of digital tracking, reverse logistics, and circular economy in action.</p>
+                     <p>It begins at the factory. The PIBO generates a <strong>USI (Unique Serialized Identifier)</strong> \u2014 a QR code \u2014 and prints it on the bottle\u2019s label. The moment that USI is created, the system knows this bottle exists. The PIBO deposits the corresponding amount into the Escrow Account.</p>`
+            },
+            {
+              title: "The Journey",
+              html: `<p>The bottle moves through the supply chain: distributor to retailer to consumer. At the retail store, you buy the bottle of beer, pay the product price plus a Rs. 10 deposit, and take it home. You finish the beer. Now what?</p>
+                     <p>You have options. Return it to one of the <strong>automated collection machines (RVMs)</strong> scattered across Goa. Drop it off at a <strong>manual collection center</strong>. If you\u2019re at a hotel or restaurant, they might collect it through their <strong>HoReCa app</strong>. There are even partnerships with rag pickers and aggregators who collect in bulk.</p>`
+            },
+            {
+              title: "The Return",
+              html: `<p>Here\u2019s the critical step: <strong>USI validation</strong>. When the QR code is scanned, the system checks: Is this a valid DRS product? Has it already been returned? Has it expired?</p>
+                     <p>If everything checks out, your <strong>Rs. 10 deposit is instantly refunded</strong> to your UPI account.</p>`
+            },
+            {
+              title: "Full Circle",
+              html: `<p>Once validated, the bottle enters the <strong>reverse logistics stream</strong>. It\u2019s collected, sorted by material type (glass, PET, aluminium, etc.), and transported to the <strong>Central Processing Center (CPC)</strong>. Here, materials are further segregated and prepared for recycling or reuse.</p>
+                     <p>For glass bottles, there\u2019s a special rule: the original PIBO gets the <strong>right of first refusal</strong>. If they want the bottle back (say, for refilling), they get priority. Otherwise, the material goes to recyclers.</p>
+                     <p>And just like that, the circle closes. The bottle you bought last week could become part of a new bottle next month. Every single step is tracked in the system. That\u2019s <strong>full traceability</strong>.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "Where is all collected DRS material transported for final processing?",
+              options: [
+                { text: "The nearest municipal waste facility", correct: false },
+                { text: "Back to the original PIBO\u2019s factory", correct: false },
+                { text: "The Central Processing Center (CPC)", correct: true },
+                { text: "Directly to recyclers across India", correct: false }
+              ],
+              explanation: "All collected material \u2014 regardless of type \u2014 is transported to the CPCs across Goa. Here it\u2019s sorted by material type, baled, and then sent for recycling or reuse."
+            },
+            {
+              type: "mcq",
+              text: "Who owns the collected material after the deposit is refunded?",
+              options: [
+                { text: "The Scheme Administrator (SA)", correct: false },
+                { text: "The System Operator (SO)", correct: true },
+                { text: "The consumer who returned it", correct: false },
+                { text: "The original PIBO who produced it", correct: false }
+              ],
+              explanation: "Once the deposit is refunded, the SO owns the material. They can sell it to recyclers or manufacturers \u2014 this is part of the SO\u2019s revenue model."
+            },
+            {
+              type: "ordering",
+              text: "Put these steps in the correct order:",
+              items: [
+                "Material recycled into new products",
+                "Consumer purchases product and pays deposit",
+                "Material sorted at Central Processing Center",
+                "USI printed on product",
+                "Empty container returned to collection point"
+              ],
+              correctOrder: [
+                "USI printed on product",
+                "Consumer purchases product and pays deposit",
+                "Empty container returned to collection point",
+                "Material sorted at Central Processing Center",
+                "Material recycled into new products"
+              ],
+              explanation: "The full lifecycle: USI creation \u2192 Sale \u2192 Return \u2192 Sorting \u2192 Recycling. Each step is tracked in the system."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 6: The Scale of the Mission
+        // ============================================================
+        {
+          id: 5,
+          title: "The Scale of the Mission",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "Year 1 is your runway. 40% target with no penalties. But by Year 4, you need to collect 9 out of every 10 containers sold.",
+          completionMessages: {
+            perfect: "350 RVMs, 90% by Year 4, zero cost to government \u2014 you\u2019ve got the numbers locked.",
+            good: "The scale is massive and you've got the key targets. Year 1 is the runway.",
+            passed: "Big numbers, big ambition. The targets will stick with practice."
+          },
+          contentChunks: [
+            {
+              title: "The Targets",
+              html: `<p>Building a Deposit Return Scheme from scratch is like building a railway network. You need infrastructure, technology, logistics, public awareness, and \u2014 most importantly \u2014 targets.</p>
+                     <p>The collection targets are aggressive but achievable:</p>
+                     <ul>
+                       <li><strong>Year 1:</strong> 40% of all DRS products sold must be collected</li>
+                       <li><strong>Year 2:</strong> 60%</li>
+                       <li><strong>Year 3:</strong> 80%</li>
+                       <li><strong>Year 4 onwards:</strong> 90%</li>
+                     </ul>
+                     <p>That means by Year 4, for every 10 bottles sold, <strong>9 must be returned</strong>. That\u2019s the endgame.</p>`
+            },
+            {
+              title: "The Infrastructure",
+              html: `<p>To hit these targets, the SO must deploy serious infrastructure. By Day 0 \u2014 the day the scheme launches \u2014 <strong>350 automated collection machines (RVMs)</strong> must be live across Goa. By Year 1, that goes up to 400. By Year 2, 500 machines.</p>
+                     <p>On top of that, at least <strong>25 manual collection centers</strong> must be set up in high-density areas.</p>
+                     <p>There are strict placement rules: every single panchayat must have at least one collection machine. A and B class municipal areas must have at least five. Across Goa\u2019s 3,702 sq km, there are <strong>1,421 potential collection sites</strong> identified.</p>`
+            },
+            {
+              title: "The Ecosystem",
+              html: `<p>It\u2019s not just about machines. The SO must onboard <strong>2,200+ PIBOs</strong> across four cohorts: Alcohol, Beverages, Non-Food FMCG, and Food FMCG. Thousands of brands need to integrate USI printing into their production lines.</p>
+                     <p>Here\u2019s the deal on penalties: <strong>Year 1 is a grace period</strong>. No penalties even if the target is missed. But starting <strong>Year 2</strong>, if the target is missed, the SO pays a <strong>50% penalty on the RCF shortfall</strong>. That\u2019s a significant financial hit.</p>`
+            },
+            {
+              title: "The Big Picture",
+              html: `<p>Public communication is massive. There are two audiences: <strong>locals</strong> (Konkani and Marathi \u2014 "Pride for Goa" messaging) and <strong>tourists</strong> (English and Hindi \u2014 "Love for Goa" messaging).</p>
+                     <p>Three mobile apps will be live: a <strong>Consumer App</strong>, a <strong>Collection Agent App</strong>, and a <strong>HoReCa App</strong>.</p>
+                     <p>The state is divided into <strong>4 geographic zones</strong> covering North and South Goa to streamline operations and logistics.</p>
+                     <p>And remember: <strong>zero cost to the government</strong>. Recykal funds everything \u2014 infrastructure, technology, logistics, apps. This is a fully privately-funded public good.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "How many automated collection machines must be deployed by launch (Day 0)?",
+              options: [
+                { text: "100", correct: false },
+                { text: "300", correct: false },
+                { text: "350", correct: true },
+                { text: "500", correct: false }
+              ],
+              explanation: "350 automated machines (RVMs) must be operational by Day 0. This number increases to 400 by Year 1 and 500 by Year 2."
+            },
+            {
+              type: "mcq",
+              text: "What happens if the SO misses the 60% collection target in Year 2?",
+              options: [
+                { text: "Nothing \u2014 penalties only start in Year 3", correct: false },
+                { text: "50% penalty on the RCF shortfall", correct: true },
+                { text: "Contract is immediately terminated", correct: false },
+                { text: "The target is revised downward for Year 3", correct: false }
+              ],
+              explanation: "Year 1 is a grace period, but from Year 2 onwards, missing the target results in a 50% penalty on the RCF shortfall."
+            },
+            {
+              type: "mcq",
+              text: "True or False: The government funds the initial infrastructure for DRS.",
+              options: [
+                { text: "True", correct: false },
+                { text: "False", correct: true }
+              ],
+              explanation: "The System Operator (Recykal) funds everything \u2014 infrastructure, technology, logistics, apps. It costs the government zero rupees. This is a fully privately-funded system."
+            }
+          ]
+        }
+      ]
+    };
+
+    // Initialize — hydrate from server first (cross-browser persistence)
+    (async () => {
+      await Gamification.hydrateFromServer();
+      App.init(MODULE_DATA);
+
+      // Propagate storageKey to cross-module links
+      const params = new URLSearchParams(window.location.search);
+      const sk = params.get('storageKey');
+      if (sk) {
+        document.querySelectorAll('a[href*="/training/module-"]').forEach(a => {
+          const url = new URL(a.href, window.location.origin);
+          url.searchParams.set('storageKey', sk);
+          a.href = url.pathname + url.search;
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

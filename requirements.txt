@@ -1,0 +1,41 @@
+# Core dependencies
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Google APIs
+google-api-python-client==2.108.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.1.0
+gspread==5.12.0
+
+# AI/ML for voice and text processing
+openai==1.6.0
+anthropic==0.8.0
+speechrecognition==3.10.0
+pydub==0.25.1
+
+# Language processing
+langdetect==1.0.9
+# googletrans removed - using Sarvam AI for translations
+
+# Web framework
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+
+# Auth
+itsdangerous==2.1.2
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# Utilities
+pandas==2.1.3
+httpx==0.25.2
+python-dateutil==2.8.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1

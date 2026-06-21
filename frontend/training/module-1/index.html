@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Module 1: Consumer — Goa DRS Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230EA5E9'><rect width='24' height='24' rx='4'/><path d='M6 12l4 4 8-8' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <style>
+/* ========================================
+   Goa DRS Training — Catalyst Design System
+   ======================================== */
+
+/* --- Design Tokens --- */
+:root {
+  --bg: #FFFFFF;
+  --surface: #F8FAFC;
+  --accent: #0EA5E9;
+  --accent-light: #E0F2FE;
+  --accent-dark: #0284C7;
+  --success: #22C55E;
+  --success-light: #DCFCE7;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --error: #EF4444;
+  --error-light: #FEF2F2;
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --text-light: #94A3B8;
+  --border: #E2E8F0;
+  --radius: 16px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --topbar-h: 64px;
+  --sidebar-w: 300px;
+  --content-max: 800px;
+  --transition: 0.2s ease;
+}
+
+/* --- Reset & Base --- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--surface);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* --- Typography --- */
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.3; }
+h1 { font-size: 28px; font-weight: 800; }
+h2 { font-size: 22px; }
+h3 { font-size: 18px; }
+h4 { font-size: 16px; font-weight: 600; }
+p { margin-bottom: 12px; }
+strong { font-weight: 600; }
+
+.mono { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+.mono-bold { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+/* --- Layout: Shell --- */
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* --- Topbar --- */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 100;
+}
+
+.topbar-brand { display: flex; align-items: center; gap: 12px; }
+
+.topbar-logo {
+  width: 36px; height: 36px;
+  background: var(--accent); border-radius: var(--radius-xs);
+  display: flex; align-items: center; justify-content: center;
+}
+.topbar-logo svg { width: 20px; height: 20px; fill: none; stroke: white; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.topbar-title { font-size: 16px; font-weight: 700; color: var(--text); }
+
+.topbar-stats { display: flex; align-items: center; gap: 20px; }
+
+.stat-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 700; color: var(--text);
+}
+.stat-badge .icon { font-size: 16px; }
+.stat-badge.xp { color: var(--accent); }
+.stat-badge.stars { color: var(--warning); }
+
+/* --- Layout: Body --- */
+.app-body { display: flex; margin-top: var(--topbar-h); min-height: calc(100vh - var(--topbar-h)); }
+
+/* --- Sidebar --- */
+.sidebar {
+  width: var(--sidebar-w); background: var(--bg);
+  border-right: 1px solid var(--border);
+  padding: 24px 20px;
+  position: fixed; top: var(--topbar-h); left: 0; bottom: 0;
+  overflow-y: auto; z-index: 50;
+}
+
+.sidebar-header { margin-bottom: 8px; }
+
+.sidebar-module-tag {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--accent-dark); background: var(--accent-light);
+  padding: 4px 10px; border-radius: 20px; display: inline-block; margin-bottom: 8px;
+}
+.sidebar-module-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.sidebar-progress-text { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+
+/* --- Sidebar: Progress Bar --- */
+.progress-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin-bottom: 24px; }
+.progress-bar-fill { height: 100%; background: var(--accent); border-radius: 5px; transition: width 0.4s ease; }
+
+/* --- Sidebar: Chapter Path --- */
+.chapter-path { list-style: none; }
+
+.chapter-node {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 10px 0; cursor: pointer; position: relative;
+  transition: opacity var(--transition);
+}
+.chapter-node.locked { opacity: 0.5; cursor: not-allowed; }
+
+.chapter-node:not(:last-child)::after {
+  content: ''; position: absolute; left: 17px; top: 44px; bottom: -10px;
+  width: 2px; background: var(--border);
+}
+.chapter-node.completed:not(:last-child)::after { background: var(--success); }
+.chapter-node.active:not(:last-child)::after { background: var(--accent); }
+
+.node-circle {
+  width: 36px; height: 36px; min-width: 36px; border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+  color: var(--text-muted); background: var(--bg); transition: all var(--transition);
+}
+.chapter-node.active .node-circle { border-color: var(--accent); background: var(--accent); color: white; }
+.chapter-node.completed .node-circle { border-color: var(--success); background: var(--success); color: white; }
+
+.node-circle .check-icon { display: none; }
+.chapter-node.completed .node-circle .check-icon { display: block; }
+.chapter-node.completed .node-circle .node-number { display: none; }
+
+.node-info { flex: 1; padding-top: 2px; }
+.node-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.chapter-node.locked .node-title { color: var(--text-light); }
+.node-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+.node-stars { color: var(--warning); letter-spacing: 1px; }
+
+/* --- Main Content Area --- */
+.main-content {
+  flex: 1; margin-left: var(--sidebar-w); padding: 32px;
+  display: flex; justify-content: center;
+}
+.content-wrapper { width: 100%; max-width: var(--content-max); }
+
+/* --- Cards --- */
+.card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 24px; margin-bottom: 16px; transition: all var(--transition);
+}
+.card:hover { box-shadow: var(--shadow-md); }
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 24px; border-radius: var(--radius-sm);
+  font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; transition: all var(--transition); text-decoration: none;
+}
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-primary:disabled { background: var(--border); color: var(--text-light); cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-outline { background: transparent; color: var(--text); border: 2px solid var(--border); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { background: #16a34a; }
+.btn-lg { padding: 14px 32px; font-size: 16px; }
+.btn-sm { padding: 8px 16px; font-size: 13px; }
+.btn-block { width: 100%; }
+
+/* --- Tags / Pills --- */
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.tag-accent { background: var(--accent-light); color: var(--accent-dark); }
+.tag-success { background: var(--success-light); color: #15803d; }
+.tag-warning { background: var(--warning-light); color: #92400e; }
+
+/* --- Chapter View --- */
+.chapter-view { display: none; }
+.chapter-view.active { display: block; }
+.chapter-header { margin-bottom: 16px; }
+.chapter-tag { margin-bottom: 8px; }
+.chapter-title { font-size: 26px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.chapter-meta { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-muted); }
+.chapter-meta .icon { margin-right: 4px; }
+
+/* ========================================
+   Chapter Progress Bar (7 segments)
+   ======================================== */
+
+.chapter-progress {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.progress-seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.4s ease, opacity 0.4s ease;
+}
+
+.progress-seg.filled { background: var(--accent); }
+.progress-seg.current { background: var(--accent); opacity: 0.4; }
+.progress-seg.quiz-correct { background: var(--success); }
+.progress-seg.quiz-wrong { background: var(--warning); }
+
+/* ========================================
+   Content Carousel
+   ======================================== */
+
+.carousel-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.carousel-header {
+  padding: 20px 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chunk-counter {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  background: var(--accent-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.chunk-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.carousel-body {
+  padding: 20px 24px;
+}
+
+.carousel-body p { margin-bottom: 14px; font-size: 15px; line-height: 1.75; color: var(--text); }
+.carousel-body p:last-child { margin-bottom: 0; }
+.carousel-body strong { font-weight: 600; color: var(--text); }
+.carousel-body ol, .carousel-body ul { margin: 12px 0 16px 24px; font-size: 15px; line-height: 1.75; }
+.carousel-body li { margin-bottom: 6px; }
+
+/* Inline image in content */
+.content-image {
+  display: block;
+  max-width: 220px;
+  margin: 16px auto;
+  border-radius: var(--radius-xs);
+}
+
+/* Key Insight (shown on last chunk) */
+.key-insight {
+  background: var(--accent-light);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  padding: 16px 20px;
+  margin: 4px 24px 20px;
+}
+.key-insight-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent-dark); margin-bottom: 6px;
+}
+.key-insight-text { font-size: 15px; font-weight: 500; color: var(--text); font-style: italic; }
+
+.carousel-nav {
+  padding: 0 24px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Slide animation */
+.chunk-slide-right { animation: slideInRight 0.3s ease; }
+.chunk-slide-left { animation: slideInLeft 0.3s ease; }
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ========================================
+   Quiz Ready Transition
+   ======================================== */
+
+.quiz-ready-section {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.quiz-ready-section .ready-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.quiz-ready-section h3 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.quiz-ready-section p {
+  color: var(--text-muted);
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+/* --- Timer Bar --- */
+.timer-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+.timer-display { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--text); }
+.timer-par { font-size: 12px; color: var(--text-muted); }
+
+/* ========================================
+   Quiz Section (Sequential)
+   ======================================== */
+
+.quiz-section { margin-top: 0; }
+
+.quiz-progress {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.quiz-progress-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+
+.quiz-progress-dots { display: flex; gap: 8px; }
+.quiz-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--border); transition: all 0.3s ease;
+}
+.quiz-dot.current { background: var(--accent); transform: scale(1.3); box-shadow: 0 0 0 3px var(--accent-light); }
+.quiz-dot.correct { background: var(--success); }
+.quiz-dot.wrong { background: var(--error); }
+
+/* --- Question Card --- */
+.question-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 16px;
+  transition: border-color var(--transition);
+}
+.question-card.answered-correct { border-color: var(--success); }
+.question-card.answered-wrong { border-color: var(--error); }
+
+.question-number {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent-dark); margin-bottom: 8px;
+}
+.question-text { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 16px; line-height: 1.5; }
+
+/* --- Quiz Options --- */
+.options-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+
+.option-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px 16px; border: 2px solid var(--border); border-radius: 14px;
+  background: var(--bg); cursor: pointer; transition: all var(--transition);
+  text-align: left; font-family: 'Poppins', sans-serif; font-size: 14px; color: var(--text);
+}
+.option-btn:hover:not(.disabled) { border-color: var(--accent); background: var(--accent-light); }
+.option-btn.selected { border-color: var(--accent); background: var(--accent-light); }
+.option-btn.correct { border-color: var(--success); background: var(--success-light); cursor: default; }
+.option-btn.wrong { border-color: var(--error); background: var(--error-light); cursor: default; }
+.option-btn.disabled { cursor: default; opacity: 0.6; }
+.option-btn.disabled.correct { opacity: 1; }
+
+.option-letter {
+  width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px; color: var(--text-muted); transition: all var(--transition);
+}
+.option-btn.correct .option-letter { background: var(--success); color: white; }
+.option-btn.wrong .option-letter { background: var(--error); color: white; }
+
+.option-text { flex: 1; font-size: 14px; line-height: 1.4; }
+
+/* ========================================
+   Explanation — Color-Coded Callout
+   ======================================== */
+
+.explanation {
+  margin-top: 16px;
+  padding: 14px 18px;
+  border-radius: var(--radius-xs);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  display: none;
+  border-left: 4px solid var(--border);
+  background: var(--surface);
+}
+
+.explanation.visible { display: block; animation: fadeIn 0.3s ease; }
+
+.explanation.correct-exp {
+  background: var(--success-light);
+  border-left-color: var(--success);
+}
+
+.explanation.wrong-exp {
+  background: var(--error-light);
+  border-left-color: var(--error);
+}
+
+.exp-prefix {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.exp-prefix.correct { color: #15803d; }
+.exp-prefix.wrong { color: var(--error); }
+
+/* --- Ordering Question --- */
+.order-list { list-style: none; display: flex; flex-direction: column; gap: 8px; counter-reset: order-counter; }
+
+.order-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border: 2px solid var(--border); border-radius: 14px;
+  background: var(--bg); cursor: grab; transition: all var(--transition);
+  font-size: 14px; user-select: none;
+}
+.order-item:active { cursor: grabbing; }
+
+.order-item .order-num {
+  width: 28px; height: 28px; min-width: 28px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 12px; color: var(--text-muted);
+}
+.order-item.correct-position { border-color: var(--success); background: var(--success-light); }
+.order-item.correct-position .order-num { background: var(--success); color: white; }
+.order-item.wrong-position { border-color: var(--error); background: var(--error-light); }
+.order-item.dragging { opacity: 0.5; border-color: var(--accent); }
+.order-item.drag-over { border-color: var(--accent); background: var(--accent-light); }
+
+/* --- Retry Transition --- */
+.retry-transition { text-align: center; padding: 40px 20px; animation: slideUp 0.4s ease; }
+.retry-transition .retry-icon { font-size: 48px; margin-bottom: 16px; }
+.retry-transition h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.retry-transition p { color: var(--text-muted); font-size: 14px; margin-bottom: 8px; }
+.retry-transition .retry-round-info { font-size: 12px; color: var(--text-light); margin-bottom: 24px; }
+
+/* --- Retry Banner --- */
+.retry-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; background: var(--warning-light);
+  border-radius: var(--radius-xs); margin-bottom: 20px;
+  font-size: 14px; font-weight: 500; color: #92400e;
+  animation: fadeIn 0.3s ease;
+}
+.retry-banner .icon { font-size: 18px; }
+
+.quiz-actions { margin-top: 20px; }
+.question-enter { animation: slideUp 0.3s ease; }
+
+/* ========================================
+   Completion Overlay
+   ======================================== */
+
+.completion-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(8px);
+  z-index: 200; align-items: center; justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+.completion-overlay.visible { display: flex; }
+
+.completion-card {
+  background: var(--bg); border-radius: 20px; padding: 40px;
+  max-width: 440px; width: 90%; text-align: center;
+  box-shadow: var(--shadow-lg); animation: slideUp 0.4s ease;
+}
+
+/* Mascot placeholder */
+.mascot-area { margin-bottom: 12px; }
+.mascot-img {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: var(--accent-light);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 42px;
+}
+
+.completion-stars { font-size: 36px; margin-bottom: 12px; letter-spacing: 4px; }
+.completion-title { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.completion-message { font-size: 14px; color: var(--text-muted); margin-bottom: 24px; line-height: 1.6; }
+
+.completion-stats { display: flex; justify-content: center; gap: 24px; margin-bottom: 24px; }
+.completion-stat { text-align: center; }
+.completion-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--text); }
+.completion-stat-value.xp { color: var(--accent); }
+.completion-stat-value.time { color: var(--text); }
+.completion-stat-value.speed { color: var(--warning); }
+.completion-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+/* --- Module Overview --- */
+.module-overview { display: none; }
+.module-overview.active { display: block; }
+
+.module-hero { margin-bottom: 32px; }
+.module-hero-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.module-hero-desc { font-size: 15px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px; }
+
+.module-stats-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.module-stat-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: var(--surface);
+  border-radius: 20px; font-size: 13px; color: var(--text-muted);
+}
+.module-stat-pill .icon { font-size: 14px; }
+
+/* --- Chapter List Cards (Overview) --- */
+.chapter-list-card {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 12px; cursor: pointer; transition: all var(--transition);
+}
+.chapter-list-card:hover:not(.locked) { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.chapter-list-card.locked { opacity: 0.5; cursor: not-allowed; }
+.chapter-list-card.completed { border-color: var(--success); background: linear-gradient(to right, var(--success-light), var(--bg)); }
+
+.chapter-list-num {
+  width: 40px; height: 40px; min-width: 40px; border-radius: 50%;
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; color: var(--text-muted);
+}
+.chapter-list-card.completed .chapter-list-num { background: var(--success); color: white; }
+.chapter-list-card.active .chapter-list-num { background: var(--accent); color: white; }
+
+.chapter-list-info { flex: 1; }
+.chapter-list-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.chapter-list-meta { font-size: 12px; color: var(--text-muted); }
+.chapter-list-right { display: flex; align-items: center; gap: 8px; }
+.chapter-list-stars { font-size: 14px; color: var(--warning); letter-spacing: 2px; }
+.chapter-list-arrow { color: var(--text-light); font-size: 18px; }
+
+/* --- Module Complete View --- */
+.module-complete { display: none; text-align: center; padding: 40px 0; }
+.module-complete.active { display: block; }
+.module-complete-badge {
+  width: 100px; height: 100px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 24px; font-size: 48px;
+  box-shadow: 0 4px 20px rgba(14, 165, 233, 0.3);
+}
+.module-complete-title { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.module-complete-subtitle { font-size: 15px; color: var(--text-muted); margin-bottom: 32px; }
+
+/* --- Sprint Tracker --- */
+.sprint-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; background: var(--warning-light);
+  border-radius: var(--radius-xs); font-size: 12px; font-weight: 600;
+  color: #92400e; margin-bottom: 24px;
+}
+.sprint-bar .icon { font-size: 14px; }
+
+/* --- Animations --- */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+.animate-in { animation: slideUp 0.3s ease; }
+
+/* --- Mobile --- */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 0px; }
+  .sidebar { display: none; }
+  .sidebar.mobile-open { display: block; width: 280px; box-shadow: var(--shadow-lg); }
+  .main-content { margin-left: 0; padding: 20px 16px; }
+  .topbar { padding: 0 16px; }
+  .mobile-menu-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border: none; background: none;
+    cursor: pointer; font-size: 20px; color: var(--text);
+  }
+  .completion-card { padding: 28px 20px; }
+  .completion-stats { gap: 16px; }
+  .chapter-title { font-size: 22px; }
+  h1 { font-size: 24px; }
+  .carousel-header { padding: 16px 16px 0; }
+  .carousel-body { padding: 16px; }
+  .carousel-nav { padding: 0 16px 16px; }
+  .key-insight { margin: 4px 16px 16px; }
+}
+
+@media (min-width: 769px) { .mobile-menu-btn { display: none; } }
+
+/* --- Utility --- */
+.hidden { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- === TOPBAR === -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <button class="mobile-menu-btn" aria-label="Menu">&#9776;</button>
+        <div class="topbar-logo">
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <span class="topbar-title">Goa DRS Training</span>
+      </div>
+      <div class="topbar-stats">
+        <div class="stat-badge xp"><span class="icon">&#9889;</span> <span id="xp-value">0</span> XP</div>
+        <div class="stat-badge stars"><span class="icon">&#9733;</span> <span id="stars-value">0</span></div>
+      </div>
+    </header>
+
+    <div class="app-body">
+
+      <!-- === SIDEBAR === -->
+      <nav class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-module-tag">Module 1</span>
+          <div class="sidebar-module-title">Consumer</div>
+          <div class="sidebar-progress-text">0 of 4 chapters</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <ul class="chapter-path"></ul>
+        <div style="margin-top: 24px;">
+          <button class="btn btn-outline btn-sm btn-block" onclick="App.goToOverview()">&#8592; Module Overview</button>
+        </div>
+      </nav>
+
+      <!-- === MAIN CONTENT === -->
+      <main class="main-content">
+        <div class="content-wrapper">
+
+          <!-- Sprint Bar -->
+          <div class="sprint-bar hidden"></div>
+
+          <!-- === MODULE OVERVIEW === -->
+          <div class="module-overview active">
+            <div class="module-hero">
+              <h1 class="module-hero-title">Module 1: Consumer</h1>
+              <p class="module-hero-desc">
+                Walk through the complete consumer journey — from paying a deposit at the store to getting your money back at a collection point. Learn how to find return locations, understand the refund process, and use the DRS app.
+              </p>
+              <div class="module-stats-row">
+                <div class="module-stat-pill"><span class="icon">&#128214;</span> 4 chapters</div>
+                <div class="module-stat-pill"><span class="icon">&#10067;</span> 12 questions</div>
+                <div class="module-stat-pill"><span class="icon">&#9201;</span> ~18 minutes</div>
+                <div class="module-stat-pill"><span class="icon">&#9889;</span> 420 XP possible</div>
+              </div>
+            </div>
+            <div id="chapter-list"></div>
+          </div>
+
+          <!-- === CHAPTER VIEW === -->
+          <div class="chapter-view">
+            <!-- Chapter Header -->
+            <div class="chapter-header">
+              <span class="tag tag-accent chapter-tag">Chapter 1 of 4</span>
+              <h2 class="chapter-title">Loading...</h2>
+              <div class="chapter-meta"></div>
+            </div>
+
+            <!-- Timer -->
+            <div class="timer-bar">
+              <div>
+                <span style="font-size:13px; color: var(--text-muted);">&#9201; </span>
+                <span class="timer-display mono-bold">0:00</span>
+              </div>
+              <div class="timer-par">Par: 4:00</div>
+            </div>
+
+            <!-- Progress Bar (7 segments) -->
+            <div class="chapter-progress" id="chapter-progress"></div>
+
+            <!-- Content Carousel -->
+            <div class="carousel-card" id="carousel-card">
+              <div class="carousel-header">
+                <span class="chunk-counter" id="chunk-counter">1 of 4</span>
+                <h3 class="chunk-title" id="chunk-title">Loading...</h3>
+              </div>
+              <div class="carousel-body" id="chunk-content"></div>
+              <div class="key-insight hidden" id="carousel-insight">
+                <div class="key-insight-label">&#128161; Key Insight</div>
+                <div class="key-insight-text" id="carousel-insight-text"></div>
+              </div>
+              <div class="carousel-nav">
+                <button class="btn btn-outline btn-sm" id="chunk-prev" onclick="App.prevChunk()">&#8592; Back</button>
+                <button class="btn btn-primary" id="chunk-next" onclick="App.nextChunk()">Next &#8594;</button>
+              </div>
+            </div>
+
+            <!-- Quiz Ready Transition -->
+            <div class="quiz-ready-section card hidden" id="quiz-ready">
+              <div class="ready-icon">&#127919;</div>
+              <h3>Ready for the quiz?</h3>
+              <p>3 questions about what you just read. Get them all right on the first try for 3 stars.</p>
+              <button class="btn btn-primary btn-lg" onclick="App.startQuiz()">Let's go &#8594;</button>
+            </div>
+
+            <!-- Quiz Sequential (hidden until started) -->
+            <div class="quiz-section hidden" id="quiz-section">
+              <div class="quiz-progress">
+                <span class="quiz-progress-text" id="quiz-progress-text">Question 1 of 3</span>
+                <div class="quiz-progress-dots" id="quiz-dots"></div>
+              </div>
+
+              <div class="retry-banner hidden" id="retry-banner">
+                <span class="icon">&#128260;</span>
+                <span id="retry-text">Let's revisit the ones you missed.</span>
+              </div>
+
+              <div id="current-question"></div>
+
+              <div class="quiz-actions">
+                <button class="btn btn-primary btn-lg btn-block" id="quiz-check-btn" disabled onclick="App.checkAnswer()">Check Answer</button>
+                <button class="btn btn-success btn-lg btn-block hidden" id="quiz-continue-btn" onclick="App.continueQuiz()">Continue &#8594;</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- === MODULE COMPLETE === -->
+          <div class="module-complete">
+            <div class="module-complete-badge">&#127891;</div>
+            <h1 class="module-complete-title">Module 1 Complete!</h1>
+            <p class="module-complete-subtitle"></p>
+            <div class="completion-stats"></div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 24px;">
+              You now understand the full consumer journey. Next up: Module 2 — Collection Eco System.
+            </p>
+            <a href="/static/training/module-2/index.html" class="btn-next-module" style="display:inline-block;margin-top:16px;padding:12px 28px;background:#0EA5E9;color:#fff;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;transition:background 0.2s;">Start Module 2 →</a>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- === COMPLETION OVERLAY === -->
+  <div class="completion-overlay">
+    <div class="completion-card">
+      <div class="mascot-area"><div class="mascot-img" id="mascot-img">&#127881;</div></div>
+      <div class="completion-stars">&#9733;&#9733;&#9733;</div>
+      <h2 class="completion-title">Perfect!</h2>
+      <p class="completion-message">You absolutely crushed it!</p>
+      <div class="completion-stats">
+        <div class="completion-stat">
+          <div class="completion-stat-value xp">+80</div>
+          <div class="completion-stat-label">XP Earned</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value time">2:30</div>
+          <div class="completion-stat-label">Time</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value speed">&#9889; Under par!</div>
+          <div class="completion-stat-label">Speed</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+        <button class="btn btn-primary btn-lg btn-block btn-next">Next Chapter &#8594;</button>
+        <button class="btn-quit" onclick="window.location.href='/'" style="background:none;border:1px solid #E2E8F0;padding:8px 16px;border-radius:8px;font-size:13px;color:#64748B;cursor:pointer;font-family:inherit;">Exit Training</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- === GAMIFICATION ENGINE === -->
+  <script>
+const Gamification = (() => {
+  const STORAGE_KEY = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('storageKey') || 'goa_drs_training';
+  })();
+
+  function getDefaultState() {
+    return {
+      trainee: { name: '', startDate: new Date().toISOString().split('T')[0], totalXP: 0, totalStars: 0, totalTimeSeconds: 0 },
+      modules: {},
+      session: { chaptersThisSession: 0, currentModule: null, currentChapter: null }
+    };
+  }
+
+  function loadState() {
+    try { const d = localStorage.getItem(STORAGE_KEY); return d ? JSON.parse(d) : getDefaultState(); }
+    catch { return getDefaultState(); }
+  }
+
+  function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  let state = loadState();
+
+  function ensureModule(moduleId) {
+    if (!state.modules[moduleId]) state.modules[moduleId] = { status: 'in_progress', chapters: {} };
+    return state.modules[moduleId];
+  }
+
+  function getChapter(moduleId, chapterId) {
+    const mod = ensureModule(moduleId);
+    return mod.chapters[chapterId] || null;
+  }
+
+  // Timer
+  let timerInterval = null, timerStart = null, timerElapsed = 0, timerCallback = null;
+
+  function startTimer(onTick) {
+    timerStart = Date.now(); timerElapsed = 0; timerCallback = onTick;
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      timerElapsed = Math.floor((Date.now() - timerStart) / 1000);
+      if (timerCallback) timerCallback(timerElapsed);
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (!timerStart) return 9999;
+    timerElapsed = Math.floor((Date.now() - timerStart) / 1000);
+    return timerElapsed;
+  }
+
+  function getElapsed() { return timerStart ? Math.floor((Date.now() - timerStart) / 1000) : timerElapsed; }
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // Stars: 0 retry rounds = 3, 1 retry round = 2, 2+ = 1
+  function calculateStars(retryRoundsUsed) {
+    if (retryRoundsUsed === 0) return 3;
+    if (retryRoundsUsed === 1) return 2;
+    return 1;
+  }
+
+  function calculateXP(stars, timeSeconds, parTimeSeconds) {
+    let xp = 20;
+    if (stars === 3) xp += 15;
+    else if (stars === 2) xp += 5;
+    // Speed bonus: up to 50 XP based on time vs par
+    if (parTimeSeconds > 0) {
+      const ratio = Math.min(timeSeconds / parTimeSeconds, 2);
+      xp += Math.max(0, Math.round(50 * (1 - ratio / 2)));
+    }
+    return xp;
+  }
+
+  function completeChapter(moduleId, chapterId, retryRoundsUsed, timeSeconds, parTimeSeconds) {
+    const mod = ensureModule(moduleId);
+    const stars = calculateStars(retryRoundsUsed);
+    let baseXP = calculateXP(stars, timeSeconds, parTimeSeconds);
+    const underPar = timeSeconds <= parTimeSeconds;
+
+    // Streak tracking (resets after 10 min gap)
+    const now = Date.now();
+    const lastTime = state.session.lastCompletionTime || 0;
+    const minutesSince = (now - lastTime) / 1000 / 60;
+    if (!lastTime || minutesSince > 10) {
+      state.session.streak = 1;
+    } else {
+      state.session.streak = (state.session.streak || 0) + 1;
+    }
+    state.session.lastCompletionTime = now;
+
+    // Streak multiplier: 1.0x base, +0.1x per level, cap 2.0x
+    const streak = state.session.streak;
+    const streakMultiplier = Math.min(1 + ((streak - 1) * 0.1), 2.0);
+    const xp = Math.round(baseXP * streakMultiplier);
+
+    const existing = mod.chapters[chapterId];
+    if (!existing || xp > (existing.xp || 0)) {
+      mod.chapters[chapterId] = { stars, xp, timeSeconds, completed: true };
+    }
+
+    recalculateTotals();
+    state.session.chaptersThisSession++;
+    state.session.currentModule = moduleId;
+    state.session.currentChapter = chapterId;
+    saveState(state);
+
+    return { stars, xp, baseXP, timeSeconds, underPar, streak, streakMultiplier };
+  }
+
+  function recalculateTotals() {
+    let totalXP = 0, totalStars = 0, totalTime = 0;
+    for (const mod of Object.values(state.modules)) {
+      for (const ch of Object.values(mod.chapters)) {
+        if (ch.completed) { totalXP += ch.xp; totalStars += ch.stars; totalTime += ch.timeSeconds; }
+      }
+      const completedCount = Object.values(mod.chapters).filter(c => c.completed).length;
+      if (mod.totalChapters && completedCount >= mod.totalChapters) { totalXP += 100; mod.status = 'completed'; }
+    }
+    state.trainee.totalXP = totalXP;
+    state.trainee.totalStars = totalStars;
+    state.trainee.totalTimeSeconds = totalTime;
+  }
+
+  function setModuleChapterCount(moduleId, count) { ensureModule(moduleId).totalChapters = count; saveState(state); }
+
+  function getModuleProgress(moduleId) {
+    const mod = state.modules[moduleId];
+    if (!mod) return { completed: 0, total: 0, percentage: 0 };
+    const total = mod.totalChapters || 0;
+    const completed = Object.values(mod.chapters).filter(c => c.completed).length;
+    return { completed, total, percentage: total > 0 ? Math.round((completed / total) * 100) : 0 };
+  }
+
+  function isChapterUnlocked(moduleId, chapterId) {
+    if (chapterId === 0) return true;
+    const prev = getChapter(moduleId, chapterId - 1);
+    return prev && prev.completed;
+  }
+
+  function isModuleComplete(moduleId) {
+    const mod = state.modules[moduleId];
+    if (!mod || !mod.totalChapters) return false;
+    return Object.values(mod.chapters).filter(c => c.completed).length >= mod.totalChapters;
+  }
+
+  function getSprintCount() { return state.session.chaptersThisSession; }
+  function getSprintMessage() {
+    const c = state.session.chaptersThisSession;
+    if (c === 0) return null;
+    if (c === 1) return "1 chapter completed this session!";
+    if (c < 4) return `${c} chapters completed this session!`;
+    return `${c} chapters completed \u2014 you're on fire!`;
+  }
+
+  function setTraineeName(name) { state.trainee.name = name; saveState(state); }
+  function getTraineeName() { return state.trainee.name; }
+  function getTotalXP() { return state.trainee.totalXP; }
+  function getTotalStars() { return state.trainee.totalStars; }
+  function getState() { return state; }
+  function getStreak() { return state.session.streak || 0; }
+  function reset() { state = getDefaultState(); saveState(state); }
+
+  async function hydrateFromServer() {
+    try {
+      const resp = await fetch('/api/training/progress', { credentials: 'include' });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.found && data.progress_json && data.progress_json !== '{}') {
+        const serverState = JSON.parse(data.progress_json);
+        const localXP = state.trainee ? (state.trainee.totalXP || 0) : 0;
+        const serverXP = serverState.trainee ? (serverState.trainee.totalXP || 0) : 0;
+        if (serverXP > localXP) {
+          localStorage.setItem(STORAGE_KEY, data.progress_json);
+          state = JSON.parse(data.progress_json);
+        }
+      }
+    } catch (e) { /* offline fallback — localStorage still works */ }
+  }
+
+  return {
+    loadState, hydrateFromServer, startTimer, stopTimer, getElapsed, formatTime,
+    calculateStars, calculateXP, completeChapter, setModuleChapterCount,
+    getChapter, getModuleProgress, isChapterUnlocked, isModuleComplete,
+    getSprintCount, getSprintMessage, setTraineeName, getTraineeName,
+    getTotalXP, getTotalStars, getState, getStreak, reset
+  };
+})();
+  </script>
+
+  <!-- === APP ENGINE (Carousel + Sequential Quiz) === -->
+  <script>
+const App = (() => {
+  let moduleData = null;
+  let currentView = 'overview';
+  let currentChapterId = null;
+
+  // Carousel state
+  let currentChunkIndex = 0;
+  let totalChunks = 0;
+
+  // Progress bar state
+  let progressStates = [];
+
+  // Quiz sequential state
+  let questionsForRound = [];
+  let currentQPos = 0;
+  let retryRound = 0;
+  let wrongThisRound = [];
+  let totalRetryRoundsUsed = 0;
+  let selectedAnswer = null;
+  let currentQuestionEvaluated = false;
+  let questionDotStates = [];
+
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
+
+  // ==========================================
+  // INIT
+  // ==========================================
+  function init(data) {
+    // Access gate: require Module 0 completed
+    const _sk = (() => { const p = new URLSearchParams(window.location.search); return p.get('storageKey') || 'goa_drs_training'; })();
+    const rawState = JSON.parse(localStorage.getItem(_sk) || '{}');
+    const prevModule = (rawState.modules || {})[0];
+    if (!prevModule || prevModule.status !== 'completed') {
+      const _skParam = _sk !== 'goa_drs_training' ? '?storageKey=' + encodeURIComponent(_sk) : '';
+      document.querySelector('.app-container').innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center;font-family:Poppins,sans-serif;">
+          <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+          <h2 style="font-size:20px;font-weight:700;margin-bottom:8px;color:#1e293b;">Module Locked</h2>
+          <p style="color:#64748b;margin-bottom:24px;max-width:320px;">Complete <strong>Module 0: Basic Training</strong> first to unlock this module.</p>
+          <a href="/static/training/module-0/index.html${_skParam}" style="background:#0ea5e9;color:#fff;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Go to Module 0</a>
+        </div>`;
+      return;
+    }
+
+    moduleData = data;
+    Gamification.setModuleChapterCount(data.id, data.chapters.length);
+    updateTopbar();
+    renderSidebar();
+    showOverview();
+    setupMobileMenu();
+  }
+
+  function updateTopbar() {
+    const xpEl = $('#xp-value');
+    const starsEl = $('#stars-value');
+    if (xpEl) xpEl.textContent = Gamification.getTotalXP();
+    if (starsEl) starsEl.textContent = Gamification.getTotalStars();
+  }
+
+  function setupMobileMenu() {
+    const btn = $('.mobile-menu-btn');
+    const sidebar = $('.sidebar');
+    if (btn && sidebar) {
+      btn.addEventListener('click', () => sidebar.classList.toggle('mobile-open'));
+      $('.main-content').addEventListener('click', () => sidebar.classList.remove('mobile-open'));
+    }
+  }
+
+  // ==========================================
+  // SIDEBAR
+  // ==========================================
+  function renderSidebar() {
+    const pathEl = $('.chapter-path');
+    if (!pathEl) return;
+
+    const progress = Gamification.getModuleProgress(moduleData.id);
+    const progressText = $('.sidebar-progress-text');
+    if (progressText) progressText.textContent = `${progress.completed} of ${progress.total} chapters`;
+    const progressFill = $('.progress-bar-fill');
+    if (progressFill) progressFill.style.width = `${progress.percentage}%`;
+
+    pathEl.innerHTML = moduleData.chapters.map((ch, i) => {
+      const chData = Gamification.getChapter(moduleData.id, i);
+      const unlocked = Gamification.isChapterUnlocked(moduleData.id, i);
+      const completed = chData && chData.completed;
+      const isActive = currentView === 'chapter' && currentChapterId === i;
+      let cls = 'chapter-node';
+      if (completed) cls += ' completed';
+      else if (isActive) cls += ' active';
+      else if (!unlocked) cls += ' locked';
+
+      const stars = completed ? renderStarsText(chData.stars) : '';
+      const meta = completed
+        ? `<span class="node-stars">${stars}</span> <span>${Gamification.formatTime(chData.timeSeconds)}</span>`
+        : `${ch.readingTime} | ${ch.quizCount} Qs`;
+
+      return `
+        <li class="${cls}" data-chapter="${i}" onclick="App.onChapterNodeClick(${i})">
+          <div class="node-circle">
+            <span class="node-number">${i + 1}</span>
+            <svg class="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div class="node-info">
+            <div class="node-title">${ch.title}</div>
+            <div class="node-meta">${meta}</div>
+          </div>
+        </li>
+      `;
+    }).join('');
+  }
+
+  function renderStarsText(count) {
+    return '\u2605'.repeat(count) + '\u2606'.repeat(3 - count);
+  }
+
+  // ==========================================
+  // OVERVIEW
+  // ==========================================
+  function showOverview() {
+    currentView = 'overview';
+    currentChapterId = null;
+    hideAllViews();
+    const overview = $('.module-overview');
+    if (overview) overview.classList.add('active');
+    renderOverviewChapters();
+    renderSidebar();
+    renderSprintBar();
+  }
+
+  function renderOverviewChapters() {
+    const listEl = $('#chapter-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = moduleData.chapters.map((ch, i) => {
+      const chData = Gamification.getChapter(moduleData.id, i);
+      const unlocked = Gamification.isChapterUnlocked(moduleData.id, i);
+      const completed = chData && chData.completed;
+
+      let cls = 'chapter-list-card';
+      if (completed) cls += ' completed';
+      else if (unlocked && !completed) cls += ' active';
+      else cls += ' locked';
+
+      const stars = completed ? `<span class="chapter-list-stars">${renderStarsText(chData.stars)}</span>` : '';
+      const meta = completed
+        ? `${Gamification.formatTime(chData.timeSeconds)} | ${chData.xp} XP`
+        : `${ch.readingTime} | ${ch.quizCount} questions`;
+
+      return `
+        <div class="${cls}" onclick="App.onChapterClick(${i})" data-chapter="${i}">
+          <div class="chapter-list-num">${completed ? '\u2713' : i + 1}</div>
+          <div class="chapter-list-info">
+            <div class="chapter-list-title">${ch.title}</div>
+            <div class="chapter-list-meta">${meta}</div>
+          </div>
+          <div class="chapter-list-right">
+            ${stars}
+            <span class="chapter-list-arrow">${unlocked ? '\u2192' : '\uD83D\uDD12'}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderSprintBar() {
+    const sprintEl = $('.sprint-bar');
+    if (!sprintEl) return;
+    const msg = Gamification.getSprintMessage();
+    if (msg) {
+      sprintEl.innerHTML = `<span class="icon">\u26A1</span> ${msg}`;
+      sprintEl.classList.remove('hidden');
+    } else {
+      sprintEl.classList.add('hidden');
+    }
+  }
+
+  // ==========================================
+  // CHAPTER VIEW — CAROUSEL
+  // ==========================================
+  function showChapter(chapterId) {
+    const chapter = moduleData.chapters[chapterId];
+    if (!chapter) return;
+
+    currentView = 'chapter';
+    currentChapterId = chapterId;
+
+    // Reset carousel state
+    currentChunkIndex = 0;
+    totalChunks = chapter.contentChunks.length;
+
+    // Reset quiz state
+    questionsForRound = [];
+    currentQPos = 0;
+    retryRound = 0;
+    wrongThisRound = [];
+    totalRetryRoundsUsed = 0;
+    selectedAnswer = null;
+    currentQuestionEvaluated = false;
+    questionDotStates = chapter.questions.map(() => 'pending');
+
+    // Reset progress bar
+    const totalSegs = totalChunks + chapter.questions.length;
+    progressStates = new Array(totalSegs).fill('pending');
+    progressStates[0] = 'current';
+
+    hideAllViews();
+    const view = $('.chapter-view');
+    if (view) view.classList.add('active');
+
+    renderChapterHeader(chapter, chapterId);
+    renderProgressBar();
+    showChunk(0, 'none');
+
+    // Hide quiz sections
+    const quizReady = $('#quiz-ready');
+    if (quizReady) quizReady.classList.add('hidden');
+    const quizSection = $('#quiz-section');
+    if (quizSection) quizSection.classList.add('hidden');
+    const carouselCard = $('#carousel-card');
+    if (carouselCard) carouselCard.classList.remove('hidden');
+
+    renderSidebar();
+    Gamification.startTimer((elapsed) => {
+      const timerEl = $('.timer-display');
+      if (timerEl) timerEl.textContent = Gamification.formatTime(elapsed);
+    });
+
+    window.scrollTo(0, 0);
+  }
+
+  function renderChapterHeader(chapter, chapterId) {
+    const tagEl = $('.chapter-tag');
+    if (tagEl) tagEl.textContent = `Chapter ${chapterId + 1} of ${moduleData.chapters.length}`;
+    const titleEl = $('.chapter-title');
+    if (titleEl) titleEl.textContent = chapter.title;
+    const metaEl = $('.chapter-meta');
+    if (metaEl) metaEl.innerHTML = `
+      <span>\uD83D\uDCD6 ${chapter.readingTime}</span>
+      <span>\u2753 ${chapter.quizCount} questions</span>
+      <span>\u23F1 Par: ${Gamification.formatTime(chapter.parTimeSeconds)}</span>
+    `;
+    const parEl = $('.timer-par');
+    if (parEl) parEl.textContent = `Par: ${Gamification.formatTime(chapter.parTimeSeconds)}`;
+  }
+
+  // ==========================================
+  // PROGRESS BAR
+  // ==========================================
+  function renderProgressBar() {
+    const barEl = $('#chapter-progress');
+    if (!barEl) return;
+
+    barEl.innerHTML = progressStates.map((state, i) => {
+      let cls = 'progress-seg';
+      if (state === 'done' || state === 'filled') cls += ' filled';
+      else if (state === 'current') cls += ' current';
+      else if (state === 'quiz-correct') cls += ' quiz-correct';
+      else if (state === 'quiz-wrong') cls += ' quiz-wrong';
+      return `<div class="${cls}"></div>`;
+    }).join('');
+  }
+
+  function updateProgressForChunk(chunkIdx) {
+    for (let i = 0; i < chunkIdx; i++) {
+      progressStates[i] = 'done';
+    }
+    progressStates[chunkIdx] = 'current';
+    for (let i = chunkIdx + 1; i < progressStates.length; i++) {
+      if (progressStates[i] !== 'quiz-correct' && progressStates[i] !== 'quiz-wrong') {
+        progressStates[i] = 'pending';
+      }
+    }
+    renderProgressBar();
+  }
+
+  function updateProgressForQuizReady() {
+    for (let i = 0; i < totalChunks; i++) {
+      progressStates[i] = 'done';
+    }
+    renderProgressBar();
+  }
+
+  function updateProgressForQuiz(qOriginalIndex, result) {
+    const segIdx = totalChunks + qOriginalIndex;
+    progressStates[segIdx] = result === 'correct' ? 'quiz-correct' : 'quiz-wrong';
+    renderProgressBar();
+  }
+
+  // ==========================================
+  // CONTENT CHUNKS
+  // ==========================================
+  function showChunk(index, direction) {
+    const chapter = moduleData.chapters[currentChapterId];
+    const chunk = chapter.contentChunks[index];
+    if (!chunk) return;
+
+    currentChunkIndex = index;
+
+    const counterEl = $('#chunk-counter');
+    if (counterEl) counterEl.textContent = `${index + 1} of ${totalChunks}`;
+    const titleEl = $('#chunk-title');
+    if (titleEl) titleEl.textContent = chunk.title;
+    const contentEl = $('#chunk-content');
+    if (contentEl) {
+      contentEl.innerHTML = chunk.html;
+      if (direction !== 'none') {
+        contentEl.classList.remove('chunk-slide-right', 'chunk-slide-left');
+        void contentEl.offsetWidth;
+        contentEl.classList.add(direction === 'right' ? 'chunk-slide-right' : 'chunk-slide-left');
+      }
+    }
+
+    // Show key insight only on last chunk
+    const insightEl = $('#carousel-insight');
+    const insightText = $('#carousel-insight-text');
+    if (insightEl && insightText) {
+      if (index === totalChunks - 1) {
+        insightText.textContent = chapter.keyInsight;
+        insightEl.classList.remove('hidden');
+      } else {
+        insightEl.classList.add('hidden');
+      }
+    }
+
+    // Update nav buttons
+    const prevBtn = $('#chunk-prev');
+    const nextBtn = $('#chunk-next');
+    if (prevBtn) {
+      prevBtn.style.visibility = index === 0 ? 'hidden' : 'visible';
+    }
+    if (nextBtn) {
+      if (index === totalChunks - 1) {
+        nextBtn.textContent = 'Ready for quiz \u2192';
+        nextBtn.className = 'btn btn-success';
+      } else {
+        nextBtn.textContent = 'Next \u2192';
+        nextBtn.className = 'btn btn-primary';
+      }
+    }
+
+    updateProgressForChunk(index);
+  }
+
+  function nextChunk() {
+    if (currentChunkIndex < totalChunks - 1) {
+      showChunk(currentChunkIndex + 1, 'right');
+      const carousel = $('#carousel-card');
+      if (carousel) carousel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      showQuizReady();
+    }
+  }
+
+  function prevChunk() {
+    if (currentChunkIndex > 0) {
+      showChunk(currentChunkIndex - 1, 'left');
+      const carousel = $('#carousel-card');
+      if (carousel) carousel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function showQuizReady() {
+    const carousel = $('#carousel-card');
+    if (carousel) carousel.classList.add('hidden');
+    const quizReady = $('#quiz-ready');
+    if (quizReady) {
+      quizReady.classList.remove('hidden');
+      quizReady.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    updateProgressForQuizReady();
+  }
+
+  // ==========================================
+  // QUIZ — SEQUENTIAL FLOW
+  // ==========================================
+  function startQuiz() {
+    const quizReady = $('#quiz-ready');
+    if (quizReady) quizReady.classList.add('hidden');
+    const quizSection = $('#quiz-section');
+    if (quizSection) quizSection.classList.remove('hidden');
+
+    const chapter = moduleData.chapters[currentChapterId];
+    questionsForRound = chapter.questions.map((_, i) => i);
+    currentQPos = 0;
+    retryRound = 0;
+    wrongThisRound = [];
+
+    const retryBanner = $('#retry-banner');
+    if (retryBanner) retryBanner.classList.add('hidden');
+
+    showCurrentQuestion();
+    quizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function showCurrentQuestion() {
+    const chapter = moduleData.chapters[currentChapterId];
+    const qIndex = questionsForRound[currentQPos];
+    const question = chapter.questions[qIndex];
+
+    selectedAnswer = null;
+    currentQuestionEvaluated = false;
+
+    updateQuizProgress();
+
+    const container = $('#current-question');
+    if (!container) return;
+
+    if (question.type === 'ordering') {
+      container.innerHTML = renderOrderingQuestion(question, qIndex);
+    } else {
+      container.innerHTML = renderMCQQuestion(question, qIndex);
+    }
+    container.classList.remove('question-enter');
+    void container.offsetWidth;
+    container.classList.add('question-enter');
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) {
+      checkBtn.classList.remove('hidden');
+      checkBtn.disabled = question.type !== 'ordering';
+      checkBtn.textContent = 'Check Answer';
+    }
+    if (continueBtn) continueBtn.classList.add('hidden');
+  }
+
+  function updateQuizProgress() {
+    const totalInRound = questionsForRound.length;
+    const currentNum = currentQPos + 1;
+
+    const progressText = $('#quiz-progress-text');
+    if (progressText) {
+      const roundLabel = retryRound > 0 ? ` (Retry ${retryRound} of 3)` : '';
+      progressText.textContent = `Question ${currentNum} of ${totalInRound}${roundLabel}`;
+    }
+
+    const dotsEl = $('#quiz-dots');
+    if (dotsEl) {
+      dotsEl.innerHTML = questionsForRound.map((qIdx, pos) => {
+        let cls = 'quiz-dot';
+        if (pos < currentQPos) {
+          cls += questionDotStates[qIdx] === 'correct' ? ' correct' : ' wrong';
+        } else if (pos === currentQPos) {
+          cls += ' current';
+        }
+        return `<span class="${cls}"></span>`;
+      }).join('');
+    }
+  }
+
+  function renderMCQQuestion(q, qi) {
+    const isRetry = retryRound > 0;
+    const retryTag = isRetry ? `<span class="tag tag-warning" style="margin-left:8px;">RETRY</span>` : '';
+
+    const options = q.options.map((opt, oi) => {
+      const letter = String.fromCharCode(65 + oi);
+      return `
+        <button class="option-btn" data-question="${qi}" data-option="${oi}" onclick="App.selectOption(${qi}, ${oi})">
+          <span class="option-letter">${letter}</span>
+          <span class="option-text">${opt.text}</span>
+        </button>
+      `;
+    }).join('');
+
+    return `
+      <div class="question-card" id="question-${qi}">
+        <div class="question-number">Question ${qi + 1}${retryTag}</div>
+        <div class="question-text">${q.text}</div>
+        <div class="options-list">${options}</div>
+        <div class="explanation" id="explanation-${qi}"></div>
+      </div>
+    `;
+  }
+
+  function renderOrderingQuestion(q, qi) {
+    const isRetry = retryRound > 0;
+    const retryTag = isRetry ? `<span class="tag tag-warning" style="margin-left:8px;">RETRY</span>` : '';
+
+    let items = [...q.items];
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    if (items.every((item, idx) => item === q.correctOrder[idx])) {
+      [items[0], items[1]] = [items[1], items[0]];
+    }
+
+    const itemsHtml = items.map((item, ii) => `
+      <div class="order-item" draggable="true" data-question="${qi}" data-index="${ii}"
+           ondragstart="App.dragStart(event)" ondragover="App.dragOver(event)"
+           ondrop="App.drop(event, ${qi})" ondragend="App.dragEnd(event)">
+        <span class="order-num">${ii + 1}</span>
+        <span class="order-text">${item}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="question-card" id="question-${qi}">
+        <div class="question-number">Question ${qi + 1}${retryTag}</div>
+        <div class="question-text">${q.text}</div>
+        <div class="order-list" id="order-list-${qi}">${itemsHtml}</div>
+        <div class="explanation" id="explanation-${qi}"></div>
+      </div>
+    `;
+  }
+
+  // ==========================================
+  // DRAG & DROP
+  // ==========================================
+  let dragItem = null;
+
+  function dragStart(e) {
+    if (currentQuestionEvaluated) return;
+    dragItem = e.target.closest('.order-item');
+    if (dragItem) { dragItem.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+  }
+  function dragOver(e) {
+    e.preventDefault();
+    const target = e.target.closest('.order-item');
+    if (target && target !== dragItem) target.classList.add('drag-over');
+  }
+  function dragEnd(e) {
+    if (dragItem) dragItem.classList.remove('dragging');
+    $$('.order-item').forEach(el => el.classList.remove('drag-over'));
+  }
+  function drop(e, qi) {
+    e.preventDefault();
+    if (currentQuestionEvaluated) return;
+    const target = e.target.closest('.order-item');
+    if (!target || !dragItem || target === dragItem) return;
+    target.classList.remove('drag-over');
+    const list = target.parentNode;
+    const items = [...list.children];
+    const fromIdx = items.indexOf(dragItem);
+    const toIdx = items.indexOf(target);
+    if (fromIdx < toIdx) list.insertBefore(dragItem, target.nextSibling);
+    else list.insertBefore(dragItem, target);
+    [...list.children].forEach((item, i) => { item.querySelector('.order-num').textContent = i + 1; });
+  }
+
+  // ==========================================
+  // ANSWER SELECTION & CHECKING
+  // ==========================================
+  function selectOption(qi, oi) {
+    if (currentQuestionEvaluated) return;
+    selectedAnswer = oi;
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) {
+      questionEl.querySelectorAll('.option-btn').forEach((btn, i) => {
+        btn.classList.toggle('selected', i === oi);
+      });
+    }
+    const checkBtn = $('#quiz-check-btn');
+    if (checkBtn) checkBtn.disabled = false;
+  }
+
+  function checkAnswer() {
+    if (currentQuestionEvaluated) return;
+    currentQuestionEvaluated = true;
+
+    const chapter = moduleData.chapters[currentChapterId];
+    const qIndex = questionsForRound[currentQPos];
+    const question = chapter.questions[qIndex];
+
+    let isCorrect;
+    if (question.type === 'ordering') {
+      isCorrect = evaluateOrdering(question, qIndex);
+    } else {
+      isCorrect = evaluateMCQ(question, qIndex);
+    }
+
+    showExplanation(qIndex, isCorrect, question.explanation);
+
+    questionDotStates[qIndex] = isCorrect ? 'correct' : 'wrong';
+    updateQuizProgress();
+
+    updateProgressForQuiz(qIndex, isCorrect ? 'correct' : 'wrong');
+
+    if (!isCorrect) wrongThisRound.push(qIndex);
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) checkBtn.classList.add('hidden');
+    if (continueBtn) {
+      continueBtn.classList.remove('hidden');
+      const isLastInRound = currentQPos >= questionsForRound.length - 1;
+      if (isLastInRound && wrongThisRound.length > 0 && retryRound < 3) {
+        continueBtn.textContent = 'Review Mistakes \u2192';
+      } else if (isLastInRound) {
+        continueBtn.textContent = 'See Results \u2192';
+      } else {
+        continueBtn.textContent = 'Continue \u2192';
+      }
+    }
+  }
+
+  function showExplanation(qi, isCorrect, explanationText) {
+    const expEl = document.getElementById(`explanation-${qi}`);
+    if (!expEl) return;
+
+    const prefix = isCorrect ? '\u2713 Correct!' : '\u2717 Not quite.';
+    const prefixClass = isCorrect ? 'correct' : 'wrong';
+    const expClass = isCorrect ? 'correct-exp' : 'wrong-exp';
+
+    expEl.innerHTML = `<span class="exp-prefix ${prefixClass}">${prefix}</span>${explanationText}`;
+    expEl.classList.add('visible', expClass);
+  }
+
+  function evaluateMCQ(q, qi) {
+    const correct = q.options.findIndex(o => o.correct);
+    const isCorrect = selectedAnswer === correct;
+
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) {
+      questionEl.classList.add(isCorrect ? 'answered-correct' : 'answered-wrong');
+      questionEl.querySelectorAll('.option-btn').forEach((btn, i) => {
+        btn.classList.add('disabled');
+        if (i === correct) btn.classList.add('correct');
+        if (i === selectedAnswer && !isCorrect) btn.classList.add('wrong');
+      });
+    }
+    return isCorrect;
+  }
+
+  function evaluateOrdering(q, qi) {
+    const listEl = document.getElementById(`order-list-${qi}`);
+    if (!listEl) return false;
+    const items = [...listEl.children];
+    let allCorrect = true;
+    items.forEach((item, i) => {
+      item.setAttribute('draggable', 'false');
+      item.style.cursor = 'default';
+      const text = item.querySelector('.order-text').textContent;
+      if (text === q.correctOrder[i]) item.classList.add('correct-position');
+      else { item.classList.add('wrong-position'); allCorrect = false; }
+    });
+    const questionEl = document.getElementById(`question-${qi}`);
+    if (questionEl) questionEl.classList.add(allCorrect ? 'answered-correct' : 'answered-wrong');
+    return allCorrect;
+  }
+
+  // ==========================================
+  // CONTINUE / RETRY / FINISH
+  // ==========================================
+  function continueQuiz() {
+    currentQPos++;
+    if (currentQPos < questionsForRound.length) {
+      showCurrentQuestion();
+      const quizSection = $('#quiz-section');
+      if (quizSection) quizSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      if (wrongThisRound.length === 0 || retryRound >= 3) {
+        finishQuiz();
+      } else {
+        showRetryTransition();
+      }
+    }
+  }
+
+  function showRetryTransition() {
+    retryRound++;
+    totalRetryRoundsUsed = retryRound;
+
+    const wrongCount = wrongThisRound.length;
+    const container = $('#current-question');
+    container.innerHTML = `
+      <div class="retry-transition">
+        <div class="retry-icon">\uD83D\uDD04</div>
+        <h3>Almost there!</h3>
+        <p>You missed ${wrongCount} question${wrongCount > 1 ? 's' : ''}. Let's try ${wrongCount > 1 ? 'them' : 'it'} again.</p>
+        <p class="retry-round-info">Attempt ${retryRound + 1} of 4</p>
+        <button class="btn btn-primary btn-lg" onclick="App.beginRetryRound()">Let's go \u2192</button>
+      </div>
+    `;
+
+    const checkBtn = $('#quiz-check-btn');
+    const continueBtn = $('#quiz-continue-btn');
+    if (checkBtn) checkBtn.classList.add('hidden');
+    if (continueBtn) continueBtn.classList.add('hidden');
+  }
+
+  function beginRetryRound() {
+    questionsForRound = [...wrongThisRound];
+    wrongThisRound = [];
+    currentQPos = 0;
+
+    questionsForRound.forEach(qi => { questionDotStates[qi] = 'pending'; });
+
+    questionsForRound.forEach(qi => {
+      progressStates[totalChunks + qi] = 'pending';
+    });
+    renderProgressBar();
+
+    const retryBanner = $('#retry-banner');
+    if (retryBanner) {
+      retryBanner.classList.remove('hidden');
+      const retryText = $('#retry-text');
+      if (retryText) retryText.textContent = `Retry ${retryRound} of 3 \u2014 Get ${questionsForRound.length > 1 ? 'these' : 'this'} right!`;
+    }
+
+    showCurrentQuestion();
+  }
+
+  function finishQuiz() {
+    const timeSeconds = Gamification.stopTimer();
+    const chapter = moduleData.chapters[currentChapterId];
+
+    const result = Gamification.completeChapter(
+      moduleData.id, currentChapterId, totalRetryRoundsUsed, timeSeconds, chapter.parTimeSeconds
+    );
+
+    updateTopbar();
+
+    // Sync progress to backend after every chapter
+    try {
+      const syncState = Gamification.getState();
+      const mods = syncState.modules || {};
+      const trainee = syncState.trainee || {};
+      let mc = 0, cc = 0, cm = 0;
+      for (const [id, m] of Object.entries(mods)) {
+        if (m.status === 'completed') mc++;
+        cc += Object.values(m.chapters || {}).filter(c => c.completed).length;
+        if (Object.values(m.chapters || {}).some(c => c.completed)) cm = Math.max(cm, parseInt(id));
+      }
+      fetch('/api/training/sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ total_xp: trainee.totalXP || 0, total_stars: trainee.totalStars || 0, modules_completed: mc, chapters_completed: cc, total_time_seconds: trainee.totalTimeSeconds || 0, current_module: cm, progress_json: JSON.stringify(syncState) })
+      }).catch(() => {});
+    } catch (e) {}
+
+    setTimeout(() => showCompletion(result, currentChapterId), 400);
+  }
+
+  // ==========================================
+  // COMPLETION OVERLAY
+  // ==========================================
+  function showCompletion(result, chapterId) {
+    const overlay = $('.completion-overlay');
+    if (!overlay) return;
+
+    const chapter = moduleData.chapters[chapterId];
+    const starsText = '\u2605'.repeat(result.stars) + '\u2606'.repeat(3 - result.stars);
+    const speedText = (() => {
+      const ratio = chapter.parTimeSeconds > 0 ? result.timeSeconds / chapter.parTimeSeconds : 2;
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      if (ratio <= 0.3) return pick(['\u26A1 Are you Flash?!', '\uD83D\uDE80 Did you just teleport?', '\uD83C\uDFC6 Someone call Guinness!', '\uD83D\uDD25 Speed demon unleashed!']);
+      if (ratio <= 0.6) return pick(['\uD83C\uDF89 Schedule your parade!', '\uD83D\uDCA8 Lightning fast!', '\uD83D\uDE0E Quick AND accurate!', '\uD83C\uDFAF Smoother than butter!']);
+      if (ratio <= 1.0) return pick(['\uD83D\uDCAA Solid speed!', '\u2728 Clean and efficient!', '\uD83D\uDE80 Right on the money!', '\uD83D\uDC4D Smooth operator!']);
+      if (ratio <= 1.5) return pick(['\uD83D\uDCDA Steady and thorough!', '\uD83C\uDF1F Good pace!', '\uD83E\uDDE0 Building strong!', '\uD83D\uDC4F Taking it in properly!']);
+      return pick(['\uD83E\uDDE0 Deep learning mode!', '\uD83D\uDCDA Thoroughness is power!', '\uD83C\uDF31 Mastery takes time!', '\uD83D\uDCAA No rush, you got this!']);
+    })();
+
+    let message;
+    if (chapter.completionMessages) {
+      if (result.stars === 3) message = chapter.completionMessages.perfect;
+      else if (result.stars === 2) message = chapter.completionMessages.good;
+      else message = chapter.completionMessages.passed;
+    } else {
+      message = 'Great work! Keep going.';
+    }
+
+    const mascotEl = $('#mascot-img');
+    if (mascotEl) {
+      if (result.stars === 3) mascotEl.textContent = '\uD83C\uDF89';
+      else if (result.stars === 2) mascotEl.textContent = '\uD83D\uDCAA';
+      else mascotEl.textContent = '\uD83E\uDD14';
+    }
+
+    overlay.querySelector('.completion-stars').textContent = starsText;
+    overlay.querySelector('.completion-title').textContent =
+      result.stars === 3 ? 'Perfect!' : result.stars === 2 ? 'Great Job!' : 'Chapter Complete!';
+    overlay.querySelector('.completion-message').textContent = message;
+    overlay.querySelector('.completion-stat-value.xp').textContent = `+${result.xp}`;
+    overlay.querySelector('.completion-stat-value.time').textContent = Gamification.formatTime(result.timeSeconds);
+    overlay.querySelector('.completion-stat-value.speed').textContent = speedText;
+
+    // Show streak badge if streak > 1
+    let streakEl = overlay.querySelector('.streak-badge');
+    if (!streakEl) {
+      streakEl = document.createElement('div');
+      streakEl.className = 'streak-badge';
+      streakEl.style.cssText = 'margin-top:12px;padding:6px 16px;background:#FEF3C7;border-radius:20px;font-size:13px;font-weight:600;color:#92400E;display:inline-block;';
+      overlay.querySelector('.completion-stats').after(streakEl);
+    }
+    if (result.streak > 1) {
+      streakEl.textContent = '\uD83D\uDD25 ' + result.streak + ' streak! (' + result.streakMultiplier.toFixed(1) + 'x XP)';
+      streakEl.style.display = 'inline-block';
+    } else {
+      streakEl.style.display = 'none';
+    }
+
+    const nextBtn = overlay.querySelector('.btn-next');
+    const isModuleComplete = Gamification.isModuleComplete(moduleData.id);
+
+    if (isModuleComplete) {
+      nextBtn.textContent = 'Complete Module \u2192';
+      nextBtn.onclick = () => { overlay.classList.remove('visible'); showModuleComplete(); };
+    } else {
+      nextBtn.textContent = 'Next Chapter \u2192';
+      nextBtn.onclick = () => { overlay.classList.remove('visible'); showChapter(chapterId + 1); };
+    }
+
+    overlay.classList.add('visible');
+  }
+
+  // ==========================================
+  // MODULE COMPLETE
+  // ==========================================
+  function showModuleComplete() {
+    currentView = 'module-complete';
+    hideAllViews();
+    const view = $('.module-complete');
+    if (view) view.classList.add('active');
+
+    const progress = Gamification.getModuleProgress(moduleData.id);
+    const state = Gamification.getState();
+    const moduleStars = Object.values(state.modules[moduleData.id].chapters)
+      .reduce((sum, ch) => sum + (ch.stars || 0), 0);
+    const moduleXP = Object.values(state.modules[moduleData.id].chapters)
+      .reduce((sum, ch) => sum + (ch.xp || 0), 0) + 100;
+
+    const msgEl = view.querySelector('.module-complete-subtitle');
+    if (msgEl) msgEl.textContent = "You've mastered the consumer journey. Deposits, collection points, refunds, and the app \u2014 all covered.";
+
+    const statsEl = view.querySelector('.completion-stats');
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <div class="completion-stat">
+          <div class="completion-stat-value xp">${moduleXP}</div>
+          <div class="completion-stat-label">Total XP</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value" style="color: var(--warning)">${moduleStars}/${progress.total * 3}</div>
+          <div class="completion-stat-label">Stars</div>
+        </div>
+        <div class="completion-stat">
+          <div class="completion-stat-value time">${Gamification.formatTime(state.trainee.totalTimeSeconds)}</div>
+          <div class="completion-stat-label">Total Time</div>
+        </div>
+      `;
+    }
+
+    // Sync progress to backend
+    try {
+      const syncState = Gamification.getState();
+      const modules = syncState.modules || {};
+      const trainee = syncState.trainee || {};
+      let modulesCompleted = 0, chaptersCompleted = 0, currentMod = 0;
+      for (const [modId, mod] of Object.entries(modules)) {
+        if (mod.status === 'completed') modulesCompleted++;
+        chaptersCompleted += Object.values(mod.chapters || {}).filter(c => c.completed).length;
+        if (Object.values(mod.chapters || {}).some(c => c.completed)) currentMod = Math.max(currentMod, parseInt(modId));
+      }
+      fetch('/api/training/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          total_xp: trainee.totalXP || 0,
+          total_stars: trainee.totalStars || 0,
+          modules_completed: modulesCompleted,
+          chapters_completed: chaptersCompleted,
+          total_time_seconds: trainee.totalTimeSeconds || 0,
+          current_module: currentMod,
+          progress_json: JSON.stringify(syncState)
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
+    renderSidebar();
+    updateTopbar();
+  }
+
+  // ==========================================
+  // NAVIGATION
+  // ==========================================
+  function hideAllViews() {
+    $$('.module-overview, .chapter-view, .module-complete').forEach(el => el.classList.remove('active'));
+    const overlay = $('.completion-overlay');
+    if (overlay) overlay.classList.remove('visible');
+  }
+
+  function onChapterClick(chapterId) {
+    if (!Gamification.isChapterUnlocked(moduleData.id, chapterId)) return;
+    showChapter(chapterId);
+    const sidebar = $('.sidebar');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+  }
+
+  function onChapterNodeClick(chapterId) { onChapterClick(chapterId); }
+
+  function goToOverview() {
+    Gamification.stopTimer();
+    showOverview();
+  }
+
+  // ==========================================
+  // PUBLIC API
+  // ==========================================
+  return {
+    init, showOverview, showChapter,
+    nextChunk, prevChunk,
+    selectOption, checkAnswer, continueQuiz,
+    startQuiz, beginRetryRound,
+    onChapterClick, onChapterNodeClick, goToOverview,
+    dragStart, dragOver, dragEnd, drop
+  };
+})();
+  </script>
+
+  <!-- === MODULE DATA === -->
+  <script>
+    const MODULE_DATA = {
+      id: 1,
+      title: "Consumer",
+      subtitle: "The Consumer Journey",
+      chapters: [
+        // ============================================================
+        // CHAPTER 1: You and Your Deposit
+        // ============================================================
+        {
+          id: 0,
+          title: "You and Your Deposit",
+          readingTime: "2.5 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "DRS just makes sure trash is trashed and not adding to landfills through refund based behaviour.",
+          completionMessages: {
+            perfect: "\u20B910 for glass, \u20B95 for PET, April 1st launch \u2014 you've got the consumer basics locked.",
+            good: "Deposits and packaging types are clicking. The DRS symbol? You'll spot it everywhere now.",
+            passed: "The deposit is the core. Everything else builds on that one idea."
+          },
+          contentChunks: [
+            {
+              title: "Every Bottle Has a Price",
+              html: `<p>Suppose you are a consumer. You buy a beer at the shop. You pay for the beer. But here\u2019s what is going to change from April 1st. In addition to the MRP, you also pay a <strong>refundable green deposit</strong> at the time of purchase.</p>
+                     <p><strong>\u20B910</strong> for a glass bottle. <strong>\u20B95</strong> for a PET bottle. <strong>\u20B95</strong> for an aluminium can. That deposit isn\u2019t a tax or a fee \u2014 it\u2019s your money, held in trust. You get it back the moment you return the empty container.</p>
+                     <p>Deposit return systems work this way across Europe, Australia, and dozens of other countries. Now Goa is bringing it to India. Pay the deposit when you buy. Get it back when you return.</p>`
+            },
+            {
+              title: "What\u2019s Covered?",
+              html: `<p>Not every bottle carries a deposit. Only products enabled with the <strong>Unique Serialized Identifier (USI)</strong> \u2014 a special QR code that makes each container traceable \u2014 are part of the DRS system.</p>
+                     <p>Right now, that means alcohol. Glass bottles, PET bottles, aluminium cans, even Tetra Pak cartons, as long as they carry the DRS QR Code. Each one has a digital identity, like an <strong>Aadhaar card for bottles</strong>.</p>
+                     <p>The deposit amount depends on the packaging type. Glass costs \u20B910 to return. PET and aluminium cost \u20B95 each. Simple, consistent, no guessing.</p>`
+            },
+            {
+              title: "The DRS Symbol",
+              html: `<p>Look for the <strong>DRS symbol</strong> on the label. It\u2019s a small mark that tells you this product is part of the deposit return scheme. Next to it, you\u2019ll find a QR code \u2014 that\u2019s the USI.</p>
+                     <img src="goaDrsLogoNew.png" alt="Goa DRS Logo" class="content-image">
+                     <p>That QR code isn\u2019t just for tracking. Scan it with your phone, and it\u2019ll show you the nearest collection point. It\u2019s your receipt, your refund ticket, and your map, all in one.</p>
+                     <p>Every DRS-enabled product has one. If you see the symbol, you\u2019ve paid the deposit. And that means you\u2019re eligible for a refund when you return it.</p>`
+            },
+            {
+              title: "Day One",
+              html: `<p>Phase 1 launches on <strong>April 1, 2026</strong>. On that day, every alcohol bottle, can, or carton you buy in Goa will carry a deposit. The system goes live statewide.</p>
+                     <p>What\u2019s next? More product categories will be added in future phases \u2014 soft drinks, packaged water, juices. But for now, it\u2019s alcohol only. One category, done right, before scaling up.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "How much deposit do you pay on a glass alcohol bottle?",
+              options: [
+                { text: "\u20B95", correct: false },
+                { text: "\u20B910", correct: true },
+                { text: "\u20B915", correct: false },
+                { text: "\u20B920", correct: false }
+              ],
+              explanation: "Glass bottles carry a \u20B910 deposit. PET bottles and aluminium cans are \u20B95 each."
+            },
+            {
+              type: "mcq",
+              text: "What does the DRS symbol on a product mean?",
+              options: [
+                { text: "The product is recyclable", correct: false },
+                { text: "The product carries a refundable deposit", correct: true },
+                { text: "The product is made from recycled material", correct: false },
+                { text: "The product is certified organic", correct: false }
+              ],
+              explanation: "The DRS symbol indicates the product is part of the deposit return scheme. You\u2019ve paid a deposit, and you can get it back by returning the container."
+            },
+            {
+              type: "mcq",
+              text: "True or False: All products in Goa are DRS-enabled from April 1, 2026.",
+              options: [
+                { text: "True", correct: false },
+                { text: "False", correct: true }
+              ],
+              explanation: "Phase 1 covers alcohol only. Other product categories like soft drinks and packaged water will be added in future phases."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 2: Finding a Collection Point
+        // ============================================================
+        {
+          id: 1,
+          title: "Finding a Collection Point",
+          readingTime: "2.5 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "Don\u2019t know where to return? Scan the QR on the bottle itself \u2014 it\u2019ll show you the nearest collection point.",
+          completionMessages: {
+            perfect: "App, product QR, Google Maps \u2014 three paths to the same place. You\u2019ll never wonder where to return.",
+            good: "Finding a collection point? Easy. You\u2019ve got three methods in your pocket.",
+            passed: "The nearest CP is always a scan away. That\u2019s the takeaway."
+          },
+          contentChunks: [
+            {
+              title: "Now What?",
+              html: `<p>You\u2019ve finished your drink. The bottle is empty. You want your deposit back. Where do you go?</p>
+                     <p>This is the first real test of any deposit refund system: if people can\u2019t find a collection point, they won\u2019t bother. The Goa DRS solves this with <strong>three discovery methods</strong>. You pick whichever fits how you think.</p>
+                     <p>No special knowledge required. No asking around. Just three simple ways to find the nearest spot to return your bottles and get your money.</p>`
+            },
+            {
+              title: "Three Ways to Find It",
+              html: `<p><strong>Method 1: The Goa DRS Consumer App.</strong> Download it from the Play Store or App Store. Open the app, and you\u2019ll see a map showing every collection point near your current location. Tap one to see details \u2014 address, hours, distance.</p>
+                     <p><strong>Method 2: Scan the QR on the bottle itself.</strong> Every DRS product has a QR code. Scan it with any QR scanner app, and it redirects to a landing page. The page asks for your location and shows you the nearest collection points. No app download required.</p>
+                     <p><strong>Method 3: Google Maps.</strong> Search for \u201CDRS collection point\u201D just like you\u2019d search for \u201Cpetrol pump\u201D or \u201CATM.\u201D The nearest ones show up with directions. Simple as that.</p>`
+            },
+            {
+              title: "Machines & People",
+              html: `<p>Collection points are of different types: <strong>RVMs</strong> (Reverse Vending Machines) and <strong>manual collection centers</strong>.</p>
+                     <p>RVMs will be fully automated once the system matures. You feed the bottles in one by one. The machine scans each QR, validates it, and processes your refund. No human interaction needed. Fast, clean, consistent.</p>
+                     <p>Manual centers have a person (aka handler) at the counter. You hand over your bottles, they scan the QRs using a handheld device, and process the refund the same way an RVM would. Same outcome, just with a human in the loop.</p>
+                     <p>Both methods are equally valid. Both give instant refunds. Pick whichever is closer or feels more comfortable.</p>`
+            },
+            {
+              title: "Collection Points Everywhere",
+              html: `<p>By April 1st, there will be <strong>350+ collection points</strong> across Goa. Every panchayat. Every municipal area. High-traffic zones like markets, petrol pumps, liquor shops.</p>
+                     <p>The goal: you should never be more than a few hundred meters from a collection point. Returning bottles should be as easy as buying them.</p>
+                     <p>Urban, rural, tourist zones \u2014 coverage is designed to meet you where you are. No excuses. No friction. Just return and get paid.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "Which of these is NOT a way to find a collection point?",
+              options: [
+                { text: "Goa DRS Consumer App", correct: false },
+                { text: "Scan the QR on the product", correct: false },
+                { text: "Google Maps", correct: false },
+                { text: "Call a helpline number", correct: true }
+              ],
+              explanation: "The three official methods are the app, scanning the product QR, and Google Maps. While there may be support helplines, they\u2019re not the primary discovery method."
+            },
+            {
+              type: "mcq",
+              text: "What happens when you scan the QR code on a DRS product?",
+              options: [
+                { text: "You get your refund immediately", correct: false },
+                { text: "It shows you the nearest collection points", correct: true },
+                { text: "It validates the product is genuine", correct: false },
+                { text: "It registers the product to your account", correct: false }
+              ],
+              explanation: "Scanning the product QR redirects you to a landing page showing nearby collection points. It\u2019s a discovery tool, not a transaction tool."
+            },
+            {
+              type: "mcq",
+              text: "What is an RVM?",
+              options: [
+                { text: "A mobile app for refund tracking", correct: false },
+                { text: "A fully automated collection machine", correct: true },
+                { text: "A manual collection center with a staff member", correct: false },
+                { text: "A recycling verification machine", correct: false }
+              ],
+              explanation: "RVM stands for Reverse Vending Machine \u2014 a self-service kiosk that scans bottles and processes refunds automatically."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 3: The Return Process
+        // ============================================================
+        {
+          id: 2,
+          title: "The Return Process",
+          readingTime: "3 min",
+          quizCount: 3,
+          parTimeSeconds: 180,
+          keyInsight: "UPI info first, bottles second. The system needs to know where to send your money before you hand over the containers.",
+          completionMessages: {
+            perfect: "UPI info \u2192 scan \u2192 validate \u2192 refund. You could walk someone through the entire return process.",
+            good: "The return flow is clear. UPI QR, app QR, or phone number \u2014 three ways to get paid.",
+            passed: "The key: share bank info first, then hand over bottles. Refund is instant."
+          },
+          contentChunks: [
+            {
+              title: "You\u2019re Here",
+              html: `<p>You arrive at a collection point. You\u2019ve got your empty bottles. You want your deposit back. What\u2019s the first thing you do?</p>
+                     <p>You don\u2019t hand over the bottles yet. The very first step is to <strong>share your UPI information</strong> with the system. This tells the system where to send your refund.</p>
+                     <p>Why UPI info first? Because once the bottles are scanned and validated, the refund is instant. The system needs to know your UPI or UPI linked phone details before it can send you money. No info, no refund.</p>`
+            },
+            {
+              title: "Show Me the Money",
+              html: `<p>You have <strong>three ways</strong> to share your UPI information at a collection point:</p>
+                     <p><strong>Option 1: UPI QR code from any UPI app.</strong> Open PhonePe, Google Pay, Paytm, or any UPI app. Show your UPI QR code to the collection point operator or the RVM scanner. The system reads it and knows where to send the refund.</p>
+                     <p><strong>Option 2: QR code from the Goa DRS Consumer App.</strong> If you\u2019ve set up the app, it generates a personal QR code tied to your registered bank account. Show that QR instead. Same function, DRS-specific.</p>
+                     <p><strong>Option 3: UPI-linked phone number.</strong> You can give your phone number instead of a QR code. The system sends you an OTP to validate it\u2019s really you. Enter the OTP, and your UPI account is linked for that transaction.</p>
+                     <p>Pick whichever method you\u2019re comfortable with. All three work. All three lead to the same instant refund.</p>`
+            },
+            {
+              title: "Scan, Validate, Done",
+              html: `<p>Once your UPI info is in the system, you hand over the bottles. Each container is scanned individually \u2014 the collection point operator scans the DRS QR on every bottle or can.</p>
+                     <p>The system validates two things: (1) Is this a valid DRS product? (2) Has this specific container already been returned? Every USI is unique, so double-claiming is impossible.</p>
+                     <p>If a bottle passes validation, it\u2019s added to your transaction. If it fails \u2014 maybe it\u2019s damaged, or the QR is unreadable, or it\u2019s already been returned \u2014 the system flags it invalid, and it\u2019s excluded.</p>
+                     <p>All containers scanned. All valid ones counted. The system computes your total deposit refund based on the count.</p>`
+            },
+            {
+              title: "Instant Cash",
+              html: `<p>The transaction closes. The system knows how many bottles you returned. It knows the deposit value of each. It knows your UPI id.</p>
+                     <p>The refund hits your UPI account <strong>right there, right then</strong>. Not tomorrow. Not in 3\u20135 business days. Instant. You\u2019ll get a notification on your phone from your UPI app confirming the deposit.</p>
+                     <p>That\u2019s the promise of the Goa DRS: scan, validate, and get paid. No waiting. No wondering if the refund will actually come through.</p>
+                     <p>The entire process \u2014 share UPI info, scan bottles, receive refund \u2014 is designed to be quick and frictionless.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What\u2019s the first thing a consumer does when they arrive at a collection point?",
+              options: [
+                { text: "Hand over the bottles", correct: false },
+                { text: "Share their UPI information", correct: true },
+                { text: "Scan each bottle\u2019s QR code", correct: false },
+                { text: "Pay a processing fee", correct: false }
+              ],
+              explanation: "UPI info comes first. The system needs to know where to send the refund before scanning the bottles. No account info, no refund."
+            },
+            {
+              type: "mcq",
+              text: "Which of these is a valid way to share your UPI info at a collection point?",
+              options: [
+                { text: "Cash payment", correct: false },
+                { text: "Credit card swipe", correct: false },
+                { text: "UPI QR code from PhonePe or Google Pay", correct: true },
+                { text: "Aadhaar card scan", correct: false }
+              ],
+              explanation: "You can share UPI info using (1) UPI QR from any app, (2) DRS app QR, or (3) UPI phone number + OTP. All three are UPI-based."
+            },
+            {
+              type: "ordering",
+              text: "Put these steps in the correct order:",
+              items: [
+                "Refund hits your UPI account",
+                "Scan each container\u2019s DRS QR code",
+                "Share your UPI information",
+                "System validates each container"
+              ],
+              correctOrder: [
+                "Share your UPI information",
+                "Scan each container\u2019s DRS QR code",
+                "System validates each container",
+                "Refund hits your UPI account"
+              ],
+              explanation: "UPI info \u2192 scan \u2192 validate \u2192 refund. That\u2019s the fixed sequence for every return transaction."
+            }
+          ]
+        },
+
+        // ============================================================
+        // CHAPTER 4: Your DRS App
+        // ============================================================
+        {
+          id: 3,
+          title: "Your DRS App",
+          readingTime: "2.5 min",
+          quizCount: 3,
+          parTimeSeconds: 150,
+          keyInsight: "The app isn\u2019t just for finding collection points \u2014 it\u2019s your receipt book, your earnings tracker, and your complaint desk, all in one.",
+          completionMessages: {
+            perfect: "My account, My QR, transaction history, grievances \u2014 you know the app inside out.",
+            good: "The app is your DRS companion. Find, return, track, complain \u2014 all covered.",
+            passed: "Key thing: the app tracks every return. Total earnings, bottle count \u2014 it\u2019s all in your pocket."
+          },
+          contentChunks: [
+            {
+              title: "Your DRS Identity",
+              html: `<p>Download the <strong>Goa DRS Consumer App</strong> from the Play Store or App Store. Open it. Create your profile. Name, phone number, UPI details. That\u2019s your DRS account.</p>
+                     <p>The app isn\u2019t mandatory \u2014 you can return bottles without it, using any UPI QR code. But the app ties everything together. It\u2019s your personal DRS dashboard.</p>
+                     <p>Once you\u2019re registered, you\u2019ve got a unique profile in the system. Every transaction you make at a collection point can now be tracked, recorded, and displayed in your app.</p>`
+            },
+            {
+              title: "Home Base",
+              html: `<p>The <strong>Home screen</strong> is your starting point. It shows a map with all nearby collection points. You can filter by type (RVM or manual), see distances, check operating hours.</p>
+                     <p>Tap a collection point, and you get the full details \u2014 address, contact info, directions. One tap, and Google Maps opens with the route. No friction between \u201CI want to return bottles\u201D and \u201CI\u2019m on my way.\u201D</p>
+                     <p>The home screen also shows any active promotions or announcements. System maintenance? New collection points opened? Special refund bonuses? It all shows up here.</p>`
+            },
+            {
+              title: "Every Rupee Tracked",
+              html: `<p>The <strong>Transaction History</strong> tab is where the magic happens. Every bottle you\u2019ve ever returned through the DRS system is logged here.</p>
+                     <p>You\u2019ll see the date, time, collection point name, number of items returned, and the refund amount. Each transaction gets a unique ID. Tap a transaction, and you get the full breakdown \u2014 which bottles, which deposit amounts, exactly when the refund hit your account.</p>
+                     <p>The app also shows three lifetime metrics: <strong>Total Earnings</strong> (\u20B9), <strong>Returned Bottles</strong> (count), and <strong>All Interactions</strong> (number of transactions). Think of it as your environmental scorecard. Every bottle you return is one less piece of waste in a landfill.</p>
+                     <p>There\u2019s a gamification layer too. Watching your total earnings climb, your bottle count grow \u2014 it turns recycling into a habit worth tracking.</p>`
+            },
+            {
+              title: "When Things Go Wrong",
+              html: `<p>The app has a <strong>Raise Grievance</strong> feature. Something didn\u2019t work as expected? Refund failures? QR code didn\u2019t scan?</p>
+                     <p>Tap \u201CRaise Grievance,\u201D describe the issue, attach a screenshot if needed, and submit. The system logs your complaint, assigns it a ticket number, and routes it to the operations team.</p>
+                     <p>You can track the status of your grievance in the app. Pending, under review, resolved. You\u2019ll get a notification when there\u2019s an update.</p>
+                     <p>The grievance system exists because no system is perfect. When things break, you need a way to fix them fast. The app gives you that channel.</p>`
+            }
+          ],
+          questions: [
+            {
+              type: "mcq",
+              text: "What does the \u201CMy QR\u201D tab in the app do?",
+              options: [
+                { text: "Scans product QR codes to find collection points", correct: false },
+                { text: "Displays your personal QR code for transactions", correct: true },
+                { text: "Shows a history of all your scanned bottles", correct: false },
+                { text: "Generates a refund receipt", correct: false }
+              ],
+              explanation: "The \u201CMy QR\u201D tab shows your DRS app QR code, which you can use at collection points to share your bank info and initiate transactions."
+            },
+            {
+              type: "mcq",
+              text: "What metrics can you see in the transaction history?",
+              options: [
+                { text: "Only the refund amounts", correct: false },
+                { text: "Only the number of bottles returned", correct: false },
+                { text: "Total earnings, returned bottles, and all interactions", correct: true },
+                { text: "Only the collection points you\u2019ve visited", correct: false }
+              ],
+              explanation: "The app tracks three lifetime metrics: total earnings (\u20B9), total returned bottles (count), and all interactions (number of transactions)."
+            },
+            {
+              type: "mcq",
+              text: "True or False: DRS app is a must have to return containers and get refunds.",
+              options: [
+                { text: "False", correct: true },
+                { text: "True", correct: false }
+              ],
+              explanation: "The app is optional. You can return bottles using any UPI QR code (PhonePe, Google Pay, etc.) or a phone number + OTP. The app just makes tracking and discovery easier."
+            }
+          ]
+        }
+      ]
+    };
+
+    // Initialize — hydrate from server first (cross-browser persistence)
+    (async () => {
+      await Gamification.hydrateFromServer();
+      App.init(MODULE_DATA);
+
+      // Propagate storageKey to cross-module links
+      const params = new URLSearchParams(window.location.search);
+      const sk = params.get('storageKey');
+      if (sk) {
+        document.querySelectorAll('a[href*="/training/module-"]').forEach(a => {
+          const url = new URL(a.href, window.location.origin);
+          url.searchParams.set('storageKey', sk);
+          a.href = url.pathname + url.search;
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

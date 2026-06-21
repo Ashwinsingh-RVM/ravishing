@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goa DRS — Reverse Logistics</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset ───────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+
+/* ── Variables ───────────────────────── */
+:root{
+  --primary:#1e6b5c;
+  --primary-dark:#155a4d;
+  --primary-light:#e8f5f1;
+  --accent:#f59e0b;
+  --bg:#ffffff;
+  --card:#f8fafb;
+  --text:#1c1917;
+  --text-secondary:#57534e;
+  --text-muted:#a8a29e;
+  --border:#e7e5e4;
+  --success:#059669;
+  --danger:#dc2626;
+  --shadow:0 2px 4px rgba(28,25,23,0.04),0 4px 12px rgba(28,25,23,0.06);
+  --radius:10px;
+  --radius-btn:14px;
+  --transition:cubic-bezier(0.4,0,0.2,1) 0.2s;
+}
+
+/* ── Base ────────────────────────────── */
+html{font-size:15px}
+body{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.55;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+}
+h1,h2,h3,h4{
+  font-family:'DM Sans',sans-serif;font-weight:600;
+  letter-spacing:-0.02em;color:var(--text);
+}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+code,.mono{font-family:'JetBrains Mono',monospace;font-size:0.85em}
+::selection{background:var(--primary);color:#fff}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+
+/* ── Header ──────────────────────────── */
+.header{
+  background:var(--bg);border-bottom:1px solid var(--border);
+  padding:16px 32px;display:flex;align-items:center;justify-content:space-between;
+  box-shadow:var(--shadow);position:relative;z-index:200;
+}
+.header-left{display:flex;align-items:center;gap:16px}
+.back-link{
+  display:flex;align-items:center;gap:6px;
+  font-size:0.82rem;color:var(--text-secondary);font-weight:500;
+  padding:6px 12px;border-radius:var(--radius);
+  transition:all var(--transition);
+}
+.back-link:hover{background:var(--primary-light);color:var(--primary);text-decoration:none}
+.header h1{font-size:1.15rem;font-weight:700}
+.header-right{display:flex;gap:12px;align-items:center}
+.badge{
+  padding:6px 14px;border-radius:100px;font-size:0.75rem;font-weight:600;letter-spacing:.01em;
+}
+.badge-teal{background:var(--primary-light);color:var(--primary);border:1px solid rgba(30,107,92,.15)}
+.badge-amber{background:rgba(245,158,11,.08);color:#b45309;border:1px solid rgba(245,158,11,.15)}
+.month-select{
+  background:var(--bg);border:1.5px solid var(--border);color:var(--text);
+  padding:8px 32px 8px 14px;border-radius:var(--radius);font-family:'Inter',sans-serif;
+  font-size:0.85rem;cursor:pointer;transition:all var(--transition);
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2357534e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+}
+.month-select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(30,107,92,.1)}
+
+/* ── Tabs ────────────────────────────── */
+.tab-bar{
+  display:flex;background:var(--bg);border-bottom:1px solid var(--border);
+  padding:0 32px;gap:4px;position:sticky;top:0;z-index:100;
+}
+.tab-btn{
+  padding:14px 20px;font-size:0.85rem;font-weight:500;color:var(--text-muted);
+  cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;
+  font-family:'Inter',sans-serif;transition:all var(--transition);
+}
+.tab-btn:hover{color:var(--text-secondary)}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.tab-panel{display:none;min-height:calc(100vh - 200px)}
+.tab-panel.active{display:block}
+
+/* ── Summary Strip ───────────────────── */
+.sim-summary{
+  display:flex;background:var(--card);border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.s-card{
+  flex:1;padding:14px 20px;border-right:1px solid var(--border);
+}
+.s-card:last-child{border-right:none}
+.s-card .lbl{
+  font-size:0.68rem;text-transform:uppercase;letter-spacing:0.8px;
+  color:var(--text-muted);font-weight:600;margin-bottom:4px;
+  font-family:'DM Sans',sans-serif;
+}
+.s-card .val{font-size:1.4rem;font-weight:700;color:var(--text);letter-spacing:-0.02em;font-family:'DM Sans',sans-serif}
+.s-card .sub{font-size:0.78rem;color:var(--text-muted);margin-top:2px}
+
+/* ── Simulation Layout ───────────────── */
+.sim-outer{display:flex;height:calc(100vh - 200px)}
+.sim-left{
+  width:380px;flex-shrink:0;background:var(--card);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sim-right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ── Map ─────────────────────────────── */
+.map-area{flex:1;position:relative;min-height:0}
+#map{position:absolute;inset:0}
+.map-legend{
+  position:absolute;bottom:20px;left:20px;
+  background:rgba(255,255,255,.95);backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:12px;
+  padding:14px 18px;z-index:1000;font-size:0.8rem;
+  box-shadow:var(--shadow);
+}
+.legend-title{color:var(--text);font-weight:600;font-size:0.82rem;margin-bottom:8px;font-family:'DM Sans',sans-serif}
+.legend-row{display:flex;align-items:center;gap:10px;padding:3px 0}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+.fleet-badge{
+  display:inline-block;background:var(--primary-light);color:var(--primary);
+  padding:3px 8px;border-radius:6px;font-weight:600;font-size:0.72rem;
+  border:1px solid rgba(30,107,92,.12);margin-right:2px;
+}
+.fleet-mix-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-top:6px}
+.fleet-mix-item{display:flex;align-items:center;gap:8px}
+.fleet-mix-count{
+  font-family:'JetBrains Mono',monospace;font-size:0.95rem;font-weight:700;
+  color:var(--text);min-width:24px;text-align:right;
+}
+.fleet-mix-label{font-size:0.78rem;color:var(--text-secondary);font-weight:400;white-space:nowrap}
+
+/* ── Parameters Sidebar ──────────────── */
+.params-hdr{
+  padding:20px 20px 16px;border-bottom:1px solid var(--border);
+  flex-shrink:0;background:var(--card);position:sticky;top:0;z-index:10;
+}
+.params-hdr h3{font-size:0.95rem;margin-bottom:14px;font-weight:600;color:var(--text);font-family:'DM Sans',sans-serif}
+.param-actions{display:flex;gap:8px;flex-wrap:wrap}
+.params-scroll{flex:1;overflow-y:auto;padding-bottom:20px}
+
+.btn{
+  padding:12px 18px;border-radius:var(--radius-btn);font-size:0.82rem;font-weight:600;
+  font-family:'Inter',sans-serif;cursor:pointer;border:none;transition:all var(--transition);
+}
+.btn-simulate{background:var(--primary);color:#fff;flex:1}
+.btn-simulate:hover{background:var(--primary-dark);box-shadow:0 4px 16px rgba(30,107,92,.2)}
+.btn-simulate:active{transform:scale(0.97)}
+.btn-simulate.running{opacity:.6;pointer-events:none}
+.btn-secondary{
+  background:var(--bg);color:var(--text-secondary);border:1.5px solid var(--border);
+}
+.btn-secondary:hover{background:var(--primary-light);color:var(--primary);border-color:rgba(30,107,92,.2)}
+.btn-sm{padding:8px 14px;font-size:0.75rem}
+
+/* ── Parameter Cards ─────────────────── */
+.p-card{background:var(--bg);border-radius:var(--radius);margin:0 12px 8px;border:1px solid var(--border);overflow:hidden}
+.p-card-head{
+  padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;
+  transition:background var(--transition);user-select:none;
+}
+.p-card-head:hover{background:var(--primary-light)}
+.p-card-icon{
+  width:32px;height:32px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-size:0.85rem;flex-shrink:0;
+}
+.icon-route{background:rgba(30,107,92,.08);color:var(--primary)}
+.icon-calib{background:rgba(5,150,105,.08);color:var(--success)}
+.icon-fleet{background:rgba(124,58,237,.06);color:#7c3aed}
+.icon-waste{background:rgba(220,38,38,.06);color:var(--danger)}
+.icon-shares{background:rgba(14,165,233,.06);color:#0ea5e9}
+.icon-size{background:rgba(245,158,11,.06);color:var(--accent)}
+.icon-pnl{background:rgba(99,102,241,.06);color:#6366f1}
+.icon-vol{background:rgba(249,115,22,.06);color:#f97316}
+.p-card-info{flex:1;min-width:0}
+.p-card-title{font-size:0.82rem;font-weight:600;color:var(--text);font-family:'DM Sans',sans-serif}
+.p-card-sub{font-size:0.66rem;color:var(--text-muted);margin-top:1px}
+.p-card-chevron{color:var(--text-muted);font-size:1.1rem;transition:transform var(--transition);flex-shrink:0}
+.p-card.open .p-card-chevron{transform:rotate(90deg)}
+.p-card-body{padding:4px 14px 14px;display:none}
+.p-card.open .p-card-body{display:block}
+
+.param-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;gap:10px}
+.param-row label{font-size:0.8rem;color:var(--text-secondary);flex:1;line-height:1.4}
+.param-val{display:flex;align-items:center;gap:6px}
+.param-row input[type=number]{
+  width:76px;background:var(--bg);border:1.5px solid var(--border);
+  color:var(--text);padding:7px 9px;border-radius:8px;font-size:0.8rem;
+  font-family:'JetBrains Mono',monospace;text-align:right;transition:all var(--transition);
+  height:36px;
+}
+.param-row input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(30,107,92,.08)}
+.param-row input:hover{border-color:rgba(30,107,92,.3)}
+.param-row input.modified{border-color:var(--accent);background:rgba(245,158,11,.04)}
+.p-unit{font-size:0.62rem;color:var(--text-muted);min-width:26px;text-align:left}
+
+/* ── Tables ──────────────────────────── */
+table{width:100%;border-collapse:collapse}
+th{
+  text-align:left;padding:12px 18px;background:var(--card);
+  color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:0.68rem;
+  letter-spacing:.8px;position:sticky;top:0;border-bottom:1px solid var(--border);
+  font-family:'DM Sans',sans-serif;
+}
+td{padding:12px 18px;border-bottom:1px solid var(--border);font-size:0.88rem}
+tr:hover{background:rgba(30,107,92,.02)}
+.text-right{text-align:right}
+.text-green{color:var(--success)}.text-red{color:var(--danger)}.text-amber{color:var(--accent)}
+.text-muted{color:var(--text-muted)}
+
+/* ── Warehouse Split ─────────────────── */
+.wh-split{padding:40px;max-width:1200px;margin:0 auto}
+.wh-split h2{font-size:1.3rem;margin-bottom:8px}
+.wh-split-subtitle{color:var(--text-secondary);margin-bottom:32px;font-size:0.92rem;line-height:1.7}
+.wh-split-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.wh-detail-card{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-btn);
+  padding:24px;transition:border-color var(--transition);box-shadow:var(--shadow);
+}
+.wh-detail-card:hover{border-color:rgba(30,107,92,.25)}
+.wh-detail-hdr{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.wh-detail-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.wh-detail-name{font-size:1.02rem;font-weight:600;color:var(--text);font-family:'DM Sans',sans-serif}
+.wh-detail-region{font-size:0.78rem;color:var(--text-muted);margin-top:1px}
+
+.wh-kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.wh-kpi{background:var(--card);padding:10px 12px;border-radius:8px;border:1px solid var(--border)}
+.wh-kpi .kl{font-size:0.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600;font-family:'DM Sans',sans-serif}
+.wh-kpi .kv{font-size:1.05rem;font-weight:700;color:var(--text);margin-top:3px;font-family:'DM Sans',sans-serif}
+.wh-kpi .ks{font-size:0.7rem;color:var(--text-muted);margin-top:1px}
+
+.wh-fleet-table{width:100%;margin-top:4px}
+.wh-fleet-table th{
+  padding:8px 10px;font-size:0.62rem;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--text-muted);font-weight:600;background:var(--card);border-bottom:1px solid var(--border);
+}
+.wh-fleet-table td{padding:9px 10px;font-size:0.85rem;border-bottom:1px solid var(--border)}
+.wh-fleet-table tr:last-child td{border-bottom:none}
+.wh-freq-bar{display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;margin-top:12px}
+.wh-freq-seg{height:100%;border-radius:1px}
+
+/* ── MoM Tab ─────────────────────────── */
+.mom-layout{padding:40px;max-width:1100px;margin:0 auto}
+.mom-layout h2{font-size:1.3rem;margin-bottom:8px}
+.mom-subtitle{color:var(--text-secondary);margin-bottom:32px;font-size:0.92rem;line-height:1.7}
+
+/* ── Sensitivity Tab ────────────────── */
+.sens-layout{padding:40px 40px;max-width:1100px;margin:0 auto}
+.sens-layout h2{font-size:1.3rem;margin-bottom:8px}
+.sens-subtitle{color:var(--text-secondary);margin-bottom:32px;font-size:0.92rem;line-height:1.7}
+.sens-card{
+  background:#ffffff;border:1px solid var(--border);border-radius:12px;
+  padding:24px 28px;margin-bottom:16px;transition:box-shadow var(--transition);
+}
+.sens-card:hover{box-shadow:var(--shadow)}
+.sens-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sens-card-left{display:flex;align-items:center;gap:14px}
+.sens-rank{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;background:#1e6b5c;color:#fff;
+  border-radius:50%;font-size:0.78rem;font-weight:700;flex-shrink:0;
+  font-family:'DM Sans',sans-serif;
+}
+.sens-title{font-size:0.95rem;font-weight:600;color:#1c1917}
+.sens-impact{
+  font-family:'JetBrains Mono',monospace;font-size:0.88rem;font-weight:600;color:#1e6b5c;
+}
+.sens-desc{font-size:0.82rem;color:#57534e;margin-bottom:16px;line-height:1.6;padding-left:44px}
+.sens-bar-wrap{display:flex;align-items:center;height:32px;position:relative;margin:0 0 8px;padding-left:44px}
+.sens-bar-left{
+  height:100%;background:linear-gradient(90deg,#059669,#34d399);border-radius:6px 0 0 6px;
+  display:flex;align-items:center;justify-content:flex-start;padding:0 10px;
+  font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:600;color:#fff;
+  min-width:40px;transition:width 0.4s var(--transition);
+}
+.sens-bar-center{
+  width:2px;background:var(--border);height:100%;flex-shrink:0;position:relative;
+}
+.sens-bar-center::after{
+  content:'0';position:absolute;top:-18px;left:50%;transform:translateX(-50%);
+  font-size:0.65rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace;
+}
+.sens-bar-right{
+  height:100%;background:linear-gradient(90deg,#f87171,#dc2626);border-radius:0 6px 6px 0;
+  display:flex;align-items:center;justify-content:flex-end;padding:0 10px;
+  font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:600;color:#fff;
+  min-width:40px;transition:width 0.4s var(--transition);
+}
+.sens-labels{display:flex;justify-content:space-between;font-size:0.72rem;padding-left:44px}
+.sens-labels .lo{color:#059669}
+.sens-labels .hi{color:#dc2626}
+.sens-range-text{
+  font-size:0.75rem;color:var(--text-muted);padding-left:44px;margin-top:6px;
+  font-family:'JetBrains Mono',monospace;
+}
+.sens-base-info{
+  font-size:0.82rem;color:var(--text-secondary);margin-bottom:24px;line-height:1.7;
+}
+
+/* ── Explainer Tab ───────────────────── */
+.explainer{padding:48px 40px;max-width:820px;margin:0 auto}
+.explainer h2{font-size:1.5rem;margin-bottom:12px}
+.explainer .lead{color:var(--text-secondary);font-size:1.02rem;margin-bottom:48px;line-height:1.8}
+
+.step{margin-bottom:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.step-header{
+  display:flex;align-items:center;padding:16px 20px;cursor:pointer;user-select:none;transition:background var(--transition);
+}
+.step-header:hover{background:var(--primary-light)}
+.step-num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;background:var(--primary-light);color:var(--primary);
+  border-radius:50%;font-size:0.82rem;font-weight:700;margin-right:14px;
+  border:1px solid rgba(30,107,92,.12);flex-shrink:0;
+  font-family:'DM Sans',sans-serif;
+}
+.step h3{font-size:1.05rem;display:inline;vertical-align:middle;color:var(--text);flex:1}
+.step-chevron{color:var(--text-muted);font-size:1.1rem;transition:transform var(--transition);margin-left:auto;flex-shrink:0}
+.step.open .step-chevron{transform:rotate(90deg)}
+.step .step-body{padding:0 20px 20px 66px;display:none}
+.step.open .step-body{display:block}
+.step .step-body p{margin-bottom:12px;color:var(--text-secondary);font-size:0.92rem;line-height:1.8}
+
+.formula{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px 24px;margin:18px 0;font-family:'JetBrains Mono',monospace;
+  font-size:0.82rem;color:var(--primary-dark);line-height:2.2;white-space:pre-line;
+}
+
+.funnel{margin:20px 0}
+.funnel-row{display:flex;align-items:center;gap:14px;padding:5px 0}
+.funnel-bar{
+  height:32px;border-radius:8px;display:flex;align-items:center;padding:0 14px;
+  font-size:0.82rem;font-weight:600;color:#fff;transition:width .4s ease-out;
+}
+.funnel-label{font-size:0.82rem;color:var(--text-muted);width:170px;text-align:right;flex-shrink:0}
+
+/* ── Leaflet Overrides ───────────────── */
+.leaflet-popup-content-wrapper{
+  background:#fff!important;color:var(--text)!important;
+  border-radius:12px!important;border:1px solid var(--border)!important;
+  box-shadow:0 8px 32px rgba(0,0,0,.12)!important;
+}
+.leaflet-popup-tip{background:#fff!important}
+.leaflet-popup-content{font-size:0.82rem;line-height:1.7;font-family:'Inter',sans-serif;padding:4px}
+
+/* ── Loading ─────────────────────────── */
+.loading{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:calc(100vh - 200px);color:var(--text-muted);font-size:0.95rem;gap:20px;
+}
+.spinner{
+  width:32px;height:32px;border:3px solid var(--border);
+  border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Toast ───────────────────────────── */
+.toast{
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
+  background:var(--text);color:#fff;padding:12px 28px;border-radius:24px;
+  font-size:0.85rem;font-family:'Inter',sans-serif;z-index:9999;
+  box-shadow:0 8px 32px rgba(0,0,0,.15);transition:opacity .3s;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  <div class="header-left">
+    <a href="/" class="back-link">&#8592; Back to Tracker</a>
+    <h1>Goa DRS — Reverse Logistics</h1>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-teal" id="badge-horecas">--</span>
+    <span class="badge badge-amber" id="badge-cal">--</span>
+    <select class="month-select" id="month-select" onchange="loadMonth(this.value)">
+      <option value="">Loading months...</option>
+    </select>
+  </div>
+</div>
+
+<!-- ===== SUMMARY STRIP ===== -->
+<div class="sim-summary" id="summary-strip">
+  <div class="s-card"><div class="lbl">HoReCas</div><div class="val" id="sm-horecas">--</div><div class="sub" id="sm-horecas-sub">--</div></div>
+  <div class="s-card"><div class="lbl">Total Vehicles</div><div class="val" id="sm-vehicles">--</div><div class="sub">across all warehouses</div></div>
+  <div class="s-card"><div class="lbl">Fleet Mix</div><div id="sm-mix">--</div></div>
+  <div class="s-card"><div class="lbl">Avg per HoReCa</div><div class="val" id="sm-avg-main">--</div><div class="sub" id="sm-avg-sub">--</div></div>
+  <div class="s-card"><div class="lbl">Daily Pickups</div><div class="val" id="sm-pickups">--</div><div class="sub" id="sm-weight">--</div></div>
+  <div class="s-card"><div class="lbl">Daily Cost</div><div class="val" id="sm-cost">--</div><div class="sub" id="sm-cost-mo">--</div></div>
+</div>
+
+<!-- ===== TABS ===== -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab('simulation',this)">Simulation</button>
+  <button class="tab-btn" onclick="showTab('warehouse',this)">Warehouse Split</button>
+  <button class="tab-btn" onclick="showTab('mom',this)">MoM Fleet Requirement</button>
+  <button class="tab-btn" onclick="showTab('sensitivity',this)">Sensitivity Analysis</button>
+  <button class="tab-btn" onclick="showTab('explainer',this)">How Does It Work</button>
+</div>
+
+<!-- ===== LOADING ===== -->
+<div class="loading" id="loading"><div class="spinner"></div>Loading model...</div>
+
+<!-- ===== TAB: SIMULATION ===== -->
+<div class="tab-panel active" id="tab-simulation" style="display:none">
+  <div class="sim-outer">
+    <div class="sim-left">
+      <div class="params-hdr">
+        <h3>Model Parameters</h3>
+        <div class="param-actions">
+          <button class="btn btn-simulate" id="btn-simulate" onclick="runSimulation()">Simulate</button>
+        </div>
+        <div class="param-actions" style="margin-top:10px">
+          <button class="btn btn-secondary btn-sm" onclick="saveDefaults()">Save Defaults</button>
+          <button class="btn btn-secondary btn-sm" onclick="loadDefaults()">Load Defaults</button>
+          <button class="btn btn-secondary btn-sm" onclick="resetParams()">Reset</button>
+        </div>
+      </div>
+      <div class="params-scroll" id="params-body"></div>
+    </div>
+    <div class="sim-right">
+      <div class="map-area">
+        <div id="map"></div>
+        <div class="map-legend" id="map-legend"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB: WAREHOUSE SPLIT ===== -->
+<div class="tab-panel" id="tab-warehouse">
+  <div class="wh-split">
+    <h2>Warehouse Split</h2>
+    <p class="wh-split-subtitle">Fleet allocation, HoReCa distribution, and operational details for each of the 5 warehouses.</p>
+    <div class="wh-split-grid" id="wh-split-grid"></div>
+  </div>
+</div>
+
+<!-- ===== TAB: MOM ===== -->
+<div class="tab-panel" id="tab-mom">
+  <div class="mom-layout">
+    <h2>Month-on-Month Fleet Requirement</h2>
+    <p class="mom-subtitle">Fleet requirement across FY27 (Apr-26 to Mar-27) using actual DRS Return Units from PnL.</p>
+    <div id="mom-table-wrap">
+      <p style="text-align:center;padding:60px;color:var(--text-muted)">Click this tab to load...</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB: SENSITIVITY ANALYSIS ===== -->
+<div class="tab-panel" id="tab-sensitivity">
+  <div class="sens-layout">
+    <h2>Sensitivity Analysis</h2>
+    <p class="sens-subtitle">Which assumptions matter most? Each parameter is varied one-at-a-time across multiple months. Ranked by median impact on total fleet requirement.</p>
+    <div id="sens-action" style="margin-bottom:24px">
+      <button id="btn-sensitivity" class="btn btn-simulate" onclick="loadSensitivity(true)" style="padding:10px 28px;font-size:0.88rem">Run Sensitivity Analysis</button>
+      <span id="sens-status" style="margin-left:14px;font-size:0.8rem;color:var(--text-muted)"></span>
+    </div>
+    <div id="sens-loading" style="display:none;text-align:center;padding:40px">
+      <div class="spinner"></div>
+      <p style="margin-top:16px;color:var(--text-muted);font-size:0.88rem">Analysing sensitivity across months — this may take a minute...</p>
+    </div>
+    <div id="tornado-chart"></div>
+  </div>
+</div>
+
+<!-- ===== TAB: HOW DOES IT WORK ===== -->
+<div class="tab-panel" id="tab-explainer">
+  <div class="explainer">
+    <h2>How Does This Model Work?</h2>
+    <p class="lead">A step-by-step guide to how we estimate the fleet needed to collect DRS containers from HoReCa establishments across Goa. Scoped to <strong>FY27 (Apr-26 to Mar-27)</strong> — the first year of DRS, covering alcohol containers only.</p>
+
+    <div class="step open">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">1</span><h3>Identifying HoReCa Establishments</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>We start with <strong>15,675 Google Places records</strong> across Goa — every restaurant, bar, hotel, cafe, guesthouse, beach shack, and resort.</p>
+        <p>Since FY27 is alcohol-only under DRS, we filter for establishments that serve or are likely to serve alcohol:</p>
+        <div class="funnel">
+          <div class="funnel-row"><div class="funnel-label">Total records</div><div class="funnel-bar" style="width:100%;background:var(--primary)">15,675</div></div>
+          <div class="funnel-row"><div class="funnel-label">Active &amp; non-duplicate</div><div class="funnel-bar" style="width:89%;background:#0ea5e9">13,875</div></div>
+          <div class="funnel-row"><div class="funnel-label">Confirmed alcohol</div><div class="funnel-bar" style="width:19%;background:var(--success)">2,626</div></div>
+          <div class="funnel-row"><div class="funnel-label">+ Likely</div><div class="funnel-bar" style="width:22%;background:#84cc16">3,113</div></div>
+          <div class="funnel-row"><div class="funnel-label">+ Inferred</div><div class="funnel-bar" style="width:23%;background:var(--accent)">3,233</div></div>
+          <div class="funnel-row"><div class="funnel-label">+ Possible (Rest., Hotels, Shacks)</div><div class="funnel-bar" style="width:60%;background:#f97316">8,313</div></div>
+        </div>
+        <p><strong>Final set: 8,313 HoReCas</strong> — Restaurants (5,603), Hotels (1,816), Bars (634), Beach Shacks (159), Cafes (87), Resorts (12), Others (2).</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">2</span><h3>Bottom-Up Waste Generation Estimates</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>Each HoReCa type has a baseline daily generation estimate (bottles/day). A <strong>size multiplier</strong> adjusts for establishment size: Large (2x), Medium (1x), Small (0.5x), Micro (0.25x).</p>
+        <div class="formula">A Medium Bar:   100 btl/day x 1.0 (medium) = 100 btl/day
+A Large Restaurant: 70 btl/day x 2.0 (large) = 140 btl/day
+A Small Cafe:   10 btl/day x 0.5 (small) = 5 btl/day</div>
+        <p>These are <strong>relative weights</strong> — the absolute numbers are calibrated by PnL data (Step 3).</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">3</span><h3>DRS Return Units — Anchoring to Reality</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>The PnL model provides exact DRS return units per month per material. We apply <strong>HoReCa share</strong> (currently 50%) to get the daily units HoReCa handles.</p>
+        <div class="formula">PnL says: 1.76 Cr DRS return units in December 2026
+Daily return units: 1.76 x 1,00,00,000 / 30 = 5,86,667 units/day
+HoReCa share (50%): 5,86,667 x 0.50 = 2,93,333 units/day
+
+Calibration factor = PnL total / bottom-up total
+Scales all estimates to match PnL — bottom-up provides relative distribution, PnL provides absolute scale.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">4</span><h3>Assign HoReCas to Warehouses</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>Goa has <strong>5 warehouses</strong> strategically placed from South to North:</p>
+        <p><strong>Margao South</strong> (South Goa) | <strong>Cortalim</strong> (South-Central) | <strong>Calangute North</strong> (Tourist Belt) | <strong>Mapusa North</strong> (Interior) | <strong>Arambol</strong> (Far North)</p>
+        <p>Each HoReCa is assigned to its <strong>nearest warehouse</strong> using haversine distance x road factor (1.4x). Calangute North gets the largest cluster at ~40%.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">5</span><h3>Pickup Scheduling</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>HoReCas are sorted by daily volume and assigned pickup frequency buckets:</p>
+        <p><strong>Daily (20%)</strong> — high-volume bars, large restaurants<br>
+        <strong>Alternate days (30%)</strong> — medium restaurants, hotels<br>
+        <strong>Twice weekly (30%)</strong> — smaller restaurants, cafes<br>
+        <strong>Weekly (20%)</strong> — guesthouses, homestays, low-volume places</p>
+        <div class="formula">Expected daily pickups = (Daily x 1.0) + (Alternate x 0.5) + (Twice weekly x 2/7) + (Weekly x 1/7)</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">6</span><h3>Fleet Sizing (with Volumetric Weight)</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>Daily pickups are split by road type, then each road type uses appropriate trucks:</p>
+        <p><strong>30% narrow streets</strong> -> Tata Ace (1T) + Bolero (1.5T)<br>
+        <strong>45% medium roads</strong> -> Intra V50 (2T)<br>
+        <strong>25% main roads</strong> -> Intra V70 (2.5T)</p>
+        <p>Stops per trip is capped by the <strong>5-hour pickup window</strong> (~18-20 stops per trip). <strong>1 trip per vehicle per day</strong> — the window is fully consumed by collection. Trucks fill by volume, not just weight — a glass-heavy mix has a volumetric factor of ~1.6x.</p>
+        <div class="formula">Trips needed = ceil(pickups / stops_per_trip)
+Vehicles needed = trips (1 trip per vehicle)
+Daily cost = vehicles x daily_cost_inr per fleet type</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">7</span><h3>The Result</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>For each warehouse: vehicle count by type, daily + monthly cost from actual vendor quotations, fleet mix optimized by road type distribution.</p>
+        <p>The <strong>Simulation tab</strong> lets you tweak any parameter and re-run instantly.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-header" onclick="this.parentElement.classList.toggle('open')"><span class="step-num">8</span><h3>Sensitivity Analysis — What Matters Most?</h3><span class="step-chevron">&#9656;</span></div>
+      <div class="step-body">
+        <p>Key drivers ranked by median impact across 12 months:</p>
+        <p><strong>1. Pickup Frequency</strong> (~18.8%) — Directly changes how many daily stops trucks make<br>
+        <strong>2. Material Mix</strong> (~18.2%) — Heavier mix (more glass) fills trucks faster<br>
+        <strong>3. HoReCa Share</strong> (~13.9%) — What fraction of total DRS returns flow through HoReCa<br>
+        <strong>4. Total Volume</strong> (~9.8%) — Overall return unit projection accuracy<br>
+        <strong>5. Road Distribution</strong> (~3.0%) — Mix of narrow vs main road routes<br>
+        <strong>6. Operational Efficiency</strong> (~0%) — Scan rate and setup time have minimal impact</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================
+   GLOBALS
+   ============================ */
+let DATA = null;
+let PARAMS = null;
+let ORIGINAL_PARAMS = null;
+let CURRENT_MONTH = null;
+let map = null;
+let layers = {};
+let MOM_LOADED = false;
+let SENSITIVITY_LOADED = false;
+
+const WH_COLORS = {};
+const COLOR_PALETTE = ['#dc2626','#f59e0b','#2563eb','#059669','#7c3aed'];
+
+/* ============================
+   TABS
+   ============================ */
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(name==='simulation' && map) setTimeout(()=>map.invalidateSize(),150);
+  if(name==='sensitivity' && !SENSITIVITY_LOADED) loadSensitivity(false);
+  if(name==='mom' && !MOM_LOADED) loadMoM();
+}
+
+/* ============================
+   SENSITIVITY ANALYSIS
+   ============================ */
+async function loadSensitivity(forceRerun) {
+  const btn = document.getElementById('btn-sensitivity');
+  const status = document.getElementById('sens-status');
+  const loading = document.getElementById('sens-loading');
+
+  // If cached and not forcing re-run, just render
+  if(SENSITIVITY_LOADED && !forceRerun) {
+    renderSensitivity();
+    return;
+  }
+
+  btn.classList.add('running');
+  btn.textContent = 'Running...';
+  status.textContent = '';
+  loading.style.display = 'block';
+  document.getElementById('tornado-chart').innerHTML = '';
+
+  try {
+    const url = forceRerun ? '/api/rl/sensitivity?refresh=1' : '/api/rl/sensitivity';
+    const res = await fetch(url);
+    const json = await res.json();
+    if(json.sensitivity) {
+      DATA.sensitivity = json.sensitivity;
+      SENSITIVITY_LOADED = true;
+      renderSensitivity();
+      status.textContent = 'Last run: just now';
+    } else {
+      document.getElementById('tornado-chart').innerHTML = '<p style="color:var(--danger);padding:20px">No sensitivity data returned.</p>';
+    }
+  } catch(e) {
+    document.getElementById('tornado-chart').innerHTML = '<p style="color:var(--danger);padding:20px">Error: '+e.message+'</p>';
+    status.textContent = '';
+  }
+  loading.style.display = 'none';
+  btn.classList.remove('running');
+  btn.textContent = SENSITIVITY_LOADED ? 'Re-run Analysis' : 'Run Sensitivity Analysis';
+}
+
+function renderSensitivity() {
+  if(!DATA || !DATA.sensitivity) return;
+  const sens = DATA.sensitivity;
+  const vars = sens.variables || [];
+  if(vars.length === 0) {
+    document.getElementById('tornado-chart').innerHTML = '<p style="text-align:center;padding:40px;color:var(--text-muted)">No sensitivity variables found.</p>';
+    return;
+  }
+
+  const monthsAnalyzed = sens.months_analyzed || 0;
+  const monthRange = sens.month_range || '';
+  const maxImpact = Math.max(...vars.map(v => Math.max(Math.abs(v.median_low_delta_pct || 0), Math.abs(v.median_high_delta_pct || 0))), 1);
+
+  let html = '';
+
+  // Summary info
+  html += `<div class="sens-base-info">
+    Each variable was tested across <strong style="color:var(--text)">${monthsAnalyzed} months</strong>`;
+  if(monthRange) html += ` <span style="color:var(--text-muted)">(${monthRange})</span>`;
+  html += `. The ranking uses the <strong style="color:var(--text)">median impact</strong> — this tells you which assumptions matter most regardless of which month you are looking at.
+    <br><span style="color:#059669">Green = fewer vehicles needed</span> &nbsp; <span style="color:#dc2626">Red = more vehicles needed</span>
+  </div>`;
+
+  vars.forEach((v, i) => {
+    const loPct = v.median_low_delta_pct || 0;
+    const hiPct = v.median_high_delta_pct || 0;
+    const loWidth = Math.max(Math.abs(loPct) / maxImpact * 100, 8);
+    const hiWidth = Math.max(Math.abs(hiPct) / maxImpact * 100, 8);
+    const rangeLo = v.range_low != null ? v.range_low.toFixed(1) : '—';
+    const rangeHi = v.range_high != null ? v.range_high.toFixed(1) : '—';
+    const medianImpact = v.median_max_impact_pct != null ? v.median_max_impact_pct.toFixed(1) : Math.max(Math.abs(loPct), Math.abs(hiPct)).toFixed(1);
+    const baseVehicles = v.base_vehicles || '';
+
+    html += `<div class="sens-card">
+      <div class="sens-card-header">
+        <div class="sens-card-left">
+          <div class="sens-rank">${i+1}</div>
+          <div class="sens-title">${v.variable}</div>
+        </div>
+        <div class="sens-impact">${medianImpact}% impact</div>
+      </div>
+      <div class="sens-desc">${v.description || ''}${baseVehicles ? ' <span style="color:var(--text-muted);font-size:0.72rem">(base: '+baseVehicles+' vehicles)</span>' : ''}</div>
+      <div class="sens-bar-wrap">
+        <div class="sens-bar-left" style="width:${loWidth}%">${loPct > 0 ? '+' : ''}${loPct.toFixed(1)}%</div>
+        <div class="sens-bar-center"></div>
+        <div class="sens-bar-right" style="width:${hiWidth}%">${hiPct > 0 ? '+' : ''}${hiPct.toFixed(1)}%</div>
+      </div>
+      <div class="sens-labels">
+        <span class="${loPct <= 0 ? 'lo' : 'hi'}">${v.low_label || 'Low'}</span>
+        <span class="${hiPct <= 0 ? 'lo' : 'hi'}">${v.high_label || 'High'}</span>
+      </div>
+      <div class="sens-range-text">Range across months: ${rangeLo}% – ${rangeHi}%</div>
+    </div>`;
+  });
+
+  document.getElementById('tornado-chart').innerHTML = html;
+}
+
+/* ============================
+   MONTH SELECTOR
+   ============================ */
+async function populateMonths() {
+  try {
+    const res = await fetch('/api/rl/months');
+    const json = await res.json();
+    const sel = document.getElementById('month-select');
+    sel.innerHTML = '';
+    json.months.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.key;
+      const label = m.key + (m.season==='Peak' ? ' *' : '') + (m.total_return_units_cr > 0 ? ' - '+m.total_return_units_cr+' Cr' : '');
+      opt.textContent = label;
+      if(m.key === json.default) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    return json.default;
+  } catch(e) {
+    console.error('Failed to load months:', e);
+    return 'Oct-27';
+  }
+}
+
+/* ============================
+   DATA LOADING
+   ============================ */
+async function loadMonth(month) {
+  CURRENT_MONTH = month;
+  document.getElementById('loading').style.display='flex';
+  document.querySelectorAll('.tab-panel').forEach(p=>p.style.display='none');
+  try {
+    const defRes = await fetch('/api/rl/load-defaults');
+    const savedDefaults = await defRes.json();
+    const hasOverrides = Object.keys(savedDefaults).length > 0;
+
+    let res;
+    if(hasOverrides) {
+      const overrides = {};
+      Object.entries(savedDefaults).forEach(([key, val]) => {
+        const pctKeys = ['seasonality.market_growth_yoy','calibration.horeca_share_of_returns'];
+        const isPctPrefix = key.startsWith('consumption_shares.') || key.startsWith('road_distribution.') || key.startsWith('pickup_frequency.');
+        if(pctKeys.includes(key) || isPctPrefix) {
+          overrides[key] = val / 100;
+        } else {
+          overrides[key] = val;
+        }
+      });
+      res = await fetch('/api/rl/run?month='+month, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({overrides})
+      });
+    } else {
+      res = await fetch('/api/rl/run?month='+month);
+    }
+
+    const json = await res.json();
+    if(json.error) { alert('Error: '+json.error); return; }
+    DATA = json.result;
+    PARAMS = json.params;
+    ORIGINAL_PARAMS = JSON.parse(JSON.stringify(json.params));
+    const whNames = Object.keys(DATA.clusters);
+    whNames.forEach((n,i) => WH_COLORS[n] = COLOR_PALETTE[i % COLOR_PALETTE.length]);
+    render();
+
+    if(hasOverrides) {
+      Object.entries(savedDefaults).forEach(([key, val]) => {
+        const inp = document.querySelector(`input[data-key="${key}"]`);
+        if(inp) { inp.value = val; markModified(inp); }
+      });
+    }
+  } catch(e) {
+    console.error(e);
+    alert('Error loading model: '+e.message);
+  }
+  document.getElementById('loading').style.display='none';
+  document.querySelectorAll('.tab-panel').forEach(p=>p.style.display='');
+}
+
+/* ============================
+   SIMULATE
+   ============================ */
+async function runSimulation() {
+  const btn = document.getElementById('btn-simulate');
+  btn.classList.add('running');
+  btn.textContent = 'Running...';
+
+  const currentValues = {};
+  document.querySelectorAll('#params-body input[data-key]').forEach(inp => {
+    currentValues[inp.dataset.key] = {val: parseFloat(inp.value), pct: !!inp.dataset.pct};
+  });
+
+  const overrides = collectParams();
+  const month = CURRENT_MONTH || document.getElementById('month-select').value;
+
+  try {
+    const res = await fetch('/api/rl/run?month='+month, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({overrides})
+    });
+    const json = await res.json();
+    if(json.error) { showToast('Error: '+json.error); return; }
+    DATA = json.result;
+    PARAMS = json.params;
+    const whNames = Object.keys(DATA.clusters);
+    whNames.forEach((n,i) => WH_COLORS[n] = COLOR_PALETTE[i % COLOR_PALETTE.length]);
+    render();
+
+    Object.entries(currentValues).forEach(([key, {val}]) => {
+      const inp = document.querySelector(`input[data-key="${key}"]`);
+      if(inp) {
+        const orig = parseFloat(inp.dataset.orig);
+        if(Math.abs(val - orig) > 0.0001) {
+          inp.value = val;
+          markModified(inp);
+        }
+      }
+    });
+
+    showToast('Simulation complete — '+DATA.grand_total_vehicles+' vehicles');
+  } catch(e) {
+    console.error(e);
+    showToast('Simulation error: '+e.message);
+  }
+  btn.classList.remove('running');
+  btn.textContent = 'Simulate';
+}
+
+/* ============================
+   RENDER ALL
+   ============================ */
+function render() {
+  renderBadges();
+  renderSummary();
+  renderMap();
+  renderParams();
+  renderWarehouseSplit();
+  MOM_LOADED = false;
+}
+
+function renderBadges() {
+  const cal = DATA.calibration || {};
+  const total = Object.values(DATA.clusters).reduce((s,c)=>s+c.total_horecas,0);
+  document.getElementById('badge-horecas').textContent = total.toLocaleString()+' HoReCas';
+  const season = cal.season || '';
+  const returnCr = cal.return_units_cr ? (cal.return_units_cr.Total || 0).toFixed(1) : '';
+  document.getElementById('badge-cal').textContent = season + (returnCr ? ' - '+returnCr+' Cr' : '');
+}
+
+function renderSummary() {
+  const cal = DATA.calibration || {};
+  const numHorecas = cal.num_horecas || 0;
+  document.getElementById('sm-horecas').textContent = numHorecas.toLocaleString();
+  document.getElementById('sm-horecas-sub').textContent = cal.included_possible ? 'incl. Possible' : 'confirmed only';
+  document.getElementById('sm-vehicles').textContent = DATA.grand_total_vehicles;
+  document.getElementById('sm-cost').innerHTML = '<span style="font-size:0.68rem;color:var(--text-muted)">INR </span>'+DATA.grand_total_daily_cost.toLocaleString();
+  document.getElementById('sm-cost-mo').textContent = 'INR '+(DATA.grand_total_daily_cost*26).toLocaleString()+' /month';
+  const mixItems = Object.entries(DATA.fleet_totals).filter(([,v])=>v>0).map(([k,v])=>
+    '<div class="fleet-mix-item"><span class="fleet-mix-count">'+v+'</span><span class="fleet-mix-label">'+k+'</span></div>'
+  ).join('');
+  document.getElementById('sm-mix').innerHTML = '<div class="fleet-mix-grid">'+mixItems+'</div>';
+  const pickups = Object.values(DATA.clusters).reduce((s,c)=>s+c.expected_daily_pickups,0);
+  const weight = Object.values(DATA.clusters).reduce((s,c)=>s+c.expected_daily_weight_kg,0);
+  document.getElementById('sm-pickups').textContent = pickups.toLocaleString();
+  document.getElementById('sm-weight').textContent = Math.round(weight).toLocaleString()+' kg/day';
+  if(cal.avg_per_horeca) {
+    document.getElementById('sm-avg-main').textContent = cal.avg_per_horeca+' btl/day';
+    document.getElementById('sm-avg-sub').textContent = (cal.calibrated_avg_weight_g||0).toFixed(0)+'g avg weight';
+  }
+}
+
+/* ============================
+   MAP
+   ============================ */
+function renderMap() {
+  if(!map) {
+    map = L.map('map',{preferCanvas:true, zoomControl:false}).setView([15.45,73.85],10);
+    L.control.zoom({position:'topright'}).addTo(map);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+      attribution:'&copy; OSM &copy; CARTO',
+      subdomains:'abcd',
+      maxZoom:20,
+    }).addTo(map);
+  }
+
+  Object.values(layers).forEach(l=>map.removeLayer(l));
+  layers = {};
+
+  const allPts = [];
+
+  Object.entries(DATA.clusters).forEach(([whName, cluster]) => {
+    const color = WH_COLORS[whName];
+    const lg = L.layerGroup().addTo(map);
+    layers[whName] = lg;
+
+    const wh = cluster.warehouse_info;
+    L.marker([wh.lat, wh.lon], {
+      icon: L.divIcon({
+        html:'<div style="background:'+color+';width:16px;height:16px;border-radius:4px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25)"></div>',
+        iconSize:[16,16], iconAnchor:[8,8], className:''
+      })
+    }).addTo(lg).bindPopup('<b>'+whName+'</b><br><span style="color:var(--text-muted)">'+wh.region+'</span><br>'+wh.shed_sqm+' sqm');
+
+    cluster.horecas.forEach(h => {
+      allPts.push([h.lat,h.lon]);
+      L.circleMarker([h.lat,h.lon],{
+        radius:3, fillColor:color, color:color, weight:0.5, fillOpacity:0.55, opacity:0.35
+      }).addTo(lg).bindPopup(
+        '<b>'+h.name+'</b><br>'+
+        '<span style="color:#78716c">'+h.type+' - '+h.size+'</span><br>'+
+        'Daily: <b>'+h.daily_bottles+'</b> btl &nbsp; Pickup: '+h.pickup_freq+'<br>'+
+        'Weight: '+h.weight_per_visit_kg+' kg &nbsp; Dist: '+h.dist_to_wh_km+' km'
+      );
+    });
+
+    if(cluster.horecas.length >= 3) {
+      const pts = cluster.horecas.map(h=>[h.lat,h.lon]);
+      const hull = convexHull(pts);
+      if(hull.length>2) L.polygon(hull,{color,weight:1.5,opacity:.12,fillColor:color,fillOpacity:.04,dashArray:'6,4'}).addTo(lg);
+    }
+  });
+
+  let legendHtml = '<div class="legend-title">Warehouse Clusters</div>';
+  Object.entries(WH_COLORS).forEach(([name,color]) => {
+    legendHtml += '<div class="legend-row"><div class="legend-dot" style="background:'+color+'"></div><span>'+name+'</span></div>';
+  });
+  document.getElementById('map-legend').innerHTML = legendHtml;
+
+  setTimeout(()=>{
+    map.invalidateSize();
+    if(allPts.length) map.fitBounds(allPts,{padding:[30,30]});
+  }, 200);
+}
+
+function convexHull(points) {
+  if(points.length<3) return points;
+  const pts=[...points].sort((a,b)=>a[1]-b[1]||a[0]-b[0]);
+  const cross=(O,A,B)=>(A[0]-O[0])*(B[1]-O[1])-(A[1]-O[1])*(B[0]-O[0]);
+  const lo=[];for(const p of pts){while(lo.length>=2&&cross(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}
+  const hi=[];for(const p of pts.reverse()){while(hi.length>=2&&cross(hi[hi.length-2],hi[hi.length-1],p)<=0)hi.pop();hi.push(p)}
+  return lo.slice(0,-1).concat(hi.slice(0,-1));
+}
+
+/* ============================
+   WAREHOUSE SPLIT
+   ============================ */
+function renderWarehouseSplit() {
+  const grid = document.getElementById('wh-split-grid');
+  grid.innerHTML = '';
+  const sorted = Object.entries(DATA.clusters).sort((a,b)=>b[1].total_horecas-a[1].total_horecas);
+  const totalVehicles = DATA.grand_total_vehicles;
+  const totalHorecas = Object.values(DATA.clusters).reduce((s,c)=>s+c.total_horecas,0);
+
+  sorted.forEach(([whName, c]) => {
+    const rec = c.recommendation;
+    const wh = c.warehouse_info;
+    const pctVehicles = ((rec.total_vehicles / totalVehicles) * 100).toFixed(0);
+    const pctHorecas = ((c.total_horecas / totalHorecas) * 100).toFixed(0);
+    const color = WH_COLORS[whName];
+
+    let fleetRows = '';
+    Object.entries(rec.fleet_mix).filter(([,f])=>f.vehicles>0).forEach(([ft,f])=>{
+      fleetRows += `<tr>
+        <td style="font-weight:600">${ft}</td>
+        <td class="text-right"><span class="fleet-badge">${f.vehicles}</span></td>
+        <td class="text-right mono" style="color:var(--text-muted)">${f.pickups_served}</td>
+        <td class="text-right mono" style="color:var(--text-muted)">INR ${f.daily_cost.toLocaleString()}</td>
+      </tr>`;
+    });
+
+    const freq = c.frequency_distribution || {};
+    const freqTotal = Object.values(freq).reduce((s,v)=>s+v,0) || 1;
+    const freqColors = {daily:'#059669',alternate:'#2563eb',twice_weekly:'#f59e0b',weekly:'#dc2626'};
+    let freqBar = '';
+    Object.entries(freq).forEach(([f,count])=>{
+      const pct = (count/freqTotal*100).toFixed(1);
+      freqBar += `<div class="wh-freq-seg" style="width:${pct}%;background:${freqColors[f]||'#a8a29e'}" title="${f}: ${count} (${pct}%)"></div>`;
+    });
+
+    let freqLegend = Object.entries(freq).map(([f,count])=>{
+      const label = f.replace(/_/g,' ');
+      return `<span style="color:${freqColors[f]||'#a8a29e'}">&#9679;</span> ${label}: ${count}`;
+    }).join('&nbsp;&nbsp;&nbsp;');
+
+    grid.innerHTML += `
+      <div class="wh-detail-card">
+        <div class="wh-detail-hdr">
+          <div class="wh-detail-dot" style="background:${color}"></div>
+          <div>
+            <div class="wh-detail-name">${whName}</div>
+            <div class="wh-detail-region">${wh.region} - ${wh.shed_sqm} sqm</div>
+          </div>
+        </div>
+        <div class="wh-kpi-grid">
+          <div class="wh-kpi"><div class="kl">HoReCas</div><div class="kv">${c.total_horecas.toLocaleString()}</div><div class="ks">${pctHorecas}% of total</div></div>
+          <div class="wh-kpi"><div class="kl">Vehicles</div><div class="kv">${rec.total_vehicles}</div><div class="ks">${pctVehicles}% of fleet</div></div>
+          <div class="wh-kpi"><div class="kl">Daily Cost</div><div class="kv">INR ${rec.total_daily_cost_inr.toLocaleString()}</div><div class="ks">${(rec.total_monthly_cost_inr/100000).toFixed(1)}L /mo</div></div>
+          <div class="wh-kpi"><div class="kl">Pickups/day</div><div class="kv">${c.expected_daily_pickups}</div><div class="ks">avg stops</div></div>
+          <div class="wh-kpi"><div class="kl">Weight/day</div><div class="kv">${Math.round(c.expected_daily_weight_kg).toLocaleString()} kg</div><div class="ks">${(c.expected_daily_weight_kg/1000).toFixed(1)} MT</div></div>
+          <div class="wh-kpi"><div class="kl">Bottles/day</div><div class="kv">${c.expected_daily_bottles.toLocaleString()}</div><div class="ks">expected</div></div>
+        </div>
+        <table class="wh-fleet-table">
+          <thead><tr><th>Fleet Type</th><th class="text-right">Vehicles</th><th class="text-right">Pickups</th><th class="text-right">Cost/day</th></tr></thead>
+          <tbody>${fleetRows}</tbody>
+        </table>
+        <div class="wh-freq-bar">${freqBar}</div>
+        <div style="font-size:0.68rem;color:var(--text-muted);margin-top:6px">${freqLegend}</div>
+      </div>`;
+  });
+}
+
+/* ============================
+   PARAMETERS PANEL
+   ============================ */
+function renderParams() {
+  const body = document.getElementById('params-body');
+  body.innerHTML = '';
+  const P = PARAMS;
+
+  const UNITS = {
+    'scan_rate_per_min':'btl/m','avg_setup_time_min':'min','road_factor':'x',
+    'avg_inter_horeca_dist_km':'km','last_horeca_to_warehouse_km':'km',
+    'warehouse_queue_time_min':'min','max_trips_per_day':'cap','total_pickup_hours':'hrs',
+    'peak_factor':'x','normal_factor':'x','market_growth_yoy':'%',
+    'horeca_share_of_returns':'%','reasonableness_threshold':'btl/d',
+    'nominal_capacity_kg':'kg','daily_cost_inr':'INR',
+    'speed_kmph_urban':'kmph','speed_kmph_highway':'kmph','unloading_time_min':'min'
+  };
+
+  function makeRow(label, val, step, dataKey, unit) {
+    const u = unit || UNITS[dataKey.split('.').pop()] || '';
+    return `<div class="param-row">
+      <label>${label}</label>
+      <div class="param-val">
+        <input type="number" step="${step}" value="${val}" data-key="${dataKey}" data-orig="${val}" onchange="markModified(this)">
+        ${u ? '<span class="p-unit">'+u+'</span>' : ''}
+      </div>
+    </div>`;
+  }
+
+  function makeCard(icon, iconClass, title, subtitle, rows, startOpen) {
+    return `<div class="p-card${startOpen?' open':''}">
+      <div class="p-card-head" onclick="toggleParamCard(this)">
+        <div class="p-card-icon ${iconClass}">${icon}</div>
+        <div class="p-card-info"><div class="p-card-title">${title}</div><div class="p-card-sub">${subtitle}</div></div>
+        <div class="p-card-chevron">&#8250;</div>
+      </div>
+      <div class="p-card-body">${rows}</div>
+    </div>`;
+  }
+
+  // PnL Data (read-only)
+  if(P.pnl_data) {
+    const pnl = P.pnl_data;
+    let pnlRows = '';
+    pnlRows += `<div class="param-row"><label>Month</label><div class="param-val"><span class="mono" style="font-weight:600">${pnl.month}</span></div></div>`;
+    pnlRows += `<div class="param-row"><label>Season</label><div class="param-val"><span class="mono" style="color:${pnl.season==='Peak'?'#b45309':'var(--primary)'};font-weight:600">${pnl.season}</span></div></div>`;
+    pnlRows += `<div class="param-row"><label>Total Return Units</label><div class="param-val"><span class="mono" style="font-weight:600">${(pnl.return_units_cr.Total||0).toFixed(2)} Cr</span></div></div>`;
+    Object.entries(pnl.return_units_cr).forEach(([mat, val]) => {
+      if(mat === 'Total') return;
+      if(val > 0) pnlRows += `<div class="param-row"><label style="padding-left:12px">${mat}</label><div class="param-val"><span class="mono" style="color:var(--text-secondary)">${val.toFixed(3)} Cr</span></div></div>`;
+    });
+    pnlRows += `<div class="param-row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px"><label>Daily Weight</label><div class="param-val"><span class="mono" style="font-weight:600">${Math.round(pnl.daily_weight_kg).toLocaleString()} kg</span></div></div>`;
+    pnlRows += `<div class="param-row"><label>HoReCa Daily Units</label><div class="param-val"><span class="mono" style="font-weight:600">${Math.round(pnl.horeca_daily_total_units).toLocaleString()}</span></div></div>`;
+    pnlRows += `<div class="param-row"><label>Avg Bottle Weight</label><div class="param-val"><span class="mono" style="font-weight:600">${(pnl.avg_weight_g||0).toFixed(1)}g</span></div></div>`;
+    body.innerHTML += makeCard('&#128202;','icon-pnl','PnL Data (Read Only)','DRS Return Units from PnL CSV',pnlRows,true);
+  }
+
+  // Route & Timing
+  let routeRows = '';
+  const routeKeys = ['avg_inter_horeca_dist_km','last_horeca_to_warehouse_km','road_factor','avg_setup_time_min','scan_rate_per_min','warehouse_queue_time_min','total_pickup_hours','max_trips_per_day'];
+  routeKeys.forEach(key => {
+    const meta = P.operational[key]; if(!meta) return;
+    const val = typeof meta === 'object' ? meta.value : meta;
+    const label = (meta && meta.label) || key.replace(/_/g,' ');
+    const step = (meta && meta.step) || 'any';
+    routeRows += makeRow(label, val, step, 'operational.'+key);
+  });
+  body.innerHTML += makeCard('&#128739;','icon-route','Route & Timing','Distance, setup, capacity',routeRows,true);
+
+  // Calibration
+  const pctCalibKeys = ['horeca_share_of_returns'];
+  let calibRows = '';
+  Object.entries(P.calibration).forEach(([key, meta]) => {
+    const rawVal = typeof meta === 'object' ? meta.value : meta;
+    const isPct = pctCalibKeys.includes(key);
+    const val = isPct ? Math.round(rawVal * 100) : rawVal;
+    const label = (meta && meta.label) || key.replace(/_/g,' ');
+    const step = isPct ? 1 : ((meta && meta.step) || 'any');
+    const unit = isPct ? '%' : 'btl/d';
+    calibRows += `<div class="param-row">
+      <label>${label}</label>
+      <div class="param-val">
+        <input type="number" step="${step}" value="${val}" data-key="calibration.${key}" data-orig="${val}"${isPct?' data-pct="1"':''} onchange="markModified(this)">
+        <span class="p-unit">${unit}</span>
+      </div>
+    </div>`;
+  });
+  body.innerHTML += makeCard('&#9878;','icon-calib','Calibration','HoReCa share, thresholds',calibRows,false);
+
+  // Material Mix (read-only)
+  if(P.pnl_data && P.pnl_data.material_mix) {
+    const mix = P.pnl_data.material_mix;
+    const wByMat = P.pnl_data.daily_weight_by_material_kg || {};
+    const totalWeight = Object.values(wByMat).reduce((s,v)=>s+v, 0) || 1;
+    let mixRows = '';
+    mixRows += `<div class="param-row" style="border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:6px">
+      <label style="font-weight:600;color:var(--text-muted);font-size:0.7rem">Material</label>
+      <div style="display:flex;gap:16px;font-size:0.7rem;font-weight:600;color:var(--text-muted)">
+        <span style="width:60px;text-align:right">Units %</span>
+        <span style="width:60px;text-align:right">Weight %</span>
+      </div>
+    </div>`;
+    Object.entries(mix).forEach(([mat, unitShare]) => {
+      const unitPct = (unitShare * 100).toFixed(1);
+      const weightPct = wByMat[mat] ? ((wByMat[mat] / totalWeight) * 100).toFixed(1) : '0.0';
+      mixRows += `<div class="param-row">
+        <label>${mat}</label>
+        <div style="display:flex;gap:16px">
+          <span class="mono" style="width:60px;text-align:right;font-weight:600">${unitPct}%</span>
+          <span class="mono" style="width:60px;text-align:right;color:var(--text-secondary)">${weightPct}%</span>
+        </div>
+      </div>`;
+    });
+    body.innerHTML += makeCard('&#129514;','icon-shares','Material Mix (from PnL)','Unit share & weight share',mixRows,false);
+  }
+
+  // Fleet types
+  const fleetLabels = {
+    'nominal_capacity_kg':'Capacity','daily_cost_inr':'Daily cost','monthly_quotation_inr':'Monthly quotation',
+    'working_days':'Working days/mo','total_km_monthly':'Total km/mo','working_hrs_per_day':'Working hrs/day',
+    'extra_km_rate_inr':'Extra km rate','extra_hr_rate_inr':'Extra hr rate',
+    'speed_kmph_urban':'Urban speed','speed_kmph_highway':'Highway speed','unloading_time_min':'Unload time'
+  };
+  const fleetUnits = {
+    'nominal_capacity_kg':'kg','daily_cost_inr':'INR','monthly_quotation_inr':'INR',
+    'working_days':'days','total_km_monthly':'km','working_hrs_per_day':'hrs',
+    'extra_km_rate_inr':'INR/km','extra_hr_rate_inr':'INR/hr',
+    'speed_kmph_urban':'kmph','speed_kmph_highway':'kmph','unloading_time_min':'min'
+  };
+  let fleetRows = '';
+  Object.entries(P.fleet).forEach(([ftName, props]) => {
+    fleetRows += `<div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:600;margin:${fleetRows?'12px':'0'} 0 6px;padding-top:${fleetRows?'10px':'0'};${fleetRows?'border-top:1px solid var(--border)':''};">${ftName} (${props.nominal_capacity_kg} kg)</div>`;
+    Object.entries(props).forEach(([key, val]) => {
+      if(key === 'suitable_for' || key === 'nominal_capacity_kg') return;
+      const dk = 'fleet.'+ftName+'.'+key;
+      const label = fleetLabels[key] || key.replace(/_/g,' ');
+      const unit = fleetUnits[key] || '';
+      fleetRows += makeRow(label, val, 'any', dk, unit);
+    });
+  });
+  body.innerHTML += makeCard('&#128666;','icon-fleet','Fleet Specifications','Vehicle capacity, cost, speed',fleetRows,false);
+
+  // Volumetric Fill
+  if(P.volumetric_fill) {
+    let volRows = '';
+    volRows += `<div class="param-row" style="border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:6px">
+      <label style="font-weight:500;color:var(--text-muted);font-size:0.72rem">Actual kg that fills a 1T truck</label>
+    </div>`;
+    Object.entries(P.volumetric_fill).forEach(([mat, fillKg]) => {
+      const volFactor = (1000 / fillKg).toFixed(2);
+      volRows += `<div class="param-row">
+        <label>${mat} <span style="color:var(--text-muted);font-size:0.68rem">(${volFactor}x)</span></label>
+        <div class="param-val">
+          <input type="number" step="10" value="${fillKg}" data-key="volumetric.${mat}" data-orig="${fillKg}" onchange="markModified(this)">
+          <span class="p-unit">kg</span>
+        </div>
+      </div>`;
+    });
+    body.innerHTML += makeCard('&#128230;','icon-vol','Volumetric Fill Weights','Actual kg per material in 1T truck',volRows,false);
+  }
+
+  // Road Distribution
+  if(P.road_distribution) {
+    const roadLabels = {'narrow_streets':'Narrow Streets','medium_streets':'Medium Roads','main_roads':'Main Roads'};
+    const roadDesc = {'narrow_streets':'Tata Ace + Bolero','medium_streets':'Intra V50','main_roads':'Intra V70'};
+    let roadRows = '';
+    roadRows += `<div class="param-row" style="border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:6px">
+      <label style="font-weight:500;color:var(--text-muted);font-size:0.72rem">% of routes by road type (must sum to 100%)</label>
+    </div>`;
+    Object.entries(P.road_distribution).forEach(([key, val]) => {
+      const pctVal = Math.round(val * 100);
+      roadRows += `<div class="param-row">
+        <label>${roadLabels[key]||key} <span style="color:var(--text-muted);font-size:0.68rem">(${roadDesc[key]||''})</span></label>
+        <div class="param-val">
+          <input type="number" step="5" value="${pctVal}" data-key="road_distribution.${key}" data-orig="${pctVal}" data-pct="1" onchange="markModified(this)">
+          <span class="p-unit">%</span>
+        </div>
+      </div>`;
+    });
+    body.innerHTML += makeCard('&#128739;','icon-route','Road Distribution','Route mix by road type',roadRows,false);
+  }
+
+  // Pickup Frequency
+  if(P.pickup_frequency) {
+    const freqLabels = {'daily':'Daily','alternate':'Alternate Day','twice_weekly':'Twice a Week','weekly':'Weekly'};
+    const freqDesc = {'daily':'High-volume bars','alternate':'Medium restaurants, hotels','twice_weekly':'Smaller restaurants, cafes','weekly':'Guesthouses, homestays'};
+    let freqRows = '';
+    freqRows += `<div class="param-row" style="border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:6px">
+      <label style="font-weight:500;color:var(--text-muted);font-size:0.72rem">% of HoReCas by frequency (must sum to 100%)</label>
+    </div>`;
+    Object.entries(P.pickup_frequency).forEach(([key, val]) => {
+      const pctVal = Math.round(val * 100);
+      freqRows += `<div class="param-row">
+        <label>${freqLabels[key]||key} <span style="color:var(--text-muted);font-size:0.68rem">(${freqDesc[key]||''})</span></label>
+        <div class="param-val">
+          <input type="number" step="5" value="${pctVal}" data-key="pickup_frequency.${key}" data-orig="${pctVal}" data-pct="1" onchange="markModified(this)">
+          <span class="p-unit">%</span>
+        </div>
+      </div>`;
+    });
+    body.innerHTML += makeCard('&#128197;','icon-calib','Pickup Frequency','How often HoReCas are visited',freqRows,false);
+  }
+
+  // Waste Generation
+  let wasteRows = '';
+  Object.entries(P.waste_generation).forEach(([ht, vals]) => {
+    const dk = 'waste_gen.'+ht+'.mean';
+    wasteRows += makeRow(ht+' (mean)', vals.mean, 1, dk, 'btl/d');
+  });
+  body.innerHTML += makeCard('&#9851;','icon-waste','Waste Generation','Per-type daily estimates',wasteRows,false);
+
+  // Size Multipliers
+  let sizeRows = '';
+  Object.entries(P.size_multipliers).forEach(([key, val]) => {
+    sizeRows += makeRow(key+' multiplier', val, 0.1, 'size_multipliers.'+key, 'x');
+  });
+  body.innerHTML += makeCard('&#128207;','icon-size','Size Multipliers','Scale by establishment size',sizeRows,false);
+}
+
+function toggleParamCard(head) {
+  head.closest('.p-card').classList.toggle('open');
+}
+
+function markModified(inp) {
+  const orig = parseFloat(inp.dataset.orig);
+  const cur = parseFloat(inp.value);
+  inp.classList.toggle('modified', Math.abs(cur - orig) > 0.0001);
+}
+
+function collectParams() {
+  const params = {};
+  document.querySelectorAll('#params-body input[data-key]').forEach(inp => {
+    const orig = parseFloat(inp.dataset.orig);
+    const cur = parseFloat(inp.value);
+    if(Math.abs(cur - orig) > 0.0001) {
+      params[inp.dataset.key] = inp.dataset.pct ? cur / 100 : cur;
+    }
+  });
+  return params;
+}
+
+/* ============================
+   SAVE / LOAD DEFAULTS
+   ============================ */
+async function saveDefaults() {
+  const all = {};
+  document.querySelectorAll('#params-body input[data-key]').forEach(inp => {
+    all[inp.dataset.key] = parseFloat(inp.value);
+  });
+  try {
+    await fetch('/api/rl/save-defaults', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(all)
+    });
+    showToast('Defaults saved');
+  } catch(e) {
+    showToast('Error saving defaults: '+e.message);
+  }
+}
+
+async function loadDefaults() {
+  try {
+    const res = await fetch('/api/rl/load-defaults');
+    const saved = await res.json();
+    if(Object.keys(saved).length === 0) { showToast('No saved defaults found'); return; }
+    Object.entries(saved).forEach(([key, val]) => {
+      const inp = document.querySelector(`input[data-key="${key}"]`);
+      if(inp) { inp.value = val; markModified(inp); }
+    });
+    showToast('Defaults loaded — click Simulate to apply');
+  } catch(e) {
+    showToast('Error loading defaults');
+  }
+}
+
+function resetParams() {
+  document.querySelectorAll('#params-body input[data-key]').forEach(inp => {
+    inp.value = inp.dataset.orig;
+    inp.classList.remove('modified');
+  });
+  showToast('Parameters reset to model defaults');
+}
+
+/* ============================
+   MOM TABLE
+   ============================ */
+async function loadMoM() {
+  const wrap = document.getElementById('mom-table-wrap');
+  wrap.innerHTML = '<div class="loading" style="height:200px"><div class="spinner"></div>Computing month-over-month fleet...</div>';
+  try {
+    const res = await fetch('/api/rl/mom');
+    const json = await res.json();
+    renderMoM(json.mom);
+    MOM_LOADED = true;
+  } catch(e) {
+    wrap.innerHTML = '<p style="color:var(--danger);padding:40px;text-align:center">Error loading MoM: '+e.message+'</p>';
+  }
+}
+
+function renderMoM(mom) {
+  const wrap = document.getElementById('mom-table-wrap');
+  if(!mom || !mom.length) { wrap.innerHTML = '<p style="text-align:center;padding:40px;color:var(--text-muted)">No MoM data available</p>'; return; }
+
+  let html = '<div style="overflow-x:auto"><table>';
+  html += '<thead><tr><th>Month</th><th>Season</th><th class="text-right">Return (Cr)</th><th class="text-right">Total Vehicles</th>';
+  const fleetTypes = ['Tata Ace','Bolero Pickup','Intra V50','Intra V70'];
+  fleetTypes.forEach(ft => { html += '<th class="text-right">'+ft+'</th>'; });
+  html += '<th class="text-right">Daily Cost</th><th class="text-right">Monthly Cost</th></tr></thead><tbody>';
+
+  mom.forEach(row => {
+    const seasonColor = row.season === 'Peak' ? 'var(--accent)' : 'var(--primary)';
+    html += `<tr>
+      <td style="font-weight:600">${row.month}</td>
+      <td><span style="color:${seasonColor};font-weight:600;font-size:0.82rem">${row.season}</span></td>
+      <td class="text-right mono">${(row.return_units_cr||0).toFixed(1)}</td>
+      <td class="text-right mono" style="font-weight:700">${row.total_vehicles}</td>`;
+    fleetTypes.forEach(ft => {
+      const count = (row.fleet_mix && row.fleet_mix[ft]) || (row.fleet_totals && row.fleet_totals[ft]) || 0;
+      html += `<td class="text-right mono">${count || '-'}</td>`;
+    });
+    html += `<td class="text-right mono">INR ${(row.daily_cost||0).toLocaleString()}</td>`;
+    html += `<td class="text-right mono">INR ${((row.daily_cost||0)*26).toLocaleString()}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+/* ============================
+   TOAST
+   ============================ */
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},2500);
+}
+
+/* ============================
+   INIT
+   ============================ */
+(async function init() {
+  const defaultMonth = await populateMonths();
+  loadMonth(defaultMonth);
+})();
+</script>
+</body>
+</html>

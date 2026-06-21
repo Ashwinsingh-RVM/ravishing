@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .header {
+            background-color: #1a5f7a;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            padding: 20px;
+        }
+        .highlight {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-left: 4px solid #1a5f7a;
+            margin: 15px 0;
+        }
+        .steps {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .requirements {
+            margin-top: 20px;
+        }
+        .requirements ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .requirements li {
+            padding: 5px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .requirements li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #1a5f7a;
+        }
+        .footer {
+            background-color: #f5f5f5;
+            padding: 15px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Goa Deposit Return Scheme</h1>
+        <p>RVM Collection Point Setup</p>
+    </div>
+
+    <div class="content">
+        <p>Dear Secretary / Sarpanch,</p>
+
+        <p>Greetings from the Goa Deposit Return Scheme (DRS) Implementation Team!</p>
+
+        <p>Thank you for meeting with us and your support in identifying a location for the
+        Reverse Vending Machine (RVM) collection point at <strong>{{village_panchayat_name}}</strong> Village Panchayat.</p>
+
+        <div class="highlight">
+            <strong>Confirmed Details:</strong>
+            <ul>
+                <li><strong>Village Panchayat:</strong> {{village_panchayat_name}}</li>
+                <li><strong>Block:</strong> {{block_name}}</li>
+                <li><strong>Location:</strong> {{location_address}}</li>
+            </ul>
+        </div>
+
+        <div class="steps">
+            <strong>Next Steps:</strong>
+            <ol>
+                <li>Please print the attached No Objection Certificate (NOC) on your official letterhead</li>
+                <li>Get it signed and stamped by the appropriate authority</li>
+                <li>Share the signed NOC with us via email or WhatsApp</li>
+            </ol>
+        </div>
+
+        <p>Once we receive the NOC, we will share the Service Agreement for your review and signature.</p>
+
+        <div class="requirements">
+            <strong>Infrastructure Requirements:</strong>
+            <ul>
+                <li>Electricity connection (single phase)</li>
+                <li>Internet connectivity (WiFi/Ethernet)</li>
+                <li>Covered shed/shelter</li>
+                <li>Flat, level surface for machine placement</li>
+            </ul>
+        </div>
+
+        <p>If you have any questions, please feel free to reach out.</p>
+
+        <p>Best regards,<br>
+        <strong>Goa DRS Implementation Team</strong></p>
+    </div>
+
+    <div class="footer">
+        <p>This is an official communication from the Goa Deposit Return Scheme Implementation Team.</p>
+        <p>For queries, please contact: {{contact_email}}</p>
+    </div>
+</body>
+</html>

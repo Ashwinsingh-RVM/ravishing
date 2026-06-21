@@ -1,0 +1,11 @@
+Visual Feedback/
+docs/
+Requirements/
+*.md
+tests/
+scripts/
+.git/
+__pycache__/
+*.pyc
+frontend/data/horeca/
+.claude/
