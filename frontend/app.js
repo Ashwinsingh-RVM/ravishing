@@ -7165,12 +7165,98 @@ function renderActProfiles(profiles) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const DEP_CACHE_KEY = 'depLocationsCache';
+
+function _depFingerprint(locations) {
+    return (locations || []).map(l =>
+        [l.locationName, l.nocReceived, l.agreementSigned, l.shedStatus,
+         l.electricalStatus, l.internetStatus, l.cctvStatus,
+         l.rvmDelivery, l.rvmDeployed, l.machineLive].join(':')
+    ).sort().join('||');
+}
+
+function _depDetectChanges(oldLocs, newLocs) {
+    const changes = [];
+    const oldMap = {};
+    (oldLocs || []).forEach(l => { oldMap[l.locationName] = l; });
+
+    (newLocs || []).forEach(l => {
+        const old = oldMap[l.locationName];
+        if (!old) {
+            changes.push({ location: l.locationName, block: l.block, field: 'New location', from: '—', to: 'Added' });
+            return;
+        }
+        [
+            { key: 'nocReceived',      label: 'NOC' },
+            { key: 'agreementSigned',  label: 'Agreement' },
+            { key: 'shedStatus',       label: 'Shed' },
+            { key: 'electricalStatus', label: 'Electrical' },
+            { key: 'internetStatus',   label: 'Internet' },
+            { key: 'cctvStatus',       label: 'CCTV' },
+            { key: 'rvmDelivery',      label: 'RVM Delivery' },
+            { key: 'rvmDeployed',      label: 'RVM Installed' },
+            { key: 'machineLive',      label: 'Machine Live' },
+        ].forEach(f => {
+            if ((old[f.key] || '') !== (l[f.key] || '')) {
+                changes.push({ location: l.locationName, block: l.block, field: f.label, from: old[f.key] || '—', to: l[f.key] || '—' });
+            }
+        });
+    });
+    return changes;
+}
+
+function _depShowChangeAlert(changes) {
+    const el = document.getElementById('dep-change-alert');
+    if (!el) return;
+    if (!changes || changes.length === 0) { el.style.display = 'none'; return; }
+
+    const user = currentUser ? `${currentUser.name} (${currentUser.email})` : 'You';
+    const now  = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+    const rows = changes.slice(0, 15).map(c => `
+        <tr>
+            <td style="font-weight:600;padding:5px 8px">${c.location}</td>
+            <td style="color:var(--muted);padding:5px 8px">${c.block}</td>
+            <td style="padding:5px 8px">${c.field}</td>
+            <td style="color:#d1453b;padding:5px 8px">${c.from}</td>
+            <td style="color:#0b6b4f;font-weight:600;padding:5px 8px">${c.to}</td>
+        </tr>`).join('');
+    const extra = changes.length > 15 ? `<div style="font-size:11px;color:var(--muted);padding:6px 8px">+${changes.length - 15} more changes</div>` : '';
+
+    el.style.display = 'block';
+    el.innerHTML = `
+        <div style="background:#fffbf0;border:1.5px solid #e08a1e40;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <span style="background:#e08a1e;color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${changes.length}</span>
+                    <span style="font-weight:700;font-size:14px;color:#b45309">Sheet updated — ${changes.length} change${changes.length > 1 ? 's' : ''} since last visit</span>
+                </div>
+                <div style="font-size:11px;color:var(--muted)">Detected: ${now} · Logged in as <b>${user}</b></div>
+            </div>
+            <div style="overflow-x:auto">
+                <table style="width:100%;font-size:12px;border-collapse:collapse">
+                    <thead><tr style="background:#fef3c7">
+                        <th style="padding:5px 8px;text-align:left">Location</th>
+                        <th style="padding:5px 8px;text-align:left">Block</th>
+                        <th style="padding:5px 8px;text-align:left">Field</th>
+                        <th style="padding:5px 8px;text-align:left">Was</th>
+                        <th style="padding:5px 8px;text-align:left">Now</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            ${extra}
+            <div style="text-align:right;margin-top:8px">
+                <button onclick="document.getElementById('dep-change-alert').style.display='none'" style="font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline">Dismiss</button>
+            </div>
+        </div>`;
+}
+
 async function loadRvmDeployment() {
     const loading = document.getElementById('ct-loading');
     const main    = document.getElementById('ct-main');
     const errEl   = document.getElementById('ct-error');
     if (!loading) return;
-    if (depData) { renderRvmDeployment(depData); return; }
 
     loading.style.display = 'block';
     main.style.display    = 'none';
@@ -7179,7 +7265,26 @@ async function loadRvmDeployment() {
     try {
         const res = await fetch('/api/deployment/summary');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        depData = await res.json();
+        const freshData = await res.json();
+
+        // Change detection against last-seen data
+        const cached = localStorage.getItem(DEP_CACHE_KEY);
+        if (cached) {
+            try {
+                const oldLocs = JSON.parse(cached);
+                const oldFp   = _depFingerprint(oldLocs);
+                const newFp   = _depFingerprint(freshData.locations);
+                if (oldFp !== newFp) {
+                    _depShowChangeAlert(_depDetectChanges(oldLocs, freshData.locations));
+                } else {
+                    const alertEl = document.getElementById('dep-change-alert');
+                    if (alertEl) alertEl.style.display = 'none';
+                }
+            } catch (_) {}
+        }
+        localStorage.setItem(DEP_CACHE_KEY, JSON.stringify(freshData.locations));
+
+        depData = freshData;
         loading.style.display = 'none';
         main.style.display    = 'block';
         renderRvmDeployment(depData);
