@@ -7120,7 +7120,6 @@ function depMarkerColor(stage) {
 }
 
 function depComputeSummary(locs) {
-    const TOTAL_ENTITIES = 205;
     function cv(key, val) { return locs.filter(l => l[key] === val).length; }
     function ps(key) {
         const done = cv(key, 'Done'), pending = cv(key, 'Pending'), not_required = cv(key, 'Not Required');
@@ -7137,9 +7136,19 @@ function depComputeSummary(locs) {
         });
         return c;
     }
+    // Pull NOC/Agreement from vpData (same source as Dashboard > Progress tab)
+    // Combined VP + Municipal total for the denominator
+    const useVpData = vpData.length > 0;
+    const totalEntities = useVpData ? vpData.length : 205;
+    const nocCount = useVpData
+        ? vpData.filter(vp => resolveStageNumber(vp) >= 9).length
+        : cvEntity('nocReceived', 'Yes');
+    const agrCount = useVpData
+        ? vpData.filter(vp => resolveStageNumber(vp) >= 11).length
+        : cvEntity('agreementSigned', 'Yes');
     return {
-        total: locs.length, totalEntities: TOTAL_ENTITIES,
-        noc: cvEntity('nocReceived', 'Yes'), agreement: cvEntity('agreementSigned', 'Yes'),
+        total: locs.length, totalEntities,
+        noc: nocCount, agreement: agrCount,
         shed: ps('shedStatus'), electrical: ps('electricalStatus'),
         internet: ps('internetStatus'), cctv: ps('cctvStatus'),
         delivered: cv('rvmDelivery', 'Done'),
@@ -7306,8 +7315,8 @@ function depRenderKPIs(s) {
     const T = depPlanTotal;
     document.getElementById('dep-kpis').innerHTML = [
         { label:'Total Locations',    value: s.total,             cls:'dep-k-total', sub:'deployment sites' },
-        { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VPs · ${s.totalEntities - s.noc} pending` },
-        { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VPs · ${s.totalEntities - s.agreement} pending` },
+        { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.noc} pending` },
+        { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.agreement} pending` },
         { label:'Shed Completed',     value: s.shed.done,         cls:'dep-k-shed',  sub:`of ${s.shed.done + s.shed.pending} required · ${s.shed.not_required} N/A` },
         { label:'Electrical Done',    value: s.electrical.done,   cls:'dep-k-elec',  sub:`${s.electrical.not_required} N/A · ${s.electrical.pending} pending` },
         { label:'Internet Done',      value: s.internet.done,     cls:'dep-k-inet',  sub:`${s.internet.not_required} N/A · ${s.internet.pending} pending` },
