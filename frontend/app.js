@@ -7617,10 +7617,21 @@ function depRenderBlockers(locs) {
     const el = document.getElementById('dep-insights');
     if (!el) return;
 
-    // Blocker counts
-    const siteGap      = Math.max(0, depPlanTotal - locs.length);
-    const nocPending   = locs.filter(l => l.nocReceived !== 'Yes').length;
-    const agrPending   = locs.filter(l => l.nocReceived === 'Yes' && l.agreementSigned !== 'Yes').length;
+    // Site gap from deployment sheet
+    const siteGap = Math.max(0, depPlanTotal - locs.length);
+
+    // NOC/Agreement from vpData (same source as KPI cards and Progress tab)
+    let nocPending, agrPending;
+    if (vpData.length > 0) {
+        const nocReceived = vpData.filter(vp => resolveStageNumber(vp) >= 9).length;
+        const agrSigned   = vpData.filter(vp => resolveStageNumber(vp) >= 11).length;
+        nocPending = vpData.length - nocReceived;
+        agrPending = nocReceived - agrSigned;
+    } else {
+        nocPending = locs.filter(l => l.nocReceived !== 'Yes').length;
+        agrPending = locs.filter(l => l.nocReceived === 'Yes' && l.agreementSigned !== 'Yes').length;
+    }
+
     const elecPending  = locs.filter(l => l.electricalStatus === 'Pending').length;
     const delivNotInst = locs.filter(l => l.rvmDelivery === 'Done' && l.rvmDeployed !== 'Done').length;
 
