@@ -1970,6 +1970,9 @@ function loadProgressDashboard() {
         devicesInstalled
     });
 
+    // Render machine install status from DRS-Tracker data
+    renderMachineInstalls();
+
     // Render BDO section within Progress
     renderBDOInProgress();
 
@@ -2138,6 +2141,95 @@ function renderULBFunnel() {
 
     funnelContainer.innerHTML = `
         <div class="funnel-flow">${steps.map((step, i) => renderStep(step) + (i < steps.length - 1 ? renderArrow() : '')).join('')}</div>
+    `;
+}
+
+/**
+ * Render Machine Installation Status section in the Progress dashboard.
+ * Data source: vpData (DRS-Tracker) — installDate, machineLive, agreedRvms, stage fields.
+ */
+function renderMachineInstalls() {
+    const el = document.getElementById('machine-install-section');
+    if (!el) return;
+
+    const vpOnly = vpData.filter(vp => !isULB(vp));
+    const infraDone   = vpOnly.filter(vp => resolveStageNumber(vp) >= 13);
+    const deployed    = vpOnly.filter(vp => resolveStageNumber(vp) >= 14);
+    const installed   = vpOnly.filter(vp => resolveStageNumber(vp) >= 15 || (vp.installDate && vp.installDate.trim()));
+    const withDate    = vpOnly.filter(vp => vp.installDate && vp.installDate.trim()).sort((a, b) => b.installDate.localeCompare(a.installDate));
+
+    // Machine counts (sum agreedRvms, default 1 per VP)
+    const machinesDeployed  = deployed.reduce((s, vp) => s + (vp.agreedRvms || 1), 0);
+    const machinesInstalled = installed.reduce((s, vp) => s + (vp.agreedRvms || 1), 0);
+    const totalPlan = vpOnly.reduce((s, vp) => s + (vp.plannedRvms || 1), 0);
+
+    // Block-wise breakdown (only blocks with at least one infra/deploy entry)
+    const blocks = [...new Set(deployed.map(vp => vp.block))].sort();
+    const blockRows = blocks.map(block => {
+        const d = deployed.filter(vp => vp.block === block).length;
+        const ins = installed.filter(vp => vp.block === block).length;
+        const inf = infraDone.filter(vp => vp.block === block).length;
+        return `<tr>
+            <td style="font-weight:600">${block}</td>
+            <td>${inf}</td>
+            <td>${d}</td>
+            <td style="color:#0b6b4f;font-weight:600">${ins}</td>
+        </tr>`;
+    }).join('');
+
+    // Recent installs list (VPs with installDate set)
+    const recentRows = withDate.slice(0, 10).map(vp => {
+        const live = vp.machineLive === 'Yes' || vp.machineLive === 'Done'
+            ? '<span style="color:#0b6b4f;font-size:11px">Live</span>'
+            : '<span style="color:#a0aaba;font-size:11px">Pending</span>';
+        return `<tr>
+            <td style="color:var(--muted);font-size:12px">${vp.installDate}</td>
+            <td><b>${vp.vpName || vp.vpCode}</b></td>
+            <td style="color:var(--muted)">${vp.block}</td>
+            <td>${live}</td>
+        </tr>`;
+    }).join('');
+
+    el.innerHTML = `
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+            <div class="dep-kpi" style="flex:1;min-width:120px;border-left:4px solid #8b6914">
+                <div class="dep-kv">${infraDone.length}</div>
+                <div class="dep-kl">Infra Ready</div>
+                <div class="dep-kn" style="font-size:11px;color:var(--muted)">VPs at infra complete</div>
+            </div>
+            <div class="dep-kpi" style="flex:1;min-width:120px;border-left:4px solid #2f6fb0">
+                <div class="dep-kv">${deployed.length}</div>
+                <div class="dep-kl">Device Deployed</div>
+                <div class="dep-kn" style="font-size:11px;color:var(--muted)">${machinesDeployed} machines</div>
+            </div>
+            <div class="dep-kpi" style="flex:1;min-width:120px;border-left:4px solid #0b6b4f">
+                <div class="dep-kv">${installed.length}</div>
+                <div class="dep-kl">Installed</div>
+                <div class="dep-kn" style="font-size:11px;color:var(--muted)">${machinesInstalled} of ${totalPlan} machines</div>
+            </div>
+        </div>
+        ${blocks.length > 0 ? `
+        <div style="overflow-x:auto;margin-bottom:16px">
+            <table class="cp-table" style="font-size:13px;width:100%">
+                <thead><tr>
+                    <th>Block</th>
+                    <th>Infra Ready</th>
+                    <th>Deployed</th>
+                    <th>Installed</th>
+                </tr></thead>
+                <tbody>${blockRows}</tbody>
+            </table>
+        </div>` : '<div style="color:var(--muted);font-size:13px;padding:8px 0">No deployment data yet</div>'}
+        ${withDate.length > 0 ? `
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text)">Recent Installs</div>
+        <div style="overflow-x:auto">
+            <table class="cp-table" style="font-size:13px;width:100%">
+                <thead><tr>
+                    <th>Install Date</th><th>Location</th><th>Block</th><th>Machine Live</th>
+                </tr></thead>
+                <tbody>${recentRows}</tbody>
+            </table>
+        </div>` : ''}
     `;
 }
 
