@@ -1970,9 +1970,6 @@ function loadProgressDashboard() {
         devicesInstalled
     });
 
-    // Render machine install status from DRS-Tracker data
-    renderMachineInstalls();
-
     // Render BDO section within Progress
     renderBDOInProgress();
 
