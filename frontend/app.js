@@ -7464,10 +7464,13 @@ function depRenderFunnel(s) {
 }
 
 function depRenderDonuts(s) {
+    const T = depPlanTotal;
+    const liveStats = { done: s.live, pending: Math.max(0, T - s.live), not_required: 0, pct: T > 0 ? Math.round(s.live / T * 100) : 0 };
     const progItems = [
         { label:'Civil Work',        stats: s.civil,      color:'#5b8a3c' },
         { label:'Shed',              stats: s.shed,       color:'#8b6914' },
         { label:'Electrical',        stats: s.electrical, color:'#c27a10' },
+        { label:'Machine Live',      stats: liveStats,    color:'#085f40' },
         { label:'Internet',          stats: s.internet,   color:'#2f6fb0' },
         { label:'CCTV',              stats: s.cctv,       color:'#6b2fa0' },
         { label:'Machine Installed', stats: s.installed,  color:'#0b6b4f' },
@@ -7764,6 +7767,7 @@ function depRenderBlockSummary(locs) {
     }
 
     const cols = [
+        { label:'Civil Work', fn: b => { const req = breq(b,'civilWorkStatus'); return req === 0 ? '—' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
         { label:'Shed',      fn: b => `${bv(b,'shedStatus','Done')}/${breq(b,'shedStatus')}` },
         { label:'Electrical',fn: b => `${bv(b,'electricalStatus','Done')}/${breq(b,'electricalStatus')}` },
         { label:'Internet',  fn: b => `${bv(b,'internetStatus','Done')}/${breq(b,'internetStatus')}` },
@@ -7843,6 +7847,7 @@ function depPendingItems(l) {
     const items = [];
     if (l.nocReceived !== 'Yes')          items.push('NOC');
     if (l.agreementSigned !== 'Yes')      items.push('Agreement');
+    if (l.civilWorkStatus === 'Pending')  items.push('Civil Work');
     if (l.shedStatus === 'Pending')       items.push('Shed');
     if (l.electricalStatus === 'Pending') items.push('Electrical');
     if (l.internetStatus === 'Pending')   items.push('Internet');
@@ -7870,6 +7875,7 @@ function depRenderLocTable(locs) {
                 <td><span class="dep-stage-pill" style="background:${hm.color}18;color:${hm.color};border:1px solid ${hm.color}33">${hm.label}</span></td>
                 <td>${depFlag(l.nocReceived)}</td>
                 <td>${depFlag(l.agreementSigned)}</td>
+                <td>${l.civilWorkStatus === 'Not Required' ? '' : depFlag(l.civilWorkStatus)}</td>
                 <td>${depFlag(l.shedStatus)}</td>
                 <td>${depFlag(l.electricalStatus)}</td>
                 <td>${depFlag(l.internetStatus)}</td>
