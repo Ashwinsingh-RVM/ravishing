@@ -332,9 +332,8 @@ async function handleLogout() {
 async function initApp() {
     populateStageDropdowns();
 
-    // Load ALL data BEFORE setting up tabs (tab restore triggers dashboard render)
-    await loadVPData();
-    await loadMeetingsData();
+    // Load ALL data in parallel before setting up tabs
+    await Promise.all([loadVPData(), loadMeetingsData(), loadBDOData()]);
 
     setupEventListeners();
     setupMasterDetailListeners();
