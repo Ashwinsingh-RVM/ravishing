@@ -333,7 +333,7 @@ async function initApp() {
     populateStageDropdowns();
 
     // Load ALL data in parallel before setting up tabs
-    await Promise.all([loadVPData(), loadMeetingsData(), loadBDOData()]);
+    await Promise.all([loadVPData(), loadMeetingsData(), loadBDOData(), preloadDepData()]);
 
     setupEventListeners();
     setupMasterDetailListeners();
@@ -1928,7 +1928,9 @@ function loadProgressDashboard() {
     const total = vpOnly.length;
     const meetingsDone = vpOnly.filter(vp => resolveStageNumber(vp) >= 3).length;
     const locationsFinalized = vpOnly.filter(vp => resolveStageNumber(vp) >= 6).length;
-    const devicesInstalled = vpOnly.filter(vp => resolveStageNumber(vp) >= 15).length;
+    const devicesInstalled = (depData && depData.locations && depData.locations.length > 0)
+        ? depData.locations.filter(l => l.rvmDeployed === 'Done').length
+        : vpOnly.filter(vp => resolveStageNumber(vp) >= 15).length;
 
     // Calculate BDO stats for holistic funnel
     const totalBlocks = bdoData.length || 12;
@@ -7164,6 +7166,13 @@ function renderActProfiles(profiles) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+async function preloadDepData() {
+    try {
+        const res = await fetch('/api/deployment/summary');
+        if (res.ok) depData = await res.json();
+    } catch (e) {}
+}
+
 async function loadRvmDeployment() {
     const loading = document.getElementById('ct-loading');
     const main    = document.getElementById('ct-main');
@@ -7238,6 +7247,7 @@ function depComputeSummary(locs) {
     return {
         total: locs.length, totalEntities,
         noc: nocCount, agreement: agrCount,
+        civil: ps('civilWorkStatus'),
         shed: ps('shedStatus'), electrical: ps('electricalStatus'),
         internet: ps('internetStatus'), cctv: ps('cctvStatus'),
         delivered: cv('rvmDelivery', 'Done'),
@@ -7406,6 +7416,7 @@ function depRenderKPIs(s) {
         { label:'Total Locations',    value: s.total,             cls:'dep-k-total', sub:'deployment sites' },
         { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.noc} pending` },
         { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.agreement} pending` },
+        { label:'Civil Work Done',     value: s.civil.done,        cls:'dep-k-civil', sub:`of ${s.civil.done + s.civil.pending} required · ${s.civil.not_required} N/A` },
         { label:'Shed Completed',     value: s.shed.done,         cls:'dep-k-shed',  sub:`of ${s.shed.done + s.shed.pending} required · ${s.shed.not_required} N/A` },
         { label:'Electrical Done',    value: s.electrical.done,   cls:'dep-k-elec',  sub:`${s.electrical.not_required} N/A · ${s.electrical.pending} pending` },
         { label:'Internet Done',      value: s.internet.done,     cls:'dep-k-inet',  sub:`${s.internet.not_required} N/A · ${s.internet.pending} pending` },
@@ -7425,6 +7436,7 @@ function depRenderFunnel(s) {
     const funnelStages = [
         { label: 'NOC Received',     val: s.noc,                                          color: '#2f6fb0', denom: s.totalEntities },
         { label: 'Agreement Signed', val: s.agreement,                                    color: '#4a7ec0', denom: s.totalEntities },
+        { label: `Civil Work Done (${s.civil.not_required} N/A)`,  val: s.civil.done + s.civil.not_required,  color: '#5b8a3c', denom: T },
         { label: 'Shed Ready',       val: s.shed.done,                                    color: '#8b6914', denom: T },
         { label: `Electrical Ready (${s.electrical.not_required} N/A)`, val: s.electrical.done + s.electrical.not_required, color: '#c27a10', denom: T },
         { label: `Internet Ready (${s.internet.not_required} N/A)`,     val: s.internet.done + s.internet.not_required,    color: '#9b7b2e', denom: T },
@@ -7453,6 +7465,7 @@ function depRenderFunnel(s) {
 
 function depRenderDonuts(s) {
     const progItems = [
+        { label:'Civil Work',        stats: s.civil,      color:'#5b8a3c' },
         { label:'Shed',              stats: s.shed,       color:'#8b6914' },
         { label:'Electrical',        stats: s.electrical, color:'#c27a10' },
         { label:'Internet',          stats: s.internet,   color:'#2f6fb0' },
