@@ -4196,6 +4196,15 @@ async function deleteMeeting(meetingId) {
     showLoading(false);
 }
 
+// Backend stores timestamps as '2026-06-24 10:49' (UTC, Railway server, no timezone marker).
+// Without this, Chrome treats the string as local IST, showing time 5h30m too early.
+function parseUTC(s) {
+    if (!s) return new Date(NaN);
+    s = s.trim();
+    if (/Z$|[+-]\d{2}:?\d{2}$/.test(s)) return new Date(s);
+    return new Date(s.replace(' ', 'T') + 'Z');
+}
+
 /**
  * Render today's activity - actions taken today grouped by VP
  */
@@ -4230,7 +4239,7 @@ function renderTodayActivity() {
         if (!vp.lastUpdated) return;
 
         try {
-            const updateTime = new Date(vp.lastUpdated);
+            const updateTime = parseUTC(vp.lastUpdated);
             if (updateTime >= cutoffTime && updateTime.toISOString().split('T')[0] === todayStr) {
                 activities.push({
                     type: 'stage_update',
@@ -4254,7 +4263,7 @@ function renderTodayActivity() {
         if (userRole === 'horeca' && !isHorecaMeeting) return;
 
         try {
-            const createTime = new Date(m.createdAt);
+            const createTime = parseUTC(m.createdAt);
             if (createTime >= cutoffTime && createTime.toISOString().split('T')[0] === todayStr) {
                 activities.push({
                     type: 'meeting_created',
@@ -4291,7 +4300,7 @@ function renderTodayActivity() {
             try {
                 const noteDate = timestampStr.split(' ')[0];
                 if (noteDate === todayStr) {
-                    const noteTime = new Date(timestampStr.replace(' ', 'T') + ':00');
+                    const noteTime = parseUTC(timestampStr);
                     if (noteTime >= cutoffTime) {
                         activities.push({
                             type: noteType === 'direct' ? 'comment' : 'note',
