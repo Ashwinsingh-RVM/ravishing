@@ -446,7 +446,18 @@ class GoogleSheetsService:
                 worksheet = spreadsheet.worksheet("RVM Deployment")
             except Exception:
                 return []
-            records = worksheet.get_all_records()
+            # Use get_all_values() instead of get_all_records() to tolerate
+            # duplicate or blank column headers that break get_all_records()
+            all_values = worksheet.get_all_values()
+            if not all_values:
+                return []
+            headers = [str(h).strip() for h in all_values[0]]
+            records = []
+            for row_vals in all_values[1:]:
+                row = {}
+                for i, header in enumerate(headers):
+                    row[header] = row_vals[i].strip() if i < len(row_vals) else ''
+                records.append(row)
             locations = []
             for row in records:
                 row = {k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
