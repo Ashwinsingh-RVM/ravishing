@@ -40,8 +40,15 @@ class VPTracker:
             self.ai_processor = None
             self.voice_transcriber = None
 
-        self.sheets_service = GoogleSheetsService()
-        self.gmail_service = GmailService()
+        try:
+            self.sheets_service = GoogleSheetsService()
+        except Exception:
+            self.sheets_service = None
+
+        try:
+            self.gmail_service = GmailService()
+        except Exception:
+            self.gmail_service = None
 
     async def process_field_update(
         self,
