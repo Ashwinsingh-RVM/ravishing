@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Goa DRS Field Update Tool - Frontend Application
  */
 
@@ -8291,10 +8291,10 @@ function ctFilterByBlock(block) {
 window.ctFilterByBlock = ctFilterByBlock;
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// RVM DEPLOYMENT â€” Plan vs Actual sub-tab (v2 â€” artifact design)
+// ═══════════════════════════════════════════════════════════════════════════
+// RVM DEPLOYMENT — Plan vs Actual sub-tab (v2 — artifact design)
 // KPI actuals from depData.locations; plan+daily actuals from GSheet RVM-PvA.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════════
 
 const PVA_LS_KEY = 'dep_pva_plans';
 let pvaCachedPlans = null;
@@ -8309,7 +8309,7 @@ const PVA_CATS = [
     { key:'live',     label:'Machine Live',    short:'Live',    color:'#059669', field:'machineLive',      pace:false },
 ];
 
-// â”€â”€ API helpers (GSheet primary, localStorage fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── API helpers (GSheet primary, localStorage fallback) ───────────────────
 
 function pvaGetPlans() {
     if (pvaCachedPlans !== null) return pvaCachedPlans;
@@ -8357,7 +8357,7 @@ window.pvaDeleteRow = function(date) {
     depRenderPvA(depFilteredLocs);
 };
 
-// â”€â”€ Date helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Date helpers ──────────────────────────────────────────────────────────
 
 function pvaIsoToLabel(iso) {
     return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { month:'short', day:'numeric' });
@@ -8374,10 +8374,10 @@ function pvaWeekLabel(wk) {
     const start = new Date(origin.getTime() + (wk - 1) * 7 * 86400000);
     const end   = new Date(start.getTime() + 6 * 86400000);
     const f = d => d.toLocaleDateString('en-IN', { month:'short', day:'numeric' });
-    return `${f(start)} â€“ ${f(end)}`;
+    return `${f(start)} – ${f(end)}`;
 }
 
-// â”€â”€ Sub-tab wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Sub-tab wiring ────────────────────────────────────────────────────────
 
 let _pvaSubTabsReady = false;
 function depInitSubTabs() {
@@ -8397,7 +8397,7 @@ function depInitSubTabs() {
     });
 }
 
-// â”€â”€ Main renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main renderer ─────────────────────────────────────────────────────────
 
 function depRenderPvA(locs) {
     const el = document.getElementById('dep-pva-view');
@@ -8410,7 +8410,7 @@ function depRenderPvA(locs) {
     const actuals = {};
     PVA_CATS.forEach(c => { actuals[c.key] = locs.filter(l => l[c.field] === 'Done').length; });
 
-    // Cumulative plan from GSheet (sum of *_plan for dates â‰¤ today)
+    // Cumulative plan from GSheet (sum of *_plan for dates ≤ today)
     const planCum = {};
     PVA_CATS.forEach(c => { planCum[c.key] = 0; });
     plans.filter(p => p.date <= todayStr).forEach(p => {
@@ -8434,7 +8434,7 @@ function depRenderPvA(locs) {
     }, 0);
 }
 
-// â”€â”€ Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Banner ────────────────────────────────────────────────────────────────
 
 function pvaBannerHtml(plans, actuals, planCum, todayStr) {
     const wk = pvaWeekNum(todayStr);
@@ -8452,14 +8452,14 @@ function pvaBannerHtml(plans, actuals, planCum, todayStr) {
             <div class="pva-meta-div"></div>
             <div class="pva-meta-p">Machine Live: <b>${actuals.live}</b></div>
             <div class="pva-meta-div"></div>
-            <div class="pva-meta-p">Overall pace: <b style="color:${paceClr}">${pace !== null ? pace + '% of plan' : 'â€”'}</b></div>
+            <div class="pva-meta-p">Overall pace: <b style="color:${paceClr}">${pace !== null ? pace + '% of plan' : '—'}</b></div>
             <div class="pva-meta-div"></div>
-            <div class="pva-meta-p" style="font-size:10px;color:var(--muted)">avg. Civil Â· Shed Â· Elec Â· Install Â· Net Â· CCTV</div>
+            <div class="pva-meta-p" style="font-size:10px;color:var(--muted)">avg. Civil · Shed · Elec · Install · Net · CCTV</div>
         </div>
     </div>`;
 }
 
-// â”€â”€ KPI cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── KPI cards ─────────────────────────────────────────────────────────────
 
 function pvaKpiSectionHtml(actuals, planCum, locs) {
     function badge(a, p) {
@@ -8478,7 +8478,7 @@ function pvaKpiSectionHtml(actuals, planCum, locs) {
             <div class="pva-kpi-cat" style="color:${c.color}">${c.label}</div>
             <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:6px">
                 <span class="pva-kpi-num" style="color:${c.color}">${act}</span>
-                <span class="pva-kpi-plan"> / ${plan || 'â€”'}</span>
+                <span class="pva-kpi-plan"> / ${plan || '—'}</span>
             </div>
             <div class="pva-kpi-bar-wrap"><div class="pva-kpi-bar" style="width:${pct}%;background:${c.color}"></div></div>
             <div class="pva-kpi-row2">
@@ -8488,18 +8488,18 @@ function pvaKpiSectionHtml(actuals, planCum, locs) {
         </div>`;
     }).join('');
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Category snapshot Â· cumulative to date</div>
+        <div class="pva-eyebrow">Category snapshot · cumulative to date</div>
         <div class="pva-kpi-grid">${cards}</div>
     </div>`;
 }
 
-// â”€â”€ Day-on-Day table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Day-on-Day table ──────────────────────────────────────────────────────
 
 function pvaDodSectionHtml(plans, todayStr) {
     const visible = plans.filter(p => p.date <= todayStr).slice(-14);
     if (!visible.length) return `<div class="pva-section">
-        <div class="pva-eyebrow">Day-on-Day Â· daily increments</div>
-        <div class="pva-empty">No entries yet â€” add plan data using the form below.</div>
+        <div class="pva-eyebrow">Day-on-Day · daily increments</div>
+        <div class="pva-empty">No entries yet — add plan data using the form below.</div>
     </div>`;
 
     let hdr = `<thead><tr><th style="text-align:left;min-width:90px" rowspan="2">Date</th>`;
@@ -8529,11 +8529,11 @@ function pvaDodSectionHtml(plans, todayStr) {
             const pv = parseInt(p[c.key+'_plan']) || 0;
             const av = parseInt(p[c.key+'_actual']) || 0;
             if (!pv && !av) {
-                rows += `<td class="td-dash${sep}">â€”</td><td class="td-dash">â€”</td>`;
+                rows += `<td class="td-dash${sep}">—</td><td class="td-dash">—</td>`;
             } else {
                 const diff = isToday ? null : av - pv;
                 const acls = diff === null ? 'td-dash' : diff >= 0 ? 'td-g td-ac' : diff >= -2 ? 'td-ac' : 'td-b td-ac';
-                rows += `<td class="td-pl${sep}">${pv||'â€”'}</td><td class="${acls}">${isToday?'â€”':av}</td>`;
+                rows += `<td class="td-pl${sep}">${pv||'—'}</td><td class="${acls}">${isToday?'—':av}</td>`;
             }
         });
         const rt = p.root_cause_type || '';
@@ -8542,18 +8542,18 @@ function pvaDodSectionHtml(plans, todayStr) {
     });
 
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Day-on-Day Â· daily increments â€” P = Plan Â· A = Actual</div>
+        <div class="pva-eyebrow">Day-on-Day · daily increments — P = Plan · A = Actual</div>
         <div class="pva-tbl-card">
             <div class="pva-t-title">
                 <span class="pva-t-title-main">Day-on-Day</span>
-                <span class="pva-t-title-sub">Last 14 days shown Â· today highlighted Â· green = ahead Â· red = behind</span>
+                <span class="pva-t-title-sub">Last 14 days shown · today highlighted · green = ahead · red = behind</span>
             </div>
             <div class="pva-tbl-scroll"><table class="pva-tbl">${hdr}<tbody>${rows}</tbody></table></div>
         </div>
     </div>`;
 }
 
-// â”€â”€ Week-on-Week table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Week-on-Week table ────────────────────────────────────────────────────
 
 function pvaWowSectionHtml(plans, todayStr) {
     const byWk = {};
@@ -8616,41 +8616,41 @@ function pvaWowSectionHtml(plans, todayStr) {
     foot += `</tr></tfoot>`;
 
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Week-on-Week Â· weekly totals + cumulative footer</div>
+        <div class="pva-eyebrow">Week-on-Week · weekly totals + cumulative footer</div>
         <div class="pva-tbl-card">
             <div class="pva-t-title">
                 <span class="pva-t-title-main">Week-on-Week</span>
-                <span class="pva-t-title-sub">Weeks with data only Â· cumulative running total at footer</span>
+                <span class="pva-t-title-sub">Weeks with data only · cumulative running total at footer</span>
             </div>
             <div class="pva-tbl-scroll"><table class="pva-tbl">${hdr}<tbody>${rows}</tbody>${foot}</table></div>
         </div>
     </div>`;
 }
 
-// â”€â”€ Chart wrap HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Chart wrap HTML ───────────────────────────────────────────────────────
 
 function pvaChartWrapHtml() {
     const legend = PVA_CATS.map(c =>
         `<div class="pva-leg-i"><svg width="18" height="7"><line x1="0" y1="3.5" x2="18" y2="3.5" stroke="${c.color}" stroke-width="2" stroke-dasharray="5 2"/></svg>${c.short}</div>`
     ).join('');
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Cumulative trend Â· plan vs actual Â· Jun 2 â†’ 12 weeks</div>
+        <div class="pva-eyebrow">Cumulative trend · plan vs actual · Jun 2 → 12 weeks</div>
         <div class="pva-chart-card">
             <div class="pva-chart-hdr">
-                <span class="pva-chart-ttl">All 7 categories Â· cumulative rollout</span>
-                <span class="pva-chart-hint">dashed = plan Â· solid + dots = actual (GSheet data)</span>
+                <span class="pva-chart-ttl">All 7 categories · cumulative rollout</span>
+                <span class="pva-chart-hint">dashed = plan · solid + dots = actual (GSheet data)</span>
             </div>
             <div class="pva-legend-row">${legend}</div>
             <canvas id="pva-chart"></canvas>
             <div class="pva-chart-note">
                 <span>- - - dashed = plan target (12-week curve)</span>
-                <span>â€”â— solid = weekly actual completions</span>
+                <span>—● solid = weekly actual completions</span>
             </div>
         </div>
     </div>`;
 }
 
-// â”€â”€ Chart draw â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Chart draw ────────────────────────────────────────────────────────────
 
 function pvaDrawChart(plans, locActuals) {
     const cv = document.getElementById('pva-chart');
@@ -8772,7 +8772,7 @@ function pvaDrawChart(plans, locActuals) {
     });
 }
 
-// â”€â”€ Root Cause Analysis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Root Cause Analysis ───────────────────────────────────────────────────
 
 function pvaRcaSectionHtml(plans, todayStr) {
     const delayEntries = plans.filter(p => p.date <= todayStr && p.root_cause_type && p.notes);
@@ -8790,11 +8790,11 @@ function pvaRcaSectionHtml(plans, todayStr) {
     });
 
     const meta = {
-        Weather:    {cls:'pva-t-wx',  emoji:'ðŸŒ§', bg:'#e0f2fe', ins:'Pre-monsoon conditions causing outdoor work halts. Front-load covered-site work to mornings.'},
-        Regulatory: {cls:'pva-t-reg', emoji:'ðŸ“‹', bg:'#fef3c7', ins:'Approvals and inspections are blocking progress. Proactive BDO escalation needed.'},
-        Contractor: {cls:'pva-t-con', emoji:'ðŸ‘·', bg:'#ede9fe', ins:'Vendor availability bottleneck. Add backup contractors to remove single-vendor dependency.'},
-        ISP:        {cls:'pva-t-isp', emoji:'ðŸ“¡', bg:'#fce7f3', ins:'Last-mile fiber gaps blocking internet â€” cascades to machine install. Explore alternate ISPs.'},
-        Resource:   {cls:'pva-t-res', emoji:'ðŸ”§', bg:'#f3f4f6', ins:'Internal capacity/material constraint. Review crew allocation and supply chain.'},
+        Weather:    {cls:'pva-t-wx',  emoji:'🌧', bg:'#e0f2fe', ins:'Pre-monsoon conditions causing outdoor work halts. Front-load covered-site work to mornings.'},
+        Regulatory: {cls:'pva-t-reg', emoji:'📋', bg:'#fef3c7', ins:'Approvals and inspections are blocking progress. Proactive BDO escalation needed.'},
+        Contractor: {cls:'pva-t-con', emoji:'👷', bg:'#ede9fe', ins:'Vendor availability bottleneck. Add backup contractors to remove single-vendor dependency.'},
+        ISP:        {cls:'pva-t-isp', emoji:'📡', bg:'#fce7f3', ins:'Last-mile fiber gaps blocking internet — cascades to machine install. Explore alternate ISPs.'},
+        Resource:   {cls:'pva-t-res', emoji:'🔧', bg:'#f3f4f6', ins:'Internal capacity/material constraint. Review crew allocation and supply chain.'},
     };
 
     const sevenDaysAgo = new Date(Date.now() - 7*86400000).toISOString().split('T')[0];
@@ -8809,7 +8809,7 @@ function pvaRcaSectionHtml(plans, todayStr) {
         const latest = data.notes[data.notes.length-1] || '';
         return `<div class="pva-ins-row">
             <div class="pva-ins-icon" style="background:${m.bg}">${m.emoji}</div>
-            <div class="pva-ins-text"><b>${type} (${data.count}Ã— logged)</b> â€” ${m.ins}
+            <div class="pva-ins-text"><b>${type} (${data.count}× logged)</b> — ${m.ins}
                 ${latest ? `<div style="margin-top:3px;color:var(--muted);font-size:11px">"${latest}"</div>` : ''}
             </div>
         </div>`;
@@ -8821,21 +8821,21 @@ function pvaRcaSectionHtml(plans, todayStr) {
         tblRows += `<tr>
             <td style="text-align:left"><span class="pva-type-badge ${m.cls}">${type}</span></td>
             <td style="font-weight:800;color:#dc2626">${data.count}d</td>
-            <td style="text-align:left;font-size:10px;color:var(--text2);line-height:1.4">${data.notes.slice(-2).join(' Â· ')}</td>
+            <td style="text-align:left;font-size:10px;color:var(--text2);line-height:1.4">${data.notes.slice(-2).join(' · ')}</td>
         </tr>`;
     });
 
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Root Cause Analysis Â· why we're behind â€” from Remarks column</div>
+        <div class="pva-eyebrow">Root Cause Analysis · why we're behind — from Remarks column</div>
         <div class="pva-rca-grid">${statsHtml}</div>
         <div class="pva-rca-insights">
-            <div class="pva-ins-title">Key Insights â€” derived from Remarks</div>
+            <div class="pva-ins-title">Key Insights — derived from Remarks</div>
             ${insightsHtml}
         </div>
         <div class="pva-tbl-card">
             <div class="pva-t-title">
                 <span class="pva-t-title-main">Delay Root Causes</span>
-                <span class="pva-t-title-sub">Grouped by type Â· from Remarks column Â· sorted by frequency</span>
+                <span class="pva-t-title-sub">Grouped by type · from Remarks column · sorted by frequency</span>
             </div>
             <div class="pva-tbl-scroll"><table class="pva-tbl">
                 <thead><tr>
@@ -8849,7 +8849,7 @@ function pvaRcaSectionHtml(plans, todayStr) {
     </div>`;
 }
 
-// â”€â”€ Plan entry form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Plan entry form ───────────────────────────────────────────────────────
 
 function pvaPlanFormHtml(todayStr) {
     const d = new Date(todayStr + 'T00:00:00');
@@ -8887,7 +8887,7 @@ function pvaPlanFormHtml(todayStr) {
                 <div style="flex:1;min-width:160px">
                     <label for="pva-f-rct" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Root Cause <span style="font-weight:400;color:var(--muted)">(if behind plan)</span></label>
                     <select id="pva-f-rct" style="width:100%;height:44px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)">
-                        <option value="">â€” None / On track â€”</option>
+                        <option value="">— None / On track —</option>
                         <option value="Weather">Weather</option>
                         <option value="Regulatory">Regulatory</option>
                         <option value="Contractor">Contractor</option>
@@ -8899,7 +8899,7 @@ function pvaPlanFormHtml(todayStr) {
                     <label for="pva-f-notes" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Remarks</label>
                     <input type="text" id="pva-f-notes"
                         style="width:100%;height:44px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)"
-                        placeholder="Why any category is behind â€” be specific: cause, location, who acts">
+                        placeholder="Why any category is behind — be specific: cause, location, who acts">
                 </div>
             </div>
             <button id="pva-save-btn"
@@ -8910,7 +8910,7 @@ function pvaPlanFormHtml(todayStr) {
     </div>`;
 }
 
-// â”€â”€ Form wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Form wiring ───────────────────────────────────────────────────────────
 
 function pvaWireForm(locs) {
     const dateInp = document.getElementById('pva-f-date');
@@ -8941,7 +8941,7 @@ function pvaWireForm(locs) {
         const d = dateInp.value;
         if (!d) { showToast('Pick a date first'); return; }
         const btn = document.getElementById('pva-save-btn');
-        if (btn) { btn.disabled = true; btn.textContent = 'Savingâ€¦'; }
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
         const entry = { date: d };
         PVA_CATS.forEach(c => {
             entry[c.key+'_plan']   = parseInt(document.getElementById(`pva-fp-${c.key}`)?.value) || 0;
@@ -8955,11 +8955,11 @@ function pvaWireForm(locs) {
     });
 }
 
-// â”€â”€ GSheet guide accordion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── GSheet guide accordion ────────────────────────────────────────────────
 
 function pvaGuideSectionHtml() {
     const rows = [
-        ['A','Date','Date','YYYY-MM-DD â€” one row per day (skip zero-activity days)',false],
+        ['A','Date','Date','YYYY-MM-DD — one row per day (skip zero-activity days)',false],
         ['B','Week','Number','Auto: =WEEKNUM(A2,2)-WEEKNUM(DATE(2026,6,2),2)+1',false],
         ['C','Civil_Plan','Number','Civil completions planned today',true],
         ['D','Civil_Actual','Number','Civil works actually completed today',false],
@@ -8975,8 +8975,8 @@ function pvaGuideSectionHtml() {
         ['N','CCTV_Actual','Number','CCTV done today',false],
         ['O','Live_Plan','Number','Machines going live today (target)',true],
         ['P','Live_Actual','Number','Machines that went live today',false],
-        ['Q','Root_Cause_Type','Dropdown','Weather Â· Regulatory Â· Contractor Â· ISP Â· Resource â€” or blank',true],
-        ['R','Remarks','Text','Why any category is behind â€” specific: cause, location, who acts',false],
+        ['Q','Root_Cause_Type','Dropdown','Weather · Regulatory · Contractor · ISP · Resource — or blank',true],
+        ['R','Remarks','Text','Why any category is behind — specific: cause, location, who acts',false],
     ].map(([col,name,type,desc,sep]) =>
         `<tr ${sep?'class="cat-grp"':''}>
             <td>${col}</td><td>${name}</td><td>${type}</td><td>${desc}</td>
@@ -8984,12 +8984,12 @@ function pvaGuideSectionHtml() {
     ).join('');
 
     return `<div class="pva-section">
-        <div class="pva-eyebrow">GSheet guide Â· 18-column single-tab setup</div>
+        <div class="pva-eyebrow">GSheet guide · 18-column single-tab setup</div>
         <div class="pva-guide-card">
             <div class="pva-guide-hdr" onclick="document.getElementById('pva-guide-body').classList.toggle('open')">
                 <div>
-                    <div class="pva-g-title">Tab: <code style="background:#e8f5f1;padding:1px 6px;border-radius:4px;font-size:12px;color:#1e6b5c">RVM-PvA</code> â€” 18 columns Aâ€“R Â· powers DoD Â· WoW Â· RCA</div>
-                    <div class="pva-g-sub">One row per day Â· enter plan targets morning Â· actual completions evening Â· remarks when behind</div>
+                    <div class="pva-g-title">Tab: <code style="background:#e8f5f1;padding:1px 6px;border-radius:4px;font-size:12px;color:#1e6b5c">RVM-PvA</code> — 18 columns A–R · powers DoD · WoW · RCA</div>
+                    <div class="pva-g-sub">One row per day · enter plan targets morning · actual completions evening · remarks when behind</div>
                 </div>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
@@ -8998,10 +8998,10 @@ function pvaGuideSectionHtml() {
                     <table class="pva-schema-t">${rows}</table>
                 </div>
                 <div class="pva-formula-box">
-                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Day-on-Day â†’</span>filter Date â‰¤ today Â· one row per day Â· P vs A per category</div>
-                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Week-on-Week â†’</span>SUMIF on col B (Week) Â· sum Plan cols + Actual cols per week</div>
-                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Cumulative trend â†’</span>running SUM of Actual cols from row 2 â†’ current date row</div>
-                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">RCA table â†’</span>GROUP BY col Q (Root_Cause_Type) Â· latest Remarks per type</div>
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Day-on-Day →</span>filter Date ≤ today · one row per day · P vs A per category</div>
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Week-on-Week →</span>SUMIF on col B (Week) · sum Plan cols + Actual cols per week</div>
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Cumulative trend →</span>running SUM of Actual cols from row 2 → current date row</div>
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">RCA table →</span>GROUP BY col Q (Root_Cause_Type) · latest Remarks per type</div>
                 </div>
                 <div class="pva-guide-note"><b>Week auto-formula (col B):</b> <code style="background:#e8f5f1;padding:1px 5px;border-radius:4px;font-size:11px;color:#1e6b5c">=WEEKNUM(A2,2)-WEEKNUM(DATE(2026,6,2),2)+1</code></div>
             </div>
