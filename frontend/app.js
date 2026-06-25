@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Goa DRS Field Update Tool - Frontend Application
  */
 
 // Configuration
 const API_BASE = '/api';  // Will be proxied or same origin
 
-// ── Analytics Tracking ──────────────────────────────────────────────────────
+// â”€â”€ Analytics Tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const _ANALYTICS_SID = (() => {
     let sid = sessionStorage.getItem('drs_sid');
     if (!sid) {
@@ -24,7 +24,7 @@ function trackEvent(event_type, page, element = '', value = '') {
     }).catch(() => {});
 }
 
-// Scroll depth tracking — fires at 25/50/75/100% milestones, once per page per session
+// Scroll depth tracking â€” fires at 25/50/75/100% milestones, once per page per session
 let _scrollPage = '';
 let _tabEnterTime = Date.now();
 const _scrollFired = new Set();
@@ -40,7 +40,7 @@ window.addEventListener('scroll', () => {
         }
     }
 }, { passive: true });
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SHEET_ID = '1gy0xNL7-ayFfVjf3ETvi8qN3bWytNGbRZg68nShnkEo';
 
 // Stage definitions (15 milestones - follow-ups tracked separately via Meetings)
@@ -62,7 +62,7 @@ const STAGES = [
     { value: 'device_installed', label: 'Device Installed', number: 15 },
 ];
 
-// ULB identification — blocks "NORTH" and "SOUTH" are ULBs, everything else is a VP
+// ULB identification â€” blocks "NORTH" and "SOUTH" are ULBs, everything else is a VP
 const ULB_BLOCKS = ['NORTH', 'SOUTH'];
 const isULB = (vp) => ULB_BLOCKS.includes(vp.block);
 
@@ -97,9 +97,9 @@ const STAGE_DURATION_MAP = {
 // Build a comprehensive stage-to-number lookup (handles enum values, labels, and legacy)
 const STAGE_NUMBER_MAP = {};
 STAGES.forEach(s => {
-    STAGE_NUMBER_MAP[s.value] = s.number;                    // email_sent → 7
-    STAGE_NUMBER_MAP[s.label.toLowerCase()] = s.number;      // email sent → 7
-    STAGE_NUMBER_MAP[s.label] = s.number;                    // Email Sent → 7
+    STAGE_NUMBER_MAP[s.value] = s.number;                    // email_sent â†’ 7
+    STAGE_NUMBER_MAP[s.label.toLowerCase()] = s.number;      // email sent â†’ 7
+    STAGE_NUMBER_MAP[s.label] = s.number;                    // Email Sent â†’ 7
 });
 // Legacy mappings
 STAGE_NUMBER_MAP['meeting_scheduled'] = 2;
@@ -126,7 +126,7 @@ const BDO_STAGES = [
     { value: 'communication_sent', label: 'Communication Sent to VPs', number: 4 },
 ];
 
-// URL route ↔ tab mapping
+// URL route â†” tab mapping
 const ROUTE_TO_TAB = {
     'VPs': 'vps', 'ULBs': 'ulbs', 'Dashboard': 'dashboard',
     'Meetings': 'meetings', 'Escalation': 'escalation',
@@ -234,7 +234,7 @@ async function checkAuth() {
             return true;
         }
     } catch (e) {
-        // Network error — show login
+        // Network error â€” show login
     }
     showLoginScreen();
     return false;
@@ -323,7 +323,7 @@ async function handleLogout() {
     try {
         await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (e) {
-        // Ignore — clear local state anyway
+        // Ignore â€” clear local state anyway
     }
     currentUser = null;
     showLoginScreen();
@@ -449,7 +449,7 @@ function getTabFromURL() {
 
 function setupTabs() {
     document.querySelectorAll('.nav-item').forEach(tab => {
-        // Skip the More button — it has its own onclick handler
+        // Skip the More button â€” it has its own onclick handler
         if (tab.classList.contains('more-btn')) return;
 
         tab.addEventListener('click', async () => {
@@ -463,7 +463,7 @@ function setupTabs() {
         if (tab) {
             switchToTab(tab);
         } else {
-            // Root URL — go to default tab
+            // Root URL â€” go to default tab
             const firstAllowed = (currentUser && currentUser.allowed_tabs) ? currentUser.allowed_tabs[0] : 'vps';
             switchToTab(firstAllowed);
         }
@@ -510,7 +510,7 @@ async function switchToTab(tabId) {
     // Save active tab for persistence across refresh
     localStorage.setItem('activeTab', tabId);
 
-    // Update URL (pushState) — skip if already at the right URL
+    // Update URL (pushState) â€” skip if already at the right URL
     const route = TAB_TO_ROUTE[tabId] || tabId;
     const targetPath = '/' + route;
     if (window.location.pathname !== targetPath) {
@@ -766,7 +766,7 @@ function renderMasterVPList() {
     const blockFilter = document.getElementById('block-filter')?.value || '';
     const stageFilter = document.getElementById('stage-filter')?.value || '';
 
-    // Filter VPs (exclude ULBs — they have their own tab)
+    // Filter VPs (exclude ULBs â€” they have their own tab)
     const filtered = vpData.filter(vp => !isULB(vp)).filter(vp => {
         const matchesSearch = !searchTerm ||
             vp.vpName.toLowerCase().includes(searchTerm) ||
@@ -977,7 +977,7 @@ function renderULBMasterList() {
 }
 
 /**
- * Select a ULB from the ULB master list — reuses detail panel
+ * Select a ULB from the ULB master list â€” reuses detail panel
  */
 function selectULBFromMaster(vpCode) {
     const vp = vpData.find(v => v.vpCode === vpCode);
@@ -1363,10 +1363,10 @@ function renderConversationHistory(vp) {
  */
 function getCommentIcon(type) {
     switch (type) {
-        case 'direct': return '💬';
-        case 'meeting': return '📅';
-        case 'legacy': return '📜';
-        default: return '💬';
+        case 'direct': return 'ðŸ’¬';
+        case 'meeting': return 'ðŸ“…';
+        case 'legacy': return 'ðŸ“œ';
+        default: return 'ðŸ’¬';
     }
 }
 
@@ -1544,7 +1544,7 @@ async function submitUpdate() {
         ];
 
         // Try to update via backend API
-        trackEvent('click', 'vps', `Stage: ${currentVP.vpName||currentVP.vpCode}`, `${currentVP.block} → ${newStage}`);
+        trackEvent('click', 'vps', `Stage: ${currentVP.vpName||currentVP.vpCode}`, `${currentVP.block} â†’ ${newStage}`);
         const response = await fetch(`${API_BASE}/update/stage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1757,7 +1757,7 @@ function renderDashHoReCa(container, data) {
         recentHtml += `<div class="hcrm-recent-item">
             <span class="hcrm-recent-name">${escapeHtml(name)}</span>
             <span class="hcrm-card-status ${statusClass}">${escapeHtml(status || 'No Status')}</span>
-            <div class="hcrm-recent-meta">${escapeHtml(updatedBy)}${timeAgo ? ' · ' + timeAgo : ''}</div>
+            <div class="hcrm-recent-meta">${escapeHtml(updatedBy)}${timeAgo ? ' Â· ' + timeAgo : ''}</div>
         </div>`;
     });
     recentHtml += '</div></div>';
@@ -1827,7 +1827,7 @@ function renderTodayActivity() {
     vpUpdatesToday.forEach(vp => {
         activities.push({
             type: 'vp_update',
-            icon: '📝',
+            icon: 'ðŸ“',
             title: `${vp.vpName}`,
             subtitle: `Stage: ${getStageLabel(vp.currentStage)}`,
             block: vp.block,
@@ -1841,7 +1841,7 @@ function renderTodayActivity() {
     meetingsToday.forEach(m => {
         activities.push({
             type: 'meeting',
-            icon: m.status === 'completed' ? '✅' : '📅',
+            icon: m.status === 'completed' ? 'âœ…' : 'ðŸ“…',
             title: `${m.vpName}`,
             subtitle: `${m.eventTime || '10:00'} - ${getEventTypeLabel(m.eventType)}`,
             block: m.block,
@@ -1863,22 +1863,22 @@ function renderTodayActivity() {
     if (statsContainer) {
         statsContainer.innerHTML = `
             <div class="today-stat-card">
-                <span class="today-stat-icon">📝</span>
+                <span class="today-stat-icon">ðŸ“</span>
                 <span class="today-stat-value">${vpCount}</span>
                 <span class="today-stat-label">VPs Updated</span>
             </div>
             <div class="today-stat-card">
-                <span class="today-stat-icon">📅</span>
+                <span class="today-stat-icon">ðŸ“…</span>
                 <span class="today-stat-value">${meetingCount}</span>
                 <span class="today-stat-label">Meetings Today</span>
             </div>
             <div class="today-stat-card">
-                <span class="today-stat-icon">✅</span>
+                <span class="today-stat-icon">âœ…</span>
                 <span class="today-stat-value">${completedCount}</span>
                 <span class="today-stat-label">Completed</span>
             </div>
             <div class="today-stat-card">
-                <span class="today-stat-icon">📊</span>
+                <span class="today-stat-icon">ðŸ“Š</span>
                 <span class="today-stat-value">${activities.length}</span>
                 <span class="today-stat-label">Total Activities</span>
             </div>
@@ -1985,7 +1985,7 @@ function loadProgressDashboard() {
 }
 
 /**
- * Render holistic funnel — single horizontal pipeline with overlay sub-labels
+ * Render holistic funnel â€” single horizontal pipeline with overlay sub-labels
  * on key blocks to show the panch/direct split without a separate branch section.
  */
 function renderHolisticFunnel(stats) {
@@ -1994,7 +1994,7 @@ function renderHolisticFunnel(stats) {
 
     // Panch branch stats (stages 4+5)
     const inPanch = stats.atPanchScheduled + stats.atPanchDone;
-    // VPs in panch pipeline — track codes to avoid double-counting with F/U
+    // VPs in panch pipeline â€” track codes to avoid double-counting with F/U
     const vpOnly = vpData.filter(vp => !isULB(vp));
     const vpCodesInPanch = new Set(
         vpOnly.filter(vp => resolveStageNumber(vp) === 4 || resolveStageNumber(vp) === 5)
@@ -2021,7 +2021,7 @@ function renderHolisticFunnel(stats) {
     const meetingSubs = [];
     if (inPanch > 0) meetingSubs.push(`${inPanch} Panch sched`);
     meetingSubs.push(`${followUpCount} F/U sched`);
-    const meetingSub = meetingSubs.join(' · ');
+    const meetingSub = meetingSubs.join(' Â· ');
 
     // For Location OK breakdown: try to infer how many came via panch
     const vpCodesAt6Plus = new Set(
@@ -2041,29 +2041,29 @@ function renderHolisticFunnel(stats) {
     let locationSub = '';
     if (stats.locationsFinalized > 0) {
         if (viaPanchCount > 0) {
-            locationSub = `Direct: ${viaDirectCount} · Panch: ${viaPanchCount}`;
+            locationSub = `Direct: ${viaDirectCount} Â· Panch: ${viaPanchCount}`;
         } else {
             locationSub = inPanch > 0 ? `${inPanch} still in Panch` : '';
         }
     }
 
     const row1 = [
-        { label: 'Blocks', value: stats.totalBlocks, icon: '🏛️', cls: 'step-blocks' },
-        { label: 'Blocks Unlocked', value: stats.blocksUnlocked, icon: '🔓', cls: 'step-unlocked' },
-        { label: 'VPs Accessible', value: stats.vpsUnlocked, icon: '📍', cls: 'step-vps' },
-        { label: 'Contacted', value: stats.contacted, icon: '📞', cls: 'step-contacted' },
-        { label: '1st Meeting', value: stats.meetingsDone, icon: '🤝', cls: 'step-meetings',
+        { label: 'Blocks', value: stats.totalBlocks, icon: 'ðŸ›ï¸', cls: 'step-blocks' },
+        { label: 'Blocks Unlocked', value: stats.blocksUnlocked, icon: 'ðŸ”“', cls: 'step-unlocked' },
+        { label: 'VPs Accessible', value: stats.vpsUnlocked, icon: 'ðŸ“', cls: 'step-vps' },
+        { label: 'Contacted', value: stats.contacted, icon: 'ðŸ“ž', cls: 'step-contacted' },
+        { label: '1st Meeting', value: stats.meetingsDone, icon: 'ðŸ¤', cls: 'step-meetings',
           sub: meetingSub },
     ];
 
     const row2 = [
-        { label: 'Location OK', value: stats.locationsFinalized, icon: '📍', cls: 'step-location',
+        { label: 'Location OK', value: stats.locationsFinalized, icon: 'ðŸ“', cls: 'step-location',
           sub: locationSub },
-        { label: 'Email Sent', value: stats.emailSent, icon: '📧', cls: 'step-email' },
-        { label: 'NOC Received', value: stats.nocReceived, icon: '📄', cls: 'step-noc' },
-        { label: 'Agr Sent', value: stats.agreementSent, icon: '📨', cls: 'step-agrsent' },
-        { label: 'Agr Signed', value: stats.agreementSigned, icon: '✍️', cls: 'step-agreement' },
-        { label: 'Installed', value: stats.devicesInstalled, icon: '✅', cls: 'step-installed' },
+        { label: 'Email Sent', value: stats.emailSent, icon: 'ðŸ“§', cls: 'step-email' },
+        { label: 'NOC Received', value: stats.nocReceived, icon: 'ðŸ“„', cls: 'step-noc' },
+        { label: 'Agr Sent', value: stats.agreementSent, icon: 'ðŸ“¨', cls: 'step-agrsent' },
+        { label: 'Agr Signed', value: stats.agreementSigned, icon: 'âœï¸', cls: 'step-agreement' },
+        { label: 'Installed', value: stats.devicesInstalled, icon: 'âœ…', cls: 'step-installed' },
     ];
 
     const renderStep = (step, total) => {
@@ -2118,14 +2118,14 @@ function renderULBFunnel() {
     const installed = ulbData.filter(vp => resolveStageNumber(vp) >= 15).length;
 
     const steps = [
-        { label: 'Total ULBs', value: total, icon: '🏢', cls: 'step-blocks' },
-        { label: 'Contacted', value: contacted, icon: '📞', cls: 'step-contacted' },
-        { label: '1st Meeting', value: meetingsDone, icon: '🤝', cls: 'step-meetings' },
-        { label: 'Location OK', value: locationsFinalized, icon: '📍', cls: 'step-location' },
-        { label: 'Email Sent', value: emailSent, icon: '📧', cls: 'step-email' },
-        { label: 'NOC Received', value: nocReceived, icon: '📄', cls: 'step-noc' },
-        { label: 'Agreement', value: agreementSigned, icon: '✍️', cls: 'step-agreement' },
-        { label: 'Installed', value: installed, icon: '✅', cls: 'step-installed' },
+        { label: 'Total ULBs', value: total, icon: 'ðŸ¢', cls: 'step-blocks' },
+        { label: 'Contacted', value: contacted, icon: 'ðŸ“ž', cls: 'step-contacted' },
+        { label: '1st Meeting', value: meetingsDone, icon: 'ðŸ¤', cls: 'step-meetings' },
+        { label: 'Location OK', value: locationsFinalized, icon: 'ðŸ“', cls: 'step-location' },
+        { label: 'Email Sent', value: emailSent, icon: 'ðŸ“§', cls: 'step-email' },
+        { label: 'NOC Received', value: nocReceived, icon: 'ðŸ“„', cls: 'step-noc' },
+        { label: 'Agreement', value: agreementSigned, icon: 'âœï¸', cls: 'step-agreement' },
+        { label: 'Installed', value: installed, icon: 'âœ…', cls: 'step-installed' },
     ];
 
     const renderStep = (step) => `
@@ -2135,7 +2135,7 @@ function renderULBFunnel() {
             <div class="funnel-step-label">${step.label}</div>
         </div>`;
 
-    const renderArrow = () => `<div class="funnel-arrow">→</div>`;
+    const renderArrow = () => `<div class="funnel-arrow">â†’</div>`;
 
     funnelContainer.innerHTML = `
         <div class="funnel-flow">${steps.map((step, i) => renderStep(step) + (i < steps.length - 1 ? renderArrow() : '')).join('')}</div>
@@ -2144,7 +2144,7 @@ function renderULBFunnel() {
 
 /**
  * Render Machine Installation Status section in the Progress dashboard.
- * Data source: vpData (DRS-Tracker) — installDate, machineLive, agreedRvms, stage fields.
+ * Data source: vpData (DRS-Tracker) â€” installDate, machineLive, agreedRvms, stage fields.
  */
 function renderMachineInstalls() {
     const el = document.getElementById('machine-install-section');
@@ -2340,7 +2340,7 @@ function renderBlockProgress() {
         const progressClass = getProgressClass(stats.percent);
         const badge = getBadge(stats.percent);
         const rankClass = index < 3 ? `rank-${index + 1}` : '';
-        const rankBadge = index < 3 ? `<span class="block-rank">${index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}</span>` : '';
+        const rankBadge = index < 3 ? `<span class="block-rank">${index === 0 ? 'ðŸ¥‡' : index === 1 ? 'ðŸ¥ˆ' : 'ðŸ¥‰'}</span>` : '';
         const filterCount = filterValue ? `<span class="filter-count">${stats.filtered} at stage</span>` : '';
 
         return `
@@ -2419,7 +2419,7 @@ function renderModalVpList(vps) {
                     <div class="vp-modal-name">${vp.vpName}</div>
                     <div class="vp-modal-stage">${sn}. ${stageLabel}</div>
                 </div>
-                <span class="vp-modal-arrow">›</span>
+                <span class="vp-modal-arrow">â€º</span>
             </div>
         `;
     }).join('') || '<div style="text-align: center; color: var(--gray-500); padding: 20px;">No VPs found</div>';
@@ -2480,12 +2480,12 @@ function getProgressClass(percent) {
 }
 
 function getBadge(percent) {
-    if (percent >= 100) return '🏆';
-    if (percent >= 75) return '🔥';
-    if (percent >= 50) return '💪';
-    if (percent >= 25) return '🚀';
-    if (percent > 0) return '✨';
-    return '💤';
+    if (percent >= 100) return 'ðŸ†';
+    if (percent >= 75) return 'ðŸ”¥';
+    if (percent >= 50) return 'ðŸ’ª';
+    if (percent >= 25) return 'ðŸš€';
+    if (percent > 0) return 'âœ¨';
+    return 'ðŸ’¤';
 }
 
 function loadRvmDashboard() {
@@ -2542,7 +2542,7 @@ function loadRvmDashboard() {
 
     document.getElementById('rvm-block-chart').innerHTML = rvmBlockHtml;
 
-    // Machine deployment map — uses VP/ULB GPS data
+    // Machine deployment map â€” uses VP/ULB GPS data
     loadLeaflet(() => initRvmDeployMap());
 }
 
@@ -2572,7 +2572,7 @@ function initRvmDeployMap() {
                 radius: 9, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.9
             }).addTo(map);
             marker.bindPopup(`<div style="min-width:180px;font-size:13px;line-height:1.8">
-                <div style="font-size:15px;font-weight:700;margin-bottom:2px">${vp.name || vp.vpName || '—'}</div>
+                <div style="font-size:15px;font-weight:700;margin-bottom:2px">${vp.name || vp.vpName || 'â€”'}</div>
                 <div style="color:#888;font-size:12px;margin-bottom:6px">${vp.block || ''}</div>
                 <div style="padding:4px 8px;border-radius:5px;background:${color}18;color:${color};font-weight:600;font-size:12px">${label}</div>
             </div>`, { maxWidth: 240 });
@@ -3605,7 +3605,7 @@ async function renderNeedsScheduling() {
             return `
                 <div class="needs-scheduling-card">
                     <div class="nsc-name" title="${name}">${name}</div>
-                    <div class="nsc-meta">${type}${city ? ' · ' + city : ''}</div>
+                    <div class="nsc-meta">${type}${city ? ' Â· ' + city : ''}</div>
                     <button class="btn-schedule-nudge" onclick="openHorecaMeetingFromNudge('${placeId}', '${name.replace(/'/g, "\\'")}')">Schedule</button>
                 </div>
             `;
@@ -4372,13 +4372,13 @@ function renderTodayActivity() {
  */
 function getActivityIcon(type) {
     const icons = {
-        'stage_update': '📊',
-        'meeting_created': '📅',
-        'comment': '💬',
-        'note': '📝',
-        'meeting': '🏛️'
+        'stage_update': 'ðŸ“Š',
+        'meeting_created': 'ðŸ“…',
+        'comment': 'ðŸ’¬',
+        'note': 'ðŸ“',
+        'meeting': 'ðŸ›ï¸'
     };
-    return icons[type] || '📌';
+    return icons[type] || 'ðŸ“Œ';
 }
 
 // Make meeting functions globally accessible
@@ -4440,9 +4440,9 @@ function countWorkingDays(startDate, endDate) {
  * Get severity level based on working days stuck
  */
 function getEscalationSeverity(workingDays) {
-    if (workingDays > 3) return { level: 'red', label: `${workingDays}d`, icon: '🔴' };
-    if (workingDays === 3) return { level: 'orange', label: '3d', icon: '🟠' };
-    if (workingDays === 2) return { level: 'yellow', label: '2d', icon: '🟡' };
+    if (workingDays > 3) return { level: 'red', label: `${workingDays}d`, icon: 'ðŸ”´' };
+    if (workingDays === 3) return { level: 'orange', label: '3d', icon: 'ðŸŸ ' };
+    if (workingDays === 2) return { level: 'yellow', label: '2d', icon: 'ðŸŸ¡' };
     return null; // No escalation needed
 }
 
@@ -4471,7 +4471,7 @@ function renderEscalationTab() {
         const config = ESCALATION_STAGES[stage];
         if (!config) return; // Stage not tracked for escalation
 
-        // Skip VPs with an UPCOMING meeting — they are being actively managed.
+        // Skip VPs with an UPCOMING meeting â€” they are being actively managed.
         // Missed meetings (past date) don't count.
         if (vpsWithUpcomingFollowUp.has(vp.vpCode)) return;
 
@@ -4493,7 +4493,7 @@ function renderEscalationTab() {
 
         let reason = '';
         if (resolveStageNumber(vp) === 3) {
-            // First Meeting Done — why stuck?
+            // First Meeting Done â€” why stuck?
             if (missedMeetings.length > 0) {
                 const lastMissed = missedMeetings.sort((a, b) => b.eventDate.localeCompare(a.eventDate))[0];
                 const missedDate = new Date(lastMissed.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
@@ -4538,7 +4538,7 @@ function renderEscalationTab() {
         const yellowCount = escalations.filter(e => e.severity.level === 'yellow').length;
         summaryEl.innerHTML = `${escalations.length} VP${escalations.length !== 1 ? 's' : ''} need attention`;
         if (escalations.length > 0) {
-            summaryEl.innerHTML += ` <span class="escalation-counts">🔴 ${redCount} 🟠 ${orangeCount} 🟡 ${yellowCount}</span>`;
+            summaryEl.innerHTML += ` <span class="escalation-counts">ðŸ”´ ${redCount} ðŸŸ  ${orangeCount} ðŸŸ¡ ${yellowCount}</span>`;
         }
     }
 
@@ -4557,7 +4557,7 @@ function renderEscalationTab() {
     if (filtered.length === 0) {
         container.innerHTML = `
             <div class="empty-state" style="padding: 40px 20px; text-align: center;">
-                <p style="font-size: 32px; margin-bottom: 8px;">✅</p>
+                <p style="font-size: 32px; margin-bottom: 8px;">âœ…</p>
                 <p style="color: #64748b;">${escalations.length === 0 ? 'No VPs need escalation right now' : 'No matches for selected filters'}</p>
             </div>
         `;
@@ -4585,11 +4585,11 @@ function renderEscalationTab() {
                 <div class="escalation-history">
                     <span class="history-label">History:</span>
                     ${recent.map(m => {
-                        const mDate = m.eventDate ? new Date(m.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
+                        const mDate = m.eventDate ? new Date(m.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'â€”';
                         const statusCls = m.status === 'completed' ? 'done' : m.status === 'scheduled' && m.eventDate < todayStr ? 'missed' : 'upcoming';
-                        const statusIcon = statusCls === 'done' ? '✓' : statusCls === 'missed' ? '✗' : '◦';
-                        const noteSnippet = m.notes ? m.notes.substring(0, 40) + (m.notes.length > 40 ? '…' : '') : '';
-                        return `<span class="history-item history-${statusCls}">${statusIcon} ${mDate}${noteSnippet ? ' — ' + noteSnippet : ''}</span>`;
+                        const statusIcon = statusCls === 'done' ? 'âœ“' : statusCls === 'missed' ? 'âœ—' : 'â—¦';
+                        const noteSnippet = m.notes ? m.notes.substring(0, 40) + (m.notes.length > 40 ? 'â€¦' : '') : '';
+                        return `<span class="history-item history-${statusCls}">${statusIcon} ${mDate}${noteSnippet ? ' â€” ' + noteSnippet : ''}</span>`;
                     }).join('')}
                 </div>`;
         }
@@ -4778,7 +4778,7 @@ async function loadHoReCaStaticData() {
     }
 }
 
-// ── Leaflet dynamic loading ──
+// â”€â”€ Leaflet dynamic loading â”€â”€
 function loadLeaflet(callback) {
     if (window.L) { callback(); return; }
     const link = document.createElement('link');
@@ -4792,7 +4792,7 @@ function loadLeaflet(callback) {
     document.head.appendChild(script);
 }
 
-// ── Map ──
+// â”€â”€ Map â”€â”€
 function initHoReCaMap() {
     loadLeaflet(() => {
         const map = L.map('horeca-leaflet-map', {
@@ -4818,7 +4818,7 @@ function initHoReCaMap() {
             }
         }).addTo(map);
 
-        // Layer 2: Meso zones (res-7) — colored by density classification
+        // Layer 2: Meso zones (res-7) â€” colored by density classification
         const MESO_COLORS = { HD: '#dc2626', MD: '#f59e0b', LD: '#3b82f6', Dead: '#9ca3af' };
         const MESO_OPACITY = { HD: 0.50, MD: 0.42, LD: 0.35, Dead: 0.20 };
         hrcMesoLayer = L.geoJSON(horecaGeoHex7, {
@@ -4830,7 +4830,7 @@ function initHoReCaMap() {
             },
             onEachFeature: (feature, layer) => {
                 const p = feature.properties;
-                layer.bindTooltip(`${p.name} — ${p.count}`, {
+                layer.bindTooltip(`${p.name} â€” ${p.count}`, {
                     permanent: false,
                     direction: 'center',
                     className: 'horeca-meso-label'
@@ -4849,7 +4849,7 @@ function initHoReCaMap() {
         });
         // Off by default
 
-        // Layer 3: Micro zones (res-8) — blue choropleth
+        // Layer 3: Micro zones (res-8) â€” blue choropleth
         hrcHexLayer = buildHoReCaHexLayer(horecaGeoHex8);
         hrcHexLayer.addTo(map);
 
@@ -5042,10 +5042,10 @@ function updateHoReCaMapStats(zoneCount, pointCount) {
     const total = horecaData ? horecaData.length : 0;
     const visible = pointCount !== undefined ? pointCount : total;
     const zones = zoneCount !== undefined ? zoneCount : (horecaGeoHex8 ? horecaGeoHex8.features.length : 0);
-    el.textContent = `${visible.toLocaleString()} of ${total.toLocaleString()} HoReCas · ${zones} zones`;
+    el.textContent = `${visible.toLocaleString()} of ${total.toLocaleString()} HoReCas Â· ${zones} zones`;
 }
 
-// ── Explorer ──
+// â”€â”€ Explorer â”€â”€
 function populateHoReCaFilters() {
     if (!horecaData) return;
 
@@ -5109,7 +5109,7 @@ function renderHoReCaExplorer() {
 
     // Info line
     const info = document.getElementById('hrc-explorer-info');
-    if (info) info.textContent = `${filtered.length.toLocaleString()} results · Page ${horecaPage} of ${totalPages}`;
+    if (info) info.textContent = `${filtered.length.toLocaleString()} results Â· Page ${horecaPage} of ${totalPages}`;
 
     // Cards
     const grid = document.getElementById('hrc-card-grid');
@@ -5140,7 +5140,7 @@ function renderHoReCaExplorer() {
             <div class="horeca-card-meta">
                 <span class="horeca-badge badge-type">${escapeHtml(r.type)}</span>
                 <span class="horeca-badge ${alcBadgeClass}">${escapeHtml(r.alc)}</span>
-                ${r.rat ? `<span class="horeca-badge badge-rating">${r.rat} ★ (${r.trat})</span>` : ''}
+                ${r.rat ? `<span class="horeca-badge badge-rating">${r.rat} â˜… (${r.trat})</span>` : ''}
                 ${statusBadge}
             </div>
             <div class="horeca-card-details" id="hrc-detail-${idx}">
@@ -5201,16 +5201,16 @@ function escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── Summary ──
+// â”€â”€ Summary â”€â”€
 const QUAD_LABELS = {
-    Q1: 'Q1 — North East (Interior North)',
-    Q2: 'Q2 — North West (Tourist North)',
-    Q3: 'Q3 — South West (Tourist South)',
-    Q4: 'Q4 — South East (Interior South)',
+    Q1: 'Q1 â€” North East (Interior North)',
+    Q2: 'Q2 â€” North West (Tourist North)',
+    Q3: 'Q3 â€” South West (Tourist South)',
+    Q4: 'Q4 â€” South East (Interior South)',
 };
 const QUAD_SHORT = { Q1: 'NE', Q2: 'NW', Q3: 'SW', Q4: 'SE' };
 const DENSITY_ORDER = ['HD', 'MD', 'LD', 'Dead'];
-const DENSITY_LABELS = { HD: 'High Density (50+)', MD: 'Medium Density (10–49)', LD: 'Low Density (4–9)', Dead: 'Dead (≤3)' };
+const DENSITY_LABELS = { HD: 'High Density (50+)', MD: 'Medium Density (10â€“49)', LD: 'Low Density (4â€“9)', Dead: 'Dead (â‰¤3)' };
 const DENSITY_COLORS = { HD: '#dc2626', MD: '#f59e0b', LD: '#3b82f6', Dead: '#9ca3af' };
 
 function renderHoReCaSummary() {
@@ -5244,7 +5244,7 @@ function renderHoReCaSummary() {
         return `<tr style="background:var(--gray-50);font-weight:700;border-top:2px solid var(--gray-300)"><td>Total</td><td class="num">${zones.length}</td><td class="num">${recs.length.toLocaleString()}</td><td class="num">100%</td><td class="num">${tAlc.toLocaleString()}</td><td class="num">${(recs.length - tAlc).toLocaleString()}</td><td class="num">${tAvg}</td></tr>`;
     };
 
-    // ── Top stat cards ──
+    // â”€â”€ Top stat cards â”€â”€
     let html = `
     <div class="horeca-stat-cards">
         <div class="horeca-stat-card"><div class="stat-value">${total.toLocaleString()}</div><div class="stat-label">Total HoReCas</div></div>
@@ -5254,9 +5254,9 @@ function renderHoReCaSummary() {
         <div class="horeca-stat-card"><div class="stat-value">${avgPriority}</div><div class="stat-label">Avg Priority</div></div>
     </div>`;
 
-    // ── 1. Quadrant Overview (always open) ──
+    // â”€â”€ 1. Quadrant Overview (always open) â”€â”€
     html += `<div class="horeca-summary-table-wrapper"><h3>Quadrant Overview</h3>
-        <p class="hrc-table-note">Goa split into 4 quadrants — NH66 highway (lng 73.90°) East–West · District boundary (lat 15.40°) North–South</p>
+        <p class="hrc-table-note">Goa split into 4 quadrants â€” NH66 highway (lng 73.90Â°) Eastâ€“West Â· District boundary (lat 15.40Â°) Northâ€“South</p>
         <table class="horeca-summary-table"><thead><tr>
             <th>Quadrant</th><th class="num">Zones</th><th class="num">Active</th><th class="num">HoReCas</th><th class="num">Alcohol</th><th class="num">Non-Alc</th><th class="num">Avg Priority</th>
         </tr></thead><tbody>`;
@@ -5273,9 +5273,9 @@ function renderHoReCaSummary() {
     }
     html += `</tbody></table></div>`;
 
-    // ── 2. Density Classification — Goa Level ──
-    html += `<div class="horeca-summary-table-wrapper"><h3>Density Classification — All Goa</h3>
-        <p class="hrc-table-note">HD = ≥50 HoReCas/zone · MD = 10–49 · LD = 4–9 · Dead = ≤3 (excluded from routing)</p>
+    // â”€â”€ 2. Density Classification â€” Goa Level â”€â”€
+    html += `<div class="horeca-summary-table-wrapper"><h3>Density Classification â€” All Goa</h3>
+        <p class="hrc-table-note">HD = â‰¥50 HoReCas/zone Â· MD = 10â€“49 Â· LD = 4â€“9 Â· Dead = â‰¤3 (excluded from routing)</p>
         <table class="horeca-summary-table"><thead><tr>
             <th>Density</th><th class="num">Zones</th><th class="num">HoReCas</th><th class="num">%</th><th class="num">Alcohol</th><th class="num">Non-Alc</th><th class="num">Avg Priority</th>
         </tr></thead><tbody>`;
@@ -5291,13 +5291,13 @@ function renderHoReCaSummary() {
     }
     html += `</tbody></table></div>`;
 
-    // ── 3. Density Classification — Per Quadrant (collapsible) ──
+    // â”€â”€ 3. Density Classification â€” Per Quadrant (collapsible) â”€â”€
     for (const q of ['Q2','Q3','Q4','Q1']) {
         const qZones = mesoZones.filter(z => z.quad === q);
         const qRecs = data.filter(r => r.quad === q);
         if (qRecs.length === 0) continue;
         const qActive = qZones.filter(z => z.density !== 'Dead').length;
-        html += collapseOpen(`${QUAD_LABELS[q]} — Density`, `${qZones.length} zones · ${qRecs.length.toLocaleString()} HoReCas · ${qActive} active`, q === 'Q2');
+        html += collapseOpen(`${QUAD_LABELS[q]} â€” Density`, `${qZones.length} zones Â· ${qRecs.length.toLocaleString()} HoReCas Â· ${qActive} active`, q === 'Q2');
         html += `<table class="horeca-summary-table"><thead><tr>
             <th>Density</th><th class="num">Zones</th><th class="num">HoReCas</th><th class="num">%</th><th class="num">Alcohol</th><th class="num">Non-Alc</th><th class="num">Avg Priority</th>
         </tr></thead><tbody>`;
@@ -5316,9 +5316,9 @@ function renderHoReCaSummary() {
         html += collapseClose();
     }
 
-    // ── 4. Segmentation Matrix — Alcohol Only (Quad × Density), collapsible per quadrant ──
-    html += `<div class="horeca-summary-table-wrapper"><h3>Segmentation Matrix — Phase 1 (Alcohol Only)</h3>
-        <p class="hrc-table-note">Quadrant × Density for Alcohol segment only (Confirmed + Likely + Inferred). Sorted by execution priority.</p>`;
+    // â”€â”€ 4. Segmentation Matrix â€” Alcohol Only (Quad Ã— Density), collapsible per quadrant â”€â”€
+    html += `<div class="horeca-summary-table-wrapper"><h3>Segmentation Matrix â€” Phase 1 (Alcohol Only)</h3>
+        <p class="hrc-table-note">Quadrant Ã— Density for Alcohol segment only (Confirmed + Likely + Inferred). Sorted by execution priority.</p>`;
 
     for (const q of ['Q2','Q3','Q4','Q1']) {
         const qAlcRecs = data.filter(r => r.quad === q && r.alcseg === 'Alcohol');
@@ -5326,7 +5326,7 @@ function renderHoReCaSummary() {
         const qAlcZones = new Set(qAlcRecs.map(r => r.h7)).size;
         const qHighC = qAlcRecs.filter(r => r.cont === 'High').length;
 
-        html += collapseOpen(`${q} ${QUAD_SHORT[q]} — Alcohol`, `${qAlcRecs.length.toLocaleString()} HoReCas · ${qAlcZones} zones · ${qHighC} high contact`, q === 'Q2');
+        html += collapseOpen(`${q} ${QUAD_SHORT[q]} â€” Alcohol`, `${qAlcRecs.length.toLocaleString()} HoReCas Â· ${qAlcZones} zones Â· ${qHighC} high contact`, q === 'Q2');
         html += `<table class="horeca-summary-table"><thead><tr>
             <th>Density</th><th class="num">Zones</th><th class="num">HoReCas</th><th class="num">High Contact</th><th class="num">Avg Priority</th>
         </tr></thead><tbody>`;
@@ -5346,8 +5346,8 @@ function renderHoReCaSummary() {
     }
     html += `</div>`;
 
-    // ── 5. Detailed HoReCa List per Segment (Quad × Density × Alcohol) ──
-    html += `<div class="horeca-summary-table-wrapper"><h3>Detailed HoReCa List — By Segment</h3>
+    // â”€â”€ 5. Detailed HoReCa List per Segment (Quad Ã— Density Ã— Alcohol) â”€â”€
+    html += `<div class="horeca-summary-table-wrapper"><h3>Detailed HoReCa List â€” By Segment</h3>
         <p class="hrc-table-note">Each segment shows individual HoReCas ranked by Priority Score within that segment.</p>`;
 
     for (const q of ['Q2','Q3','Q4','Q1']) {
@@ -5359,8 +5359,8 @@ function renderHoReCaSummary() {
             const segAvg = (segRecs.reduce((s,r) => s + r.pscore, 0) / segRecs.length).toFixed(1);
 
             html += collapseOpen(
-                `${q} ${QUAD_SHORT[q]} · ${dDot(d, 8)}${d} · Alcohol`,
-                `${segRecs.length.toLocaleString()} HoReCas · Avg ${segAvg} · ${segHighC} high contact`,
+                `${q} ${QUAD_SHORT[q]} Â· ${dDot(d, 8)}${d} Â· Alcohol`,
+                `${segRecs.length.toLocaleString()} HoReCas Â· Avg ${segAvg} Â· ${segHighC} high contact`,
                 false
             );
             html += `<div class="hrc-seg-list">`;
@@ -5370,7 +5370,7 @@ function renderHoReCaSummary() {
                     <span class="hrc-seg-rank">${i + 1}</span>
                     <div class="hrc-seg-info">
                         <div class="hrc-seg-name">${escapeHtml(r.name)}</div>
-                        <div class="hrc-seg-meta">${escapeHtml(r.city || '')} · ${escapeHtml(r.type)} · ${r.alc}${r.rat ? ' · ★' + r.rat : ''}</div>
+                        <div class="hrc-seg-meta">${escapeHtml(r.city || '')} Â· ${escapeHtml(r.type)} Â· ${r.alc}${r.rat ? ' Â· â˜…' + r.rat : ''}</div>
                     </div>
                     <div class="hrc-seg-right">
                         <span class="hrc-seg-score">${r.pscore}</span>
@@ -5384,8 +5384,8 @@ function renderHoReCaSummary() {
     }
     html += `</div>`;
 
-    // ── 6. Further Insights — Good to Have (collapsible wrapper) ──
-    html += collapseOpen('Further Insights — Good to Have', 'Active zones per quadrant, breakdowns by type, alcohol signal, size, contactability', false);
+    // â”€â”€ 6. Further Insights â€” Good to Have (collapsible wrapper) â”€â”€
+    html += collapseOpen('Further Insights â€” Good to Have', 'Active zones per quadrant, breakdowns by type, alcohol signal, size, contactability', false);
 
     // Active zones per quadrant
     for (const q of ['Q2','Q3','Q4','Q1']) {
@@ -5409,7 +5409,7 @@ function renderHoReCaSummary() {
                 if (dOrder[a.density] !== dOrder[b.density]) return dOrder[a.density] - dOrder[b.density];
                 return b.count - a.count;
             });
-        html += `<div class="horeca-summary-table-wrapper" style="box-shadow:none;padding:12px 0"><h3>${QUAD_LABELS[q]} — Active Zones</h3>
+        html += `<div class="horeca-summary-table-wrapper" style="box-shadow:none;padding:12px 0"><h3>${QUAD_LABELS[q]} â€” Active Zones</h3>
             <table class="horeca-summary-table"><thead><tr>
                 <th>Zone</th><th>Density</th><th class="num">HoReCas</th><th class="num">Alcohol</th><th class="num">High Contact</th><th class="num">Avg Priority</th>
             </tr></thead><tbody>`;
@@ -5458,7 +5458,7 @@ function buildBreakdownTable(title, rows, headers, total) {
 // ==================== HoReCa CRM ====================
 
 let horecaCrmData = [];
-// ── HoReCa Board (Kanban) ──
+// â”€â”€ HoReCa Board (Kanban) â”€â”€
 let horecaBoardLoaded = false;
 let horecaBoardCounts = {};       // { status: count }
 let horecaBoardCards = {};        // { status: [records] }
@@ -5600,9 +5600,9 @@ function renderBoardColumn(status) {
 
     let html = '';
     records.forEach(r => {
-        const typeIcon = (r.types || '').toLowerCase().includes('bar') ? '🍺' :
-                         (r.types || '').toLowerCase().includes('cafe') ? '☕' :
-                         (r.types || '').toLowerCase().includes('hotel') ? '🏨' : '🍽';
+        const typeIcon = (r.types || '').toLowerCase().includes('bar') ? 'ðŸº' :
+                         (r.types || '').toLowerCase().includes('cafe') ? 'â˜•' :
+                         (r.types || '').toLowerCase().includes('hotel') ? 'ðŸ¨' : 'ðŸ½';
         const typeLabel = r.types ? r.types.split(',')[0].trim() : '';
         const city = r.city || '';
         const assignee = r.assigned_to || '';
@@ -5610,8 +5610,8 @@ function renderBoardColumn(status) {
             <div class="horeca-board-card-name">${escapeHtml(r.name)}</div>
             <div class="horeca-board-card-meta">
                 ${typeLabel ? `<span>${typeIcon} ${escapeHtml(typeLabel)}</span>` : ''}
-                ${city ? `<span>· ${escapeHtml(city)}</span>` : ''}
-                ${assignee ? `<span>· 👤 ${escapeHtml(assignee)}</span>` : ''}
+                ${city ? `<span>Â· ${escapeHtml(city)}</span>` : ''}
+                ${assignee ? `<span>Â· ðŸ‘¤ ${escapeHtml(assignee)}</span>` : ''}
             </div>
         </div>`;
     });
@@ -5648,7 +5648,7 @@ function boardClickCard(placeId, status) {
         statusFilter.value = status;
     }
 
-    // Search by place_id in the CRM — update filter and fetch
+    // Search by place_id in the CRM â€” update filter and fetch
     horecaCrmFilters.status = status;
     horecaCrmFilters.search = '';
     horecaCrmPage = 1;
@@ -5671,10 +5671,10 @@ function boardClickCard(placeId, status) {
                 selectHorecaFromMaster(placeId);
             }
         })
-        .catch(err => console.error('Board→CRM navigation error:', err));
+        .catch(err => console.error('Boardâ†’CRM navigation error:', err));
 }
 
-// ── HoReCa CRM ──
+// â”€â”€ HoReCa CRM â”€â”€
 let horecaCrmTotal = 0;
 let horecaCrmPage = 1;
 let horecaCrmTotalPages = 0;
@@ -5872,7 +5872,7 @@ function selectHorecaFromMaster(placeId) {
         mapsLink.style.display = 'none';
     }
 
-    // Status update form — pre-fill
+    // Status update form â€” pre-fill
     document.getElementById('hcrm-update-status').value = record.outreach_status || '';
     document.getElementById('hcrm-follow-up').value = record.follow_up_date || '';
     // Pre-fill updated_by from currentUser
@@ -6119,7 +6119,7 @@ async function submitHorecaStatusUpdate() {
 
 /**
  * Auto-create a meeting when HoReCa status changes to "Meeting aligned" or follow-up date is set.
- * Assigned to: HoReCa's assigned_to → fallback to the person updating.
+ * Assigned to: HoReCa's assigned_to â†’ fallback to the person updating.
  * Skips if a scheduled meeting already exists for the same HoReCa on the same date.
  */
 async function autoCreateHorecaMeeting(horeca, status, followUpDate, updatedBy) {
@@ -6140,7 +6140,7 @@ async function autoCreateHorecaMeeting(horeca, status, followUpDate, updatedBy) 
     );
     if (existingMeeting) return; // Don't duplicate
 
-    // Assigned to: HoReCa's assigned person → fallback to person updating
+    // Assigned to: HoReCa's assigned person â†’ fallback to person updating
     const assignedTo = horeca.assigned_to || updatedBy;
 
     // Meeting title based on trigger
@@ -6249,8 +6249,8 @@ function renderHorecaAssignmentHistory(record) {
     const entries = historyStr.split('\n---\n').filter(Boolean);
     let html = '';
     for (const entry of entries) {
-        // Format: [YYYY-MM-DD HH:MM|author] → assignee
-        const match = entry.match(/^\[(.+?)\|(.+?)\]\s*→\s*(.+)$/);
+        // Format: [YYYY-MM-DD HH:MM|author] â†’ assignee
+        const match = entry.match(/^\[(.+?)\|(.+?)\]\s*â†’\s*(.+)$/);
         if (match) {
             const [, timestamp, author, assignee] = match;
             html += `<div class="hcrm-assign-entry">
@@ -6320,7 +6320,7 @@ function horecaCrmGoPage(page) {
     fetchHoReCaCRMData();
 }
 
-// ── Add New HoReCa Lead ──
+// â”€â”€ Add New HoReCa Lead â”€â”€
 
 function openAddHorecaLeadModal() {
     const modal = document.getElementById('horeca-add-lead-modal');
@@ -6416,7 +6416,7 @@ window.closeAddHorecaLeadModal = closeAddHorecaLeadModal;
 window.toggleAddLeadSection = toggleAddLeadSection;
 window.submitNewHorecaLead = submitNewHorecaLead;
 
-// ── HoReCa Meeting Scheduling ──
+// â”€â”€ HoReCa Meeting Scheduling â”€â”€
 
 function openHorecaMeetingModal() {
     if (!currentHoreca) {
@@ -6471,7 +6471,7 @@ function openHorecaMeetingModal() {
 
 window.openHorecaMeetingModal = openHorecaMeetingModal;
 
-// ── HoReCa Dashboard ──
+// â”€â”€ HoReCa Dashboard â”€â”€
 
 async function initHoReCaDashboard() {
     const container = document.getElementById('hcrm-dashboard-content');
@@ -6526,7 +6526,7 @@ function renderHorecaDashboard(data) {
     });
     funnelHtml += '</div></div>';
 
-    // Status × Type table
+    // Status Ã— Type table
     let typeTableHtml = '<div class="card"><h2>Status by Type</h2><div class="hcrm-table-scroll"><table class="hcrm-table"><thead><tr><th>Type</th>';
     statuses.forEach(s => { typeTableHtml += `<th>${s}</th>`; });
     typeTableHtml += '</tr></thead><tbody>';
@@ -6540,7 +6540,7 @@ function renderHorecaDashboard(data) {
     });
     typeTableHtml += '</tbody></table></div></div>';
 
-    // Status × Zone table (top 20)
+    // Status Ã— Zone table (top 20)
     let zoneTableHtml = '<div class="card"><h2>Status by Zone (Top 20)</h2><div class="hcrm-table-scroll"><table class="hcrm-table"><thead><tr><th>Zone</th>';
     statuses.forEach(s => { zoneTableHtml += `<th>${s}</th>`; });
     zoneTableHtml += '<th>Total</th></tr></thead><tbody>';
@@ -6622,7 +6622,7 @@ async function hydrateTrainingFromServer() {
                 localStorage.setItem(key, data.progress_json);
             }
         }
-    } catch (e) { /* silent — localStorage still works */ }
+    } catch (e) { /* silent â€” localStorage still works */ }
 }
 
 async function initLearningTab() {
@@ -6707,7 +6707,7 @@ async function initLearningTab() {
                         <span>${mod.chapters > 0 ? mod.chapters + ' chapters' : '--'}</span>
                         <span>${mod.time}</span>
                         ${modXP ? `<span>${modXP} XP</span>` : ''}
-                        ${modStars ? `<span>${modStars} ★</span>` : ''}
+                        ${modStars ? `<span>${modStars} â˜…</span>` : ''}
                     </div>
                     ${progressBarHtml}
                     ${actionHtml}
@@ -6785,7 +6785,7 @@ async function loadLeaderboard() {
         }
 
         const userEmail = currentUser ? currentUser.email : '';
-        const medals = ['🥇', '🥈', '🥉'];
+        const medals = ['ðŸ¥‡', 'ðŸ¥ˆ', 'ðŸ¥‰'];
 
         let html = '<div class="leaderboard-list">';
         data.leaderboard.forEach(entry => {
@@ -6797,7 +6797,7 @@ async function loadLeaderboard() {
                     <span class="leaderboard-name">${escapeHtml(entry.name)}</span>
                     <span class="leaderboard-stats">
                         <span class="leaderboard-xp">${entry.xp} XP</span>
-                        <span class="leaderboard-stars">${entry.stars} ★</span>
+                        <span class="leaderboard-stars">${entry.stars} â˜…</span>
                         <span class="leaderboard-modules">${entry.modules}/${TRAINING_MODULES.length} modules</span>
                     </span>
                 </div>
@@ -6861,7 +6861,7 @@ let depDeadline = '2026-07-15';
 let depPlanTotal = 301;
 let depFilteredLocs = null;
 
-// ── Activity Log ─────────────────────────────────────────────────────────────
+// â”€â”€ Activity Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const _ACT_BADGE_CLASS = { login:'b-login', page_view:'b-page', scroll:'b-scroll', click:'b-click' };
 const _ACT_BADGE_LABEL = { login:'Login', page_view:'Page View', scroll:'Scroll', click:'Click' };
@@ -6912,7 +6912,7 @@ function activityShell() {
   <!-- Header -->
   <div style="padding:18px 24px 14px;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:#FAFBFC">
     <div style="display:flex;align-items:center;gap:12px">
-      <div style="width:36px;height:36px;background:linear-gradient(135deg,#1e6b5c,#2d8a78);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px">📊</div>
+      <div style="width:36px;height:36px;background:linear-gradient(135deg,#1e6b5c,#2d8a78);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px">ðŸ“Š</div>
       <div>
         <div style="font-size:16px;font-weight:700;color:#111827;letter-spacing:-.02em">User Analytics</div>
         <div style="font-size:11px;color:#6B7280;margin-top:1px">Who's using the dashboard, when, and how</div>
@@ -6922,15 +6922,15 @@ function activityShell() {
       <div style="display:flex;align-items:center;gap:5px;background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.2);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;color:#059669;letter-spacing:.04em">
         <div style="width:6px;height:6px;background:#059669;border-radius:50%;animation:actPulse 1.8s ease-in-out infinite"></div>LIVE
       </div>
-      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:20px;padding:4px 10px;font-size:11px;color:#92400E;font-weight:600">🔒 Only visible to you</div>
+      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:20px;padding:4px 10px;font-size:11px;color:#92400E;font-weight:600">ðŸ”’ Only visible to you</div>
     </div>
   </div>
   <!-- KPIs -->
   <div id="act-kpis" style="padding:16px 24px;border-bottom:1px solid #E2E8F0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:#FAFBFC">
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total events</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-total">—</div></div>
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total logins</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-logins">—</div></div>
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Active users</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-users">—</div></div>
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Last activity</div><div style="font-size:13px;font-weight:600;color:#111827;margin-top:5px;line-height:1.3" id="act-kpi-last">—</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total events</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-total">â€”</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total logins</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-logins">â€”</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Active users</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-users">â€”</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Last activity</div><div style="font-size:13px;font-weight:600;color:#111827;margin-top:5px;line-height:1.3" id="act-kpi-last">â€”</div></div>
   </div>
   <!-- Tab bar -->
   <div style="display:flex;gap:0;padding:0 24px;border-bottom:1px solid #E2E8F0;background:#FFFFFF">
@@ -6963,7 +6963,7 @@ function activityShell() {
   <!-- Profiles panel -->
   <div id="act-profiles-panel" style="display:none;background:#F8FAFC">
     <div style="padding:14px 24px;border-bottom:1px solid #E2E8F0;background:#FFFFFF">
-      <div style="font-size:13px;color:#6B7280">Engagement profile per team member · All time</div>
+      <div style="font-size:13px;color:#6B7280">Engagement profile per team member Â· All time</div>
     </div>
     <div id="act-profiles-body" style="padding:18px 24px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
       <div style="color:#6B7280;font-size:13px;padding:16px">Loading profiles...</div>
@@ -6984,7 +6984,7 @@ function renderActivityFeed(events) {
     const users = new Set(events.map(e => e.User_Email).filter(Boolean));
     document.getElementById('act-kpi-users').textContent = users.size;
     const last = events[0];
-    document.getElementById('act-kpi-last').textContent = last ? `${last.User_Name || last.User_Email} · ${(last.Timestamp || '').slice(11, 16)}` : '—';
+    document.getElementById('act-kpi-last').textContent = last ? `${last.User_Name || last.User_Email} Â· ${(last.Timestamp || '').slice(11, 16)}` : 'â€”';
 
     // Populate user filter
     const userSel = document.getElementById('act-filter-user');
@@ -7037,7 +7037,7 @@ function paintFeedRows(events) {
             lastDate = dateStr;
             const d = new Date(dateStr + 'T00:00:00');
             const label = isNaN(d) ? dateStr : d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'short', year:'numeric' });
-            rows.push(`<tr><td colspan="6" style="padding:16px 10px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9CA3AF;pointer-events:none;border-bottom:1px solid #F9FAFB">— ${label}</td></tr>`);
+            rows.push(`<tr><td colspan="6" style="padding:16px 10px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9CA3AF;pointer-events:none;border-bottom:1px solid #F9FAFB">â€” ${label}</td></tr>`);
         }
         const ev = e.Event_Type || '';
         const bg = badgeColors[ev] || 'rgba(156,163,175,.1)';
@@ -7048,25 +7048,25 @@ function paintFeedRows(events) {
             if (ev === 'page_view') return `Opened <span style="color:${_ACT_PAGE_COLORS[e.Page]||'#1e6b5c'};font-weight:600">${e.Page||''}</span>`;
             if (ev === 'scroll') return `Scrolled <b style="color:#7C3AED">${e.Value}%</b> down <span style="color:#6B7280">${e.Page}</span>`;
             if (ev === 'dwell') return `Spent <b style="color:#0EA5E9">${e.Value}s</b> on <span style="color:${_ACT_PAGE_COLORS[e.Page]||'#1e6b5c'};font-weight:600">${e.Page}</span>`;
-            if (ev === 'click') return `<b style="color:#111827">${e.Element||''}</b> <span style="color:#6B7280">${e.Page ? 'on ' + e.Page : ''}</span>${e.Value ? ` <span style="color:#9CA3AF">→ ${e.Value}</span>` : ''}`;
+            if (ev === 'click') return `<b style="color:#111827">${e.Element||''}</b> <span style="color:#6B7280">${e.Page ? 'on ' + e.Page : ''}</span>${e.Value ? ` <span style="color:#9CA3AF">â†’ ${e.Value}</span>` : ''}`;
             return e.Element || e.Page || '';
         })();
-        const device = [e.Device_Type === 'Mobile' ? '📱' : '💻', e.Browser, e.OS].filter(Boolean).join(' · ');
+        const device = [e.Device_Type === 'Mobile' ? 'ðŸ“±' : 'ðŸ’»', e.Browser, e.OS].filter(Boolean).join(' Â· ');
         rows.push(`<tr style="border-bottom:1px solid #F9FAFB;transition:background .1s" onmouseenter="this.style.background='#F8FAFC'" onmouseleave="this.style.background=''">
           <td style="padding:11px 10px;white-space:nowrap">
-            <div style="font-family:monospace;font-size:13px;font-weight:600;color:#111827">${ts.slice(11,19)||'—'}</div>
+            <div style="font-family:monospace;font-size:13px;font-weight:600;color:#111827">${ts.slice(11,19)||'â€”'}</div>
             <div style="font-family:monospace;font-size:11px;color:#9CA3AF;margin-top:2px">${dateStr}</div>
           </td>
           <td style="padding:11px 10px">
             <div style="display:flex;align-items:center;gap:8px;white-space:nowrap">
               <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(e.User_Email)};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${initials(e.User_Name||e.User_Email)}</div>
-              <div><div style="font-size:14px;font-weight:600;color:#111827">${e.User_Name||e.User_Email||'—'}</div><div style="font-size:11px;color:#9CA3AF;font-family:monospace;margin-top:1px">${e.User_Email||''}</div></div>
+              <div><div style="font-size:14px;font-weight:600;color:#111827">${e.User_Name||e.User_Email||'â€”'}</div><div style="font-size:11px;color:#9CA3AF;font-family:monospace;margin-top:1px">${e.User_Email||''}</div></div>
             </div>
           </td>
           <td style="padding:11px 10px"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;background:${bg};color:${tc}"><span style="width:5px;height:5px;border-radius:50%;background:${tc}"></span>${lbl}</span></td>
           <td style="padding:11px 10px;font-size:13px;color:#374151;max-width:260px">${details}</td>
-          <td style="padding:11px 10px"><div style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;padding:4px 9px;font-size:12px;color:#6B7280;white-space:nowrap">${device||'—'}</div></td>
-          <td style="padding:11px 10px;font-family:monospace;font-size:11px;color:#9CA3AF;white-space:nowrap">${(e.IP_Address||'—').replace(/\d+$/, '×')}</td>
+          <td style="padding:11px 10px"><div style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;padding:4px 9px;font-size:12px;color:#6B7280;white-space:nowrap">${device||'â€”'}</div></td>
+          <td style="padding:11px 10px;font-family:monospace;font-size:11px;color:#9CA3AF;white-space:nowrap">${(e.IP_Address||'â€”').replace(/\d+$/, 'Ã—')}</td>
         </tr>`);
     });
     tbody.innerHTML = rows.join('');
@@ -7075,7 +7075,7 @@ function paintFeedRows(events) {
 function renderActProfiles(profiles) {
     const el = document.getElementById('act-profiles-body');
     if (!profiles.length) {
-        el.innerHTML = `<div style="color:#6B7280;font-size:13px;padding:24px;text-align:center;grid-column:1/-1">No data yet — events will appear after users log in and interact with the dashboard.</div>`;
+        el.innerHTML = `<div style="color:#6B7280;font-size:13px;padding:24px;text-align:center;grid-column:1/-1">No data yet â€” events will appear after users log in and interact with the dashboard.</div>`;
         return;
     }
 
@@ -7109,12 +7109,12 @@ function renderActProfiles(profiles) {
         const clicksHTML = (u.top_clicks||[]).map(c =>
             `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #F3F4F6">
                <span style="font-size:11px;color:#374151;font-weight:500">${c.element}</span>
-               <span style="font-size:10px;font-family:monospace;color:#059669;background:#D1FAE5;border-radius:4px;padding:1px 7px;font-weight:700">${c.count}×</span>
+               <span style="font-size:10px;font-family:monospace;color:#059669;background:#D1FAE5;border-radius:4px;padding:1px 7px;font-weight:700">${c.count}Ã—</span>
              </div>`
         ).join('');
 
         const hoursHTML = (u.hours||Array(24).fill(0)).map((h,i) =>
-            `<div style="height:14px;border-radius:2px;background:${heatColor(h,maxHour)}" title="${i}:00 — ${h} actions"></div>`
+            `<div style="height:14px;border-radius:2px;background:${heatColor(h,maxHour)}" title="${i}:00 â€” ${h} actions"></div>`
         ).join('');
 
         const lastSeenShort = (u.last_seen||'').slice(0,16).replace('T',' ');
@@ -7132,18 +7132,18 @@ function renderActProfiles(profiles) {
               <div style="font-size:26px;font-weight:800;color:#1e6b5c;line-height:1">${u.logins}</div>
               <div style="font-size:9px;color:#9CA3AF;margin-top:3px;text-transform:uppercase;letter-spacing:.06em">logins</div>
             </div>
-            <div style="font-size:11px;color:#D1D5DB;margin-left:4px">▼</div>
+            <div style="font-size:11px;color:#D1D5DB;margin-left:4px">â–¼</div>
           </div>
           <!-- Quick chips -->
           <div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;background:#FAFBFC;border-bottom:1px solid #F3F4F6">
-            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">Last seen <b style="color:#111827">${lastSeenShort||'—'}</b></span>
-            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">📱 <b style="color:#111827">${mobilePct}%</b> mobile</span>
+            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">Last seen <b style="color:#111827">${lastSeenShort||'â€”'}</b></span>
+            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">ðŸ“± <b style="color:#111827">${mobilePct}%</b> mobile</span>
             ${u.pages&&u.pages[0]?`<span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">Top page: <b style="color:${_ACT_PAGE_COLORS[u.pages[0].name]||'#1e6b5c'}">${u.pages[0].name}</b></span>`:''}
           </div>
           <!-- Expandable detail -->
           <div class="act-card-detail" style="display:none">
             ${pagesHTML ? `<div style="padding:14px 16px;border-bottom:1px solid #F3F4F6">
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:10px">Pages visited · scroll depth</div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:10px">Pages visited Â· scroll depth</div>
               ${pagesHTML}
             </div>` : ''}
             ${clicksHTML ? `<div style="padding:14px 16px;border-bottom:1px solid #F3F4F6">
@@ -7173,7 +7173,7 @@ function renderActProfiles(profiles) {
     }).join('');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function preloadDepData() {
     try {
@@ -7265,7 +7265,7 @@ function depComputeSummary(locs) {
     };
 }
 
-// ── Deadline Card ─────────────────────────────────────────────────────────────
+// â”€â”€ Deadline Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function depGetDeadline() {
     const inp = document.getElementById('dep-deadline-input');
@@ -7376,7 +7376,7 @@ function depRenderSummary302(s) {
     </div>`;
 }
 
-// ── Pie Charts (vs 302) ───────────────────────────────────────────────────────
+// â”€â”€ Pie Charts (vs 302) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function depPiePath(done, total, color) {
     if (total === 0 || done <= 0) return `<circle cx="60" cy="60" r="48" fill="#e8ecf0"/>`;
@@ -7423,13 +7423,13 @@ function depRenderKPIs(s) {
     const T = depPlanTotal;
     document.getElementById('dep-kpis').innerHTML = [
         { label:'Total Locations',    value: s.total,             cls:'dep-k-total', sub:'deployment sites' },
-        { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.noc} pending` },
-        { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.agreement} pending` },
-        { label:'Civil Work Done',     value: s.civil.done,        cls:'dep-k-civil', sub:`of ${s.civil.done + s.civil.pending} required · ${s.civil.not_required} N/A` },
-        { label:'Shed Completed',     value: s.shed.done,         cls:'dep-k-shed',  sub:`of ${s.shed.done + s.shed.pending} required · ${s.shed.not_required} N/A` },
-        { label:'Electrical Done',    value: s.electrical.done,   cls:'dep-k-elec',  sub:`${s.electrical.not_required} N/A · ${s.electrical.pending} pending` },
-        { label:'Internet Done',      value: s.internet.done,     cls:'dep-k-inet',  sub:`${s.internet.not_required} N/A · ${s.internet.pending} pending` },
-        { label:'CCTV Done',          value: s.cctv.done,         cls:'dep-k-cctv',  sub:`${s.cctv.not_required} N/A · ${s.cctv.pending} pending` },
+        { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VP + Municipal Â· ${s.totalEntities - s.noc} pending` },
+        { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VP + Municipal Â· ${s.totalEntities - s.agreement} pending` },
+        { label:'Civil Work Done',     value: s.civil.done,        cls:'dep-k-civil', sub:`of ${s.civil.done + s.civil.pending} required Â· ${s.civil.not_required} N/A` },
+        { label:'Shed Completed',     value: s.shed.done,         cls:'dep-k-shed',  sub:`of ${s.shed.done + s.shed.pending} required Â· ${s.shed.not_required} N/A` },
+        { label:'Electrical Done',    value: s.electrical.done,   cls:'dep-k-elec',  sub:`${s.electrical.not_required} N/A Â· ${s.electrical.pending} pending` },
+        { label:'Internet Done',      value: s.internet.done,     cls:'dep-k-inet',  sub:`${s.internet.not_required} N/A Â· ${s.internet.pending} pending` },
+        { label:'CCTV Done',          value: s.cctv.done,         cls:'dep-k-cctv',  sub:`${s.cctv.not_required} N/A Â· ${s.cctv.pending} pending` },
         { label:'Machines Delivered', value: s.delivered,         cls:'dep-k-del',   sub:`${Math.round(s.delivered/T*100)}% of ${T}` },
         { label:'Machines Installed', value: s.installed.done,    cls:'dep-k-inst',  sub:`${Math.round(s.installed.done/T*100)}% installed` },
         { label:'Machines Live',      value: s.live,              cls:'dep-k-live',  sub:`${Math.round(s.live/T*100)}% of ${T}` },
@@ -7467,7 +7467,7 @@ function depRenderFunnel(s) {
             <div class="dep-funnel-bar">
                 <div class="dep-funnel-fill" style="width:${Math.max(p,2)}%;background:${st.color}">${st.val}</div>
             </div>
-            ${drop > 0 ? `<div class="dep-funnel-drop">▼ ${drop} gap</div>` : ''}
+            ${drop > 0 ? `<div class="dep-funnel-drop">â–¼ ${drop} gap</div>` : ''}
         </div>`;
     }).join('');
 }
@@ -7533,7 +7533,7 @@ function depRenderForecast(s, locs) {
     const reqAggr    = Math.ceil(reqDaily * 1.2);
 
     function estDate(rate) {
-        if (!rate || rate <= 0) return '—';
+        if (!rate || rate <= 0) return 'â€”';
         return new Date(today.getTime() + Math.ceil(remaining / rate) * 86400000)
             .toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
     }
@@ -7577,7 +7577,7 @@ function depRenderForecast(s, locs) {
                 <div class="dep-sc-body">
                     <div>${dailyRate > 0 ? dailyRate : '?'}/day &middot; ${weeklyRate > 0 ? weeklyRate : '?'}/week</div>
                     <div>Est. completion: <b>${estDate(dailyRate)}</b></div>
-                    ${dailyRate > 0 && dailyRate < reqDaily ? '<div style="color:#d1453b;font-size:11px;margin-top:3px">Behind — will likely miss deadline</div>' : ''}
+                    ${dailyRate > 0 && dailyRate < reqDaily ? '<div style="color:#d1453b;font-size:11px;margin-top:3px">Behind â€” will likely miss deadline</div>' : ''}
                 </div>
             </div>
             <div class="dep-scenario" style="border-color:#0b6b4f">
@@ -7628,7 +7628,7 @@ function depRenderForecast(s, locs) {
                 </div>`;
             }).join('')}` : ''}
             ` : `<div style="padding:24px 0;text-align:center;color:var(--muted);font-size:13px">
-                <div style="font-size:28px;margin-bottom:8px">📋</div>
+                <div style="font-size:28px;margin-bottom:8px">ðŸ“‹</div>
                 Add a <b>Machine Install Date</b> column (YYYY-MM-DD)<br>to see installation history charts.
             </div>`}
         </div>
@@ -7636,7 +7636,7 @@ function depRenderForecast(s, locs) {
     </div>`;
 }
 
-// ── Where We're Stuck ────────────────────────────────────────────────────────
+// â”€â”€ Where We're Stuck â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function depRenderBlockers(locs) {
     const el = document.getElementById('dep-insights');
@@ -7665,7 +7665,7 @@ function depRenderBlockers(locs) {
         nocPending > 0   && { count: nocPending,   label: 'NOC not received',          color: '#e08a1e', bg: '#fffbf0', detail: 'Panchayat/municipality sign-off pending' },
         agrPending > 0   && { count: agrPending,   label: 'Agreement pending',         color: '#c27a10', bg: '#fef9f0', detail: `${agrPending} NOC done, agreement not signed yet` },
         elecPending > 0  && { count: elecPending,  label: 'Electrical pending',        color: '#8b6914', bg: '#faf6e8', detail: 'Power connection needed before RVM goes live' },
-        delivNotInst > 0 && { count: delivNotInst, label: 'Delivered, not installed',  color: '#0b6b4f', bg: '#f0faf5', detail: 'Machine on-site — commission now' },
+        delivNotInst > 0 && { count: delivNotInst, label: 'Delivered, not installed',  color: '#0b6b4f', bg: '#f0faf5', detail: 'Machine on-site â€” commission now' },
     ].filter(Boolean);
 
     if (blockers.length === 0) { el.innerHTML = ''; return; }
@@ -7684,7 +7684,7 @@ function depRenderBlockers(locs) {
     </div>`;
 }
 
-// ── Project Metrics ───────────────────────────────────────────────────────────
+// â”€â”€ Project Metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function depRenderProjectMetrics(s, locs) {
     const el = document.getElementById('dep-project-metrics');
@@ -7711,7 +7711,7 @@ function depRenderProjectMetrics(s, locs) {
     const schedGap  = Math.abs(timePct - deployPct);
 
     const instDates = locs.map(l => l.installDate).filter(d => d && d.length >= 8).sort();
-    let actualRate = '—';
+    let actualRate = 'â€”';
     if (instDates.length >= 2) {
         const first = new Date(instDates[0]);
         const last  = new Date(instDates[instDates.length - 1]);
@@ -7720,12 +7720,12 @@ function depRenderProjectMetrics(s, locs) {
     }
 
     const metrics = [
-        { val: identified,  lbl: 'Locations Identified',  sub: siteGap > 0 ? `${siteGap} more needed for ${RVM_TARGET}` : 'Target reached ✓', color: siteGap > 0 ? '#d1453b' : '#0b6b4f' },
+        { val: identified,  lbl: 'Locations Identified',  sub: siteGap > 0 ? `${siteGap} more needed for ${RVM_TARGET}` : 'Target reached âœ“', color: siteGap > 0 ? '#d1453b' : '#0b6b4f' },
         { val: RVM_TARGET,  lbl: 'RVM Target',            sub: `Go-live ${deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}`,      color: '#1e6b5c' },
         { val: deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),
                             lbl: 'Project Deadline',       sub: 'Go-live target date',                                                                              color: daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f' },
         { val: daysLeft,    lbl: 'Days Left',              sub: `until ${deadlineStr}`,                                                                             color: daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f' },
-        { val: installed,   lbl: 'RVMs Installed',        sub: `${deployPct}% of ${RVM_TARGET} · ${live} live`,                                                     color: '#0b6b4f' },
+        { val: installed,   lbl: 'RVMs Installed',        sub: `${deployPct}% of ${RVM_TARGET} Â· ${live} live`,                                                     color: '#0b6b4f' },
         { val: gap,         lbl: 'Gap to Target',         sub: 'Machines still to install',                                                                         color: gap > 50 ? '#d1453b' : '#e08a1e' },
         { val: reqPerDay,   lbl: 'Req. Installs / Day',   sub: `Actual: ${actualRate}`,                                                                             color: '#2f6fb0' },
     ];
@@ -7742,7 +7742,7 @@ function depRenderProjectMetrics(s, locs) {
     </div>`;
 }
 
-// ── Block-wise Summary ────────────────────────────────────────────────────────
+// â”€â”€ Block-wise Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function depRenderBlockSummary(locs) {
     const el = document.getElementById('dep-block-summary');
@@ -7776,7 +7776,7 @@ function depRenderBlockSummary(locs) {
     }
 
     const cols = [
-        { label:'Civil Work', fn: b => { const req = breq(b,'civilWorkStatus'); return req === 0 ? '—' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
+        { label:'Civil Work', fn: b => { const req = breq(b,'civilWorkStatus'); return req === 0 ? 'â€”' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
         { label:'Shed',      fn: b => `${bv(b,'shedStatus','Done')}/${breq(b,'shedStatus')}` },
         { label:'Electrical',fn: b => `${bv(b,'electricalStatus','Done')}/${breq(b,'electricalStatus')}` },
         { label:'Internet',  fn: b => `${bv(b,'internetStatus','Done')}/${breq(b,'internetStatus')}` },
@@ -7789,7 +7789,7 @@ function depRenderBlockSummary(locs) {
     el.innerHTML = `<div class="card" style="margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
             <h2 style="margin:0">Block-wise Progress</h2>
-            <div style="font-size:12px;color:var(--muted)">${blocks.length} blocks · ${locs.length} locations</div>
+            <div style="font-size:12px;color:var(--muted)">${blocks.length} blocks Â· ${locs.length} locations</div>
         </div>
         <div class="ct-table-wrap">
             <table class="ct-table" style="font-size:12px">
@@ -7832,13 +7832,13 @@ function depRenderBlockSummary(locs) {
     </div>`;
 }
 
-// ── Location Table ────────────────────────────────────────────────────────────
+// â”€â”€ Location Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function depFlag(val) {
-    if (!val || val === '') return '<span class="ct-flag-na">—</span>';
-    if (val === 'Yes' || val === 'Done') return '<span class="ct-flag-yes">✓</span>';
-    if (val === 'No')           return '<span class="ct-flag-no">✗</span>';
-    if (val === 'Pending')      return '<span class="ct-flag-pend">◐</span>';
+    if (!val || val === '') return '<span class="ct-flag-na">â€”</span>';
+    if (val === 'Yes' || val === 'Done') return '<span class="ct-flag-yes">âœ“</span>';
+    if (val === 'No')           return '<span class="ct-flag-no">âœ—</span>';
+    if (val === 'Pending')      return '<span class="ct-flag-pend">â—</span>';
     if (val === 'Not Required') return '<span class="ct-flag-na">N/A</span>';
     return `<span class="ct-flag-pend">${val}</span>`;
 }
@@ -7864,7 +7864,7 @@ function depPendingItems(l) {
     if (l.rvmDelivery !== 'Done')         items.push('Delivery');
     if (l.rvmDeployed !== 'Done')         items.push('Installation');
     if (l.machineLive !== 'Done')         items.push('Go-Live');
-    if (items.length === 0) return '<span style="color:#0b6b4f;font-size:11px">Complete ✓</span>';
+    if (items.length === 0) return '<span style="color:#0b6b4f;font-size:11px">Complete âœ“</span>';
     return `<span style="font-size:11px;color:#e08a1e">${items.join(', ')}</span>`;
 }
 
@@ -7876,11 +7876,11 @@ function depRenderLocTable(locs) {
             const hm = depHighestMilestone(l);
             const installDate = l.installDate && l.installDate.length >= 10
                 ? l.installDate.substring(0, 10)
-                : '—';
+                : 'â€”';
             return `<tr>
                 <td style="color:var(--muted)">${i+1}</td>
                 <td><b>${l.locationName}</b></td>
-                <td style="font-size:12px">${l.block || '—'}</td>
+                <td style="font-size:12px">${l.block || 'â€”'}</td>
                 <td><span class="dep-stage-pill" style="background:${hm.color}18;color:${hm.color};border:1px solid ${hm.color}33">${hm.label}</span></td>
                 <td>${depFlag(l.nocReceived)}</td>
                 <td>${depFlag(l.agreementSigned)}</td>
@@ -7925,13 +7925,13 @@ function depRenderCPSection(cpData, planTotal) {
     </div>`;
 }
 
-// ── Main Render + Filters ─────────────────────────────────────────────────────
+// â”€â”€ Main Render + Filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function renderRvmDeployment(data) {
     depInitSubTabs();
     if (data.planTotal) depPlanTotal = data.planTotal;
     const subtitleEl = document.getElementById('dep-header-subtitle');
-    if (subtitleEl) subtitleEl.textContent = `${depPlanTotal} Collection Points · Goa DRS 2026`;
+    if (subtitleEl) subtitleEl.textContent = `${depPlanTotal} Collection Points Â· Goa DRS 2026`;
 
     const blockSel = document.getElementById('dep-filter-block');
     const existBlocks = new Set([...blockSel.options].map(o => o.value).filter(Boolean));
@@ -8097,12 +8097,12 @@ function renderCtDashboard(data) {
     const calDays = Math.round((DEADLINE - TODAY) / 864e5);
 
     // KPIs
-    const rate = wd > 0 ? ((s.target - s.installed) / wd).toFixed(1) : '—';
+    const rate = wd > 0 ? ((s.target - s.installed) / wd).toFixed(1) : 'â€”';
     const pct  = s.target > 0 ? Math.round(s.installed / s.target * 100) : 0;
     document.getElementById('ct-kpis').innerHTML = [
         { c:'k-loc',  v: s.identified, k: 'Locations Identified', n: `<span style="color:#d1453b">${s.site_gap} more needed for ${s.target}</span>` },
         { c:'k-goal', v: s.target,     k: 'RVM Target',           n: `<span style="color:#0b6b4f">Go-live 15 Jul 2026</span>` },
-        { c:'k-live', v: s.installed,  k: 'RVMs Installed',       n: `${pct}% of ${s.target} · ${s.live} live` },
+        { c:'k-live', v: s.installed,  k: 'RVMs Installed',       n: `${pct}% of ${s.target} Â· ${s.live} live` },
         { c:'k-gap',  v: s.target - s.installed, k: 'Gap to Target', n: `<span style="color:#d1453b">units still to deploy</span>` },
         { c:'k-days', v: wd,           k: 'Working Days Left',    n: `${calDays} calendar days` },
         { c:'k-rate', v: rate,         k: 'Req. Installs / Day',  n: `<span style="color:#e08a1e">to hit target by deadline</span>` },
@@ -8137,9 +8137,9 @@ function renderCtDashboard(data) {
         while (cnt < daysNeeded) { proj.setDate(proj.getDate() + 1); if (proj.getDay() !== 0) cnt++; }
         const projStr = proj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
         const diff = Math.round((proj - DEADLINE) / 864e5);
-        let cls = 'ct-sim-green', msg = `On track — completes by ${projStr}`;
-        if (diff > 7)  { cls = 'ct-sim-red';   msg = `Misses deadline by ${diff} days — completes ${projStr}`; }
-        else if (diff > 0) { cls = 'ct-sim-amber'; msg = `Just misses deadline by ${diff} days — completes ${projStr}`; }
+        let cls = 'ct-sim-green', msg = `On track â€” completes by ${projStr}`;
+        if (diff > 7)  { cls = 'ct-sim-red';   msg = `Misses deadline by ${diff} days â€” completes ${projStr}`; }
+        else if (diff > 0) { cls = 'ct-sim-amber'; msg = `Just misses deadline by ${diff} days â€” completes ${projStr}`; }
         document.getElementById('ct-sim-result').className = `ct-sim-result ${cls}`;
         document.getElementById('ct-sim-result').textContent = msg;
     }
@@ -8159,9 +8159,9 @@ function renderCtDashboard(data) {
         const p = Math.round(st[1] / base * 100);
         const drop = i === 0 ? (s.identified - st[1]) : (stages[i-1][1] - st[1]);
         return `<div class="ct-funnel-stage">
-            <div class="ct-funnel-labels"><span class="fn">${st[0]}</span><span class="fc">${st[1]} · ${p}%</span></div>
+            <div class="ct-funnel-labels"><span class="fn">${st[0]}</span><span class="fc">${st[1]} Â· ${p}%</span></div>
             <div class="ct-funnel-bar"><div class="ct-funnel-fill" style="width:${Math.max(p,2)}%;background:${st[2]}">${st[1]}</div></div>
-            ${drop > 0 ? `<div class="ct-funnel-drop">▼ ${drop} drop from prev gate</div>` : ''}
+            ${drop > 0 ? `<div class="ct-funnel-drop">â–¼ ${drop} drop from prev gate</div>` : ''}
         </div>`;
     }).join('');
 
@@ -8169,11 +8169,11 @@ function renderCtDashboard(data) {
     const bn = data.bottlenecks;
     document.getElementById('ct-bottlenecks').innerHTML = [
         ['bn-crit', bn.site_gap,              'Site sourcing gap',          `Only ${s.identified} of ${s.target} locations mapped`],
-        ['bn-crit', bn.no_noc,                'NOC not received',           'Govt sign-off pending — gates everything downstream'],
+        ['bn-crit', bn.no_noc,                'NOC not received',           'Govt sign-off pending â€” gates everything downstream'],
         ['bn-warn', bn.no_agreement,          'Awaiting service agreement', 'NOC done but agreement unsigned'],
         ['bn-warn', bn.shed_pending,          'Shed pending',               'Shed required but not yet installed'],
         ['bn-warn', bn.elec_pending,          'Electricity not ready',      'Plug-point / power supply pending'],
-        ['bn-ok',   bn.delivered_not_installed,'Deployed, not installed',   'RVM on-site — needs base-fixing (quick win)'],
+        ['bn-ok',   bn.delivered_not_installed,'Deployed, not installed',   'RVM on-site â€” needs base-fixing (quick win)'],
         ['bn-ok',   bn.cctv_pending,          'CCTV pending',               'Final step before machine goes live'],
     ].map(([cls, count, title, desc]) => `
         <div class="ct-bn ${cls}">
@@ -8219,7 +8219,7 @@ function ctRenderBlockTable(blocks) {
         const active = ctActiveBlock === b.block ? ' ct-row-active' : '';
         return `<tr class="ct-block-row${active}" onclick="ctFilterByBlock('${b.block}')" style="cursor:pointer">
             <td><b>${b.block}</b></td>
-            <td style="font-size:11.5px;color:var(--muted)">${b.poc || '—'}</td>
+            <td style="font-size:11.5px;color:var(--muted)">${b.poc || 'â€”'}</td>
             <td>${b.total}</td>
             <td>${b.noc}</td>
             <td>${b.agreement}</td>
@@ -8233,10 +8233,10 @@ function ctRenderBlockTable(blocks) {
 }
 
 function ctFlag(val) {
-    if (val === true  || val === 'Yes')     return '<span class="ct-flag-yes">✓</span>';
-    if (val === false || val === 'No')      return '<span class="ct-flag-no">✗</span>';
-    if (val === 'Pending')                  return '<span class="ct-flag-pend">◐</span>';
-    if (!val || val === '' || val === '—')  return '<span class="ct-flag-na">·</span>';
+    if (val === true  || val === 'Yes')     return '<span class="ct-flag-yes">âœ“</span>';
+    if (val === false || val === 'No')      return '<span class="ct-flag-no">âœ—</span>';
+    if (val === 'Pending')                  return '<span class="ct-flag-pend">â—</span>';
+    if (!val || val === '' || val === 'â€”')  return '<span class="ct-flag-na">Â·</span>';
     return `<span class="ct-flag-pend">${val}</span>`;
 }
 
@@ -8248,7 +8248,7 @@ function ctRenderLocTable(locs) {
             <td style="color:var(--muted)">${i+1}</td>
             <td><b>${d.name}</b></td>
             <td>${d.block}</td>
-            <td style="font-size:11.5px;color:var(--muted)">${d.poc || '—'}</td>
+            <td style="font-size:11.5px;color:var(--muted)">${d.poc || 'â€”'}</td>
             <td><span class="ct-pill ct-s${d.ctStage}">${d.ctStageName}</span></td>
             <td>${ctFlag(d.noc)}</td>
             <td>${ctFlag(d.agreement)}</td>
@@ -8258,7 +8258,7 @@ function ctRenderLocTable(locs) {
             <td>${ctFlag(d.installed)}</td>
             <td>${ctFlag(d.cctvInstalled)}</td>
             <td>${ctFlag(d.machineLive)}</td>
-            <td style="font-size:11.5px;color:var(--muted);max-width:140px">${d.blocker || '—'}</td>
+            <td style="font-size:11.5px;color:var(--muted);max-width:140px">${d.blocker || 'â€”'}</td>
         </tr>`).join('') || '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--muted)">No locations match current filters.</td></tr>';
 }
 
@@ -8290,26 +8290,26 @@ function ctFilterByBlock(block) {
 
 window.ctFilterByBlock = ctFilterByBlock;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// RVM DEPLOYMENT — Plan vs Actual sub-tab
-// Plans stored in localStorage; actuals computed live from depData.locations.
-// ═══════════════════════════════════════════════════════════════════════════
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// RVM DEPLOYMENT â€” Plan vs Actual sub-tab (v2 â€” artifact design)
+// KPI actuals from depData.locations; plan+daily actuals from GSheet RVM-PvA.
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 const PVA_LS_KEY = 'dep_pva_plans';
+let pvaCachedPlans = null;
 
 const PVA_CATS = [
-    { key:'civil',    label:'Civil Work',      short:'Civil',    color:'#2f6fb0', field:'civilWorkStatus'  },
-    { key:'shed',     label:'Shed',             short:'Shed',     color:'#8b6914', field:'shedStatus'       },
-    { key:'elec',     label:'Electrical',       short:'Elec',     color:'#b45309', field:'electricalStatus' },
-    { key:'install',  label:'Machine Install',  short:'Install',  color:'#6b2fa0', field:'rvmDeployed'      },
-    { key:'internet', label:'Internet',         short:'Internet', color:'#0891b2', field:'internetStatus'   },
-    { key:'cctv',     label:'CCTV',             short:'CCTV',     color:'#be185d', field:'cctvStatus'       },
-    { key:'live',     label:'Machine Live',     short:'Live',     color:'#0b6b4f', field:'machineLive'      },
+    { key:'civil',    label:'Civil Work',     short:'Civil',   color:'#2563eb', field:'civilWorkStatus',  pace:true  },
+    { key:'shed',     label:'Shed',            short:'Shed',    color:'#92400e', field:'shedStatus',       pace:true  },
+    { key:'elec',     label:'Electrical',      short:'Elec',    color:'#d97706', field:'electricalStatus', pace:true  },
+    { key:'install',  label:'Machine Install', short:'Install', color:'#7c3aed', field:'rvmDeployed',      pace:true  },
+    { key:'internet', label:'Internet',        short:'Net',     color:'#0284c7', field:'internetStatus',   pace:true  },
+    { key:'cctv',     label:'CCTV',            short:'CCTV',    color:'#db2777', field:'cctvStatus',       pace:true  },
+    { key:'live',     label:'Machine Live',    short:'Live',    color:'#059669', field:'machineLive',      pace:false },
 ];
 
-// ── API-backed plan helpers (localStorage fallback when API unavailable) ─────
-
-let pvaCachedPlans = null;
+// â”€â”€ API helpers (GSheet primary, localStorage fallback) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function pvaGetPlans() {
     if (pvaCachedPlans !== null) return pvaCachedPlans;
@@ -8357,33 +8357,27 @@ window.pvaDeleteRow = function(date) {
     depRenderPvA(depFilteredLocs);
 };
 
-// ── Date helpers ──────────────────────────────────────────────────────────
+// â”€â”€ Date helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function pvaIsoToLabel(iso) {
-    const d = new Date(iso + 'T00:00:00');
-    return d.toLocaleDateString('en-IN', { month:'short', day:'numeric' });
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { month:'short', day:'numeric' });
 }
 function pvaDayShort(iso) {
     return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { weekday:'short' });
 }
-function pvaWeekStart(iso) {
-    const d = new Date(iso + 'T00:00:00');
-    const day = d.getDay();
-    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-    return d.toISOString().split('T')[0];
+function pvaWeekNum(iso) {
+    const origin = new Date('2026-06-02T00:00:00');
+    return Math.max(1, Math.floor((new Date(iso + 'T00:00:00') - origin) / (7 * 86400000)) + 1);
 }
-function pvaWeekEnd(mon) {
-    const d = new Date(mon + 'T00:00:00');
-    d.setDate(d.getDate() + 6);
-    return d.toISOString().split('T')[0];
-}
-function pvaGroupByWeek(plans) {
-    const wks = {};
-    plans.forEach(p => { const k = pvaWeekStart(p.date); (wks[k] = wks[k] || []).push(p); });
-    return wks;
+function pvaWeekLabel(wk) {
+    const origin = new Date('2026-06-02T00:00:00');
+    const start = new Date(origin.getTime() + (wk - 1) * 7 * 86400000);
+    const end   = new Date(start.getTime() + 6 * 86400000);
+    const f = d => d.toLocaleDateString('en-IN', { month:'short', day:'numeric' });
+    return `${f(start)} â€“ ${f(end)}`;
 }
 
-// ── Sub-tab wiring (called once from renderRvmDeployment) ─────────────────
+// â”€â”€ Sub-tab wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let _pvaSubTabsReady = false;
 function depInitSubTabs() {
@@ -8403,7 +8397,7 @@ function depInitSubTabs() {
     });
 }
 
-// ── Main PvA renderer ─────────────────────────────────────────────────────
+// â”€â”€ Main renderer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function depRenderPvA(locs) {
     const el = document.getElementById('dep-pva-view');
@@ -8412,24 +8406,26 @@ function depRenderPvA(locs) {
     const todayStr = today.toISOString().split('T')[0];
     const plans = pvaGetPlans();
 
+    // KPI actuals from live locations (authoritative count)
     const actuals = {};
     PVA_CATS.forEach(c => { actuals[c.key] = locs.filter(l => l[c.field] === 'Done').length; });
 
+    // Cumulative plan from GSheet (sum of *_plan for dates â‰¤ today)
     const planCum = {};
     PVA_CATS.forEach(c => { planCum[c.key] = 0; });
     plans.filter(p => p.date <= todayStr).forEach(p => {
-        PVA_CATS.forEach(c => { planCum[c.key] += (parseInt(p[c.key]) || 0); });
+        PVA_CATS.forEach(c => { planCum[c.key] += (parseInt(p[c.key + '_plan']) || 0); });
     });
 
-    const installByDate = pvaInstallByDate(locs);
-
     el.innerHTML = `<div class="pva-root">
-        ${pvaHtmlKpis(actuals, planCum, locs)}
-        ${pvaHtmlWeekSection(plans, actuals)}
-        ${pvaHtmlDailyLog(plans, actuals, todayStr, installByDate)}
-        ${pvaHtmlPlanForm(todayStr)}
-        ${pvaHtmlLocTable(locs)}
-        ${pvaHtmlSchema()}
+        ${pvaBannerHtml(plans, actuals, planCum, todayStr)}
+        ${pvaKpiSectionHtml(actuals, planCum, locs)}
+        ${pvaDodSectionHtml(plans, todayStr)}
+        ${pvaWowSectionHtml(plans, todayStr)}
+        ${pvaChartWrapHtml()}
+        ${pvaRcaSectionHtml(plans, todayStr)}
+        ${pvaPlanFormHtml(todayStr)}
+        ${pvaGuideSectionHtml()}
     </div>`;
 
     setTimeout(() => {
@@ -8438,345 +8434,438 @@ function depRenderPvA(locs) {
     }, 0);
 }
 
-// ── Install daily actuals (only category with date field) ─────────────────
+// â”€â”€ Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function pvaInstallByDate(locs) {
-    const byDate = {};
-    locs.forEach(l => {
-        if (l.rvmDeployed === 'Done' && l.installDate) {
-            const d = pvaParseInstallDate(l.installDate);
-            if (d) byDate[d] = (byDate[d] || 0) + 1;
-        }
-    });
-    return byDate;
+function pvaBannerHtml(plans, actuals, planCum, todayStr) {
+    const wk = pvaWeekNum(todayStr);
+    const paceCats = PVA_CATS.filter(c => c.pace);
+    const denom = paceCats.filter(c => planCum[c.key] > 0).length;
+    const pace = denom > 0
+        ? Math.round(paceCats.reduce((s, c) => s + (planCum[c.key] > 0 ? actuals[c.key] / planCum[c.key] * 100 : 0), 0) / denom)
+        : null;
+    const paceClr = pace === null ? 'var(--muted)' : pace >= 90 ? '#16a34a' : pace >= 70 ? '#d97706' : '#dc2626';
+    return `<div class="pva-banner">
+        <div class="pva-meta-row">
+            <div class="pva-meta-p">Rollout: <b>${depPlanTotal} RVMs</b></div>
+            <div class="pva-meta-div"></div>
+            <div class="pva-meta-p">Week: <b>${wk}</b></div>
+            <div class="pva-meta-div"></div>
+            <div class="pva-meta-p">Machine Live: <b>${actuals.live}</b></div>
+            <div class="pva-meta-div"></div>
+            <div class="pva-meta-p">Overall pace: <b style="color:${paceClr}">${pace !== null ? pace + '% of plan' : 'â€”'}</b></div>
+            <div class="pva-meta-div"></div>
+            <div class="pva-meta-p" style="font-size:10px;color:var(--muted)">avg. Civil Â· Shed Â· Elec Â· Install Â· Net Â· CCTV</div>
+        </div>
+    </div>`;
 }
-function pvaParseInstallDate(s) {
-    if (!s) return null;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const p = s.split('/');
-    if (p.length === 3) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-    return null;
-}
 
-// ── KPI cards ─────────────────────────────────────────────────────────────
+// â”€â”€ KPI cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function pvaHtmlKpis(actuals, planCum, locs) {
-    const T = depPlanTotal;
+function pvaKpiSectionHtml(actuals, planCum, locs) {
     function badge(a, p) {
         if (!p) return '';
         const d = a - p;
-        if (d > 0) return `<span class="pva-badge pva-badge-a">+${d}</span>`;
-        if (d < 0) return `<span class="pva-badge pva-badge-b">${d}</span>`;
-        return `<span class="pva-badge pva-badge-o">✓</span>`;
+        if (d >= 0)  return `<span class="pva-badge pva-badge-g">+${d} ahead</span>`;
+        if (d >= -3) return `<span class="pva-badge pva-badge-o">${d}</span>`;
+        return `<span class="pva-badge pva-badge-b">${d} behind</span>`;
     }
     const cards = PVA_CATS.map(c => {
         const act = actuals[c.key], plan = planCum[c.key] || 0;
         const nr = locs.filter(l => l[c.field] === 'Not Required').length;
-        const denom = Math.max(1, T - nr);
+        const denom = Math.max(1, depPlanTotal - nr);
         const pct = Math.round(act / denom * 100);
-        return `<div class="pva-kpi" style="--cat-clr:${c.color}">
-            <div class="pva-kpi-cat">${c.label}</div>
-            <div class="pva-kpi-num" style="color:${c.color}">${act}</div>
-            <div class="pva-kpi-row2">
-                <span class="pva-kpi-plan">${plan ? `Plan: ${plan}` : 'No plan set'}</span>
-                ${badge(act, plan)}
+        return `<div class="pva-kpi" style="border-top:3px solid ${c.color}">
+            <div class="pva-kpi-cat" style="color:${c.color}">${c.label}</div>
+            <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:6px">
+                <span class="pva-kpi-num" style="color:${c.color}">${act}</span>
+                <span class="pva-kpi-plan"> / ${plan || 'â€”'}</span>
             </div>
             <div class="pva-kpi-bar-wrap"><div class="pva-kpi-bar" style="width:${pct}%;background:${c.color}"></div></div>
-            <div class="pva-kpi-rem">${denom - act} of ${denom} left</div>
+            <div class="pva-kpi-row2">
+                <span class="pva-kpi-rem">${pct}%</span>
+                ${badge(act, plan)}
+            </div>
         </div>`;
     }).join('');
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Cumulative to date — actual vs plan</div>
+        <div class="pva-eyebrow">Category snapshot Â· cumulative to date</div>
         <div class="pva-kpi-grid">${cards}</div>
     </div>`;
 }
 
-// ── Week-on-week section (chart + weekly table) ───────────────────────────
+// â”€â”€ Day-on-Day table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function pvaHtmlWeekSection(plans, actuals) {
-    const empty = plans.length === 0;
-    const weekGroups = pvaGroupByWeek(plans);
-    const sortedWeeks = Object.keys(weekGroups).sort();
-    const catHeaders = PVA_CATS.map(c =>
-        `<th style="color:${c.color};text-align:center;font-size:9px;padding:6px 4px;text-transform:uppercase;letter-spacing:.04em;background:var(--ground)">${c.short}</th>`
-    ).join('');
-    const weekRows = sortedWeeks.map(wk => {
-        const wkLabel = `${pvaIsoToLabel(wk)} – ${pvaIsoToLabel(pvaWeekEnd(wk))}`;
-        const cells = PVA_CATS.map(c => {
-            const total = weekGroups[wk].reduce((s, p) => s + (parseInt(p[c.key]) || 0), 0);
-            return `<td style="text-align:center;color:${c.color};font-weight:700;font-variant-numeric:tabular-nums;font-size:13px;padding:8px 4px">${total}</td>`;
-        }).join('');
-        return `<tr style="border-bottom:1px dashed var(--border)">
-            <td style="font-size:11px;padding:8px 10px;white-space:nowrap;font-weight:600">${wkLabel}</td>${cells}
-        </tr>`;
-    }).join('');
-
-    const tableSection = empty ? '' : `<div style="border-top:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch">
-        <table style="width:100%;border-collapse:collapse;min-width:440px">
-            <thead><tr style="border-bottom:1px solid var(--border)">
-                <th style="text-align:left;padding:6px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--ground);min-width:120px">Week</th>
-                ${catHeaders}
-            </tr></thead>
-            <tbody>${weekRows}</tbody>
-        </table>
+function pvaDodSectionHtml(plans, todayStr) {
+    const visible = plans.filter(p => p.date <= todayStr).slice(-14);
+    if (!visible.length) return `<div class="pva-section">
+        <div class="pva-eyebrow">Day-on-Day Â· daily increments</div>
+        <div class="pva-empty">No entries yet â€” add plan data using the form below.</div>
     </div>`;
 
-    const chartBlock = empty
-        ? `<div class="pva-empty">No plan entries yet — add daily targets below to see the weekly chart and table.</div>`
-        : `<div class="pva-card" style="overflow:hidden">
-            <div style="padding:11px 14px 8px;font-size:13px;font-weight:700;color:var(--text);letter-spacing:-.01em">
-                Weekly plan totals &nbsp;<span style="font-size:10px;font-weight:400;color:var(--muted)">Solid line = plan curve · ○ = current actual</span>
-            </div>
-            <canvas id="pva-chart" style="display:block;width:100%;height:220px"></canvas>
-            <div id="pva-legend" style="display:flex;flex-wrap:wrap;gap:8px 14px;padding:10px 14px;border-top:1px solid var(--border)"></div>
-            ${tableSection}
-        </div>`;
-
-    return `<div class="pva-section">
-        <div class="pva-eyebrow">Week on week — plan by category</div>
-        ${chartBlock}
-    </div>`;
-}
-
-// ── Canvas chart ──────────────────────────────────────────────────────────
-
-function pvaDrawChart(plans, actuals) {
-    const canvas = document.getElementById('pva-chart');
-    if (!canvas || plans.length === 0) return;
-    const dpr = window.devicePixelRatio || 1;
-    const W = canvas.clientWidth || 400;
-    const H = 220;
-    canvas.width = W * dpr; canvas.height = H * dpr;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-
-    const weekGroups = pvaGroupByWeek(plans);
-    const sortedWeeks = Object.keys(weekGroups).sort();
-    if (sortedWeeks.length === 0) return;
-
-    // cumulative plan per category per week
-    const cumPlan = {};
-    PVA_CATS.forEach(c => { cumPlan[c.key] = []; });
-    const run = {}; PVA_CATS.forEach(c => { run[c.key] = 0; });
-    sortedWeeks.forEach(wk => {
-        PVA_CATS.forEach(c => {
-            run[c.key] += weekGroups[wk].reduce((s, p) => s + (parseInt(p[c.key]) || 0), 0);
-            cumPlan[c.key].push(run[c.key]);
-        });
+    let hdr = `<thead><tr><th style="text-align:left;min-width:90px" rowspan="2">Date</th>`;
+    PVA_CATS.forEach((c, i) => {
+        const sep = i > 0 ? ' cat-sep' : '';
+        hdr += `<th colspan="2" style="border-bottom:3px solid ${c.color}" class="${sep.trim()}">${c.label}</th>`;
     });
-
-    const todayWk = pvaWeekStart(new Date().toISOString().split('T')[0]);
-    const todayIdx = sortedWeeks.indexOf(todayWk);
-    const curIdx = todayIdx >= 0 ? todayIdx : sortedWeeks.length - 1;
-
-    const pad = { t:12, r:20, b:46, l:34 };
-    const gW = W - pad.l - pad.r;
-    const gH = H - pad.t - pad.b;
-    const allVals = Object.values(cumPlan).flat().concat(Object.values(actuals));
-    const yMax = Math.ceil(Math.max(10, ...allVals) / 5) * 5 + 5;
-
-    // grid + y-axis labels
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-        const y = pad.t + gH - (i / 4) * gH;
-        ctx.strokeStyle = '#e5e7eb';
-        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + gW, y); ctx.stroke();
-        ctx.fillStyle = '#9ca3af'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
-        ctx.fillText(Math.round((i / 4) * yMax), pad.l - 4, y + 3);
-    }
-
-    // x-axis labels + vertical guides
-    const xStep = sortedWeeks.length > 1 ? gW / (sortedWeeks.length - 1) : gW / 2;
-    sortedWeeks.forEach((wk, i) => {
-        const x = pad.l + i * xStep;
-        ctx.strokeStyle = '#f3f4f6'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + gH); ctx.stroke();
-        ctx.fillStyle = '#9ca3af'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center';
-        ctx.fillText(`W${i + 1}`, x, H - pad.b + 13);
-        const parts = wk.substring(5).split('-');
-        ctx.font = '10px system-ui';
-        ctx.fillText(`${parseInt(parts[1])}/${parseInt(parts[0])}`, x, H - pad.b + 25);
+    hdr += `<th rowspan="2" style="text-align:left;min-width:150px">Remarks</th></tr><tr class="pva-sub-hdr">`;
+    PVA_CATS.forEach((c, i) => {
+        const sep = i > 0 ? ' cat-sep' : '';
+        hdr += `<th class="${sep.trim()}">P</th><th>A</th>`;
     });
+    hdr += `</tr></thead>`;
 
-    // "today" vertical marker
-    if (curIdx >= 0) {
-        const cx = pad.l + curIdx * xStep;
-        ctx.strokeStyle = 'rgba(30,107,92,.3)'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
-        ctx.beginPath(); ctx.moveTo(cx, pad.t); ctx.lineTo(cx, pad.t + gH); ctx.stroke();
-        ctx.setLineDash([]);
-    }
-
-    // plan lines (cumulative)
-    PVA_CATS.forEach(c => {
-        const vals = cumPlan[c.key];
-        ctx.strokeStyle = c.color; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
-        ctx.beginPath();
-        vals.forEach((v, i) => {
-            const x = pad.l + i * xStep, y = pad.t + gH - (v / yMax) * gH;
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-        // terminal dot
-        const lx = pad.l + (vals.length - 1) * xStep, ly = pad.t + gH - (vals[vals.length - 1] / yMax) * gH;
-        ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2);
-        ctx.fillStyle = c.color; ctx.fill();
-    });
-
-    // actual dots at current week (open circles)
-    if (curIdx >= 0) {
-        PVA_CATS.forEach(c => {
-            const act = actuals[c.key];
-            const ax = pad.l + curIdx * xStep, ay = pad.t + gH - (act / yMax) * gH;
-            ctx.beginPath(); ctx.arc(ax, ay, 5.5, 0, Math.PI * 2);
-            ctx.fillStyle = '#fff'; ctx.fill();
-            ctx.strokeStyle = c.color; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(ax, ay, 5.5, 0, Math.PI * 2); ctx.stroke();
-        });
-    }
-
-    // legend
-    const leg = document.getElementById('pva-legend');
-    if (leg) {
-        leg.innerHTML = PVA_CATS.map(c =>
-            `<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-2)">
-                <div style="width:18px;height:3px;border-radius:2px;background:${c.color}"></div>${c.short}
-            </div>`
-        ).join('') + `<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">
-            <div style="width:11px;height:11px;border-radius:50%;border:2px solid #aaa;background:#fff;flex-shrink:0"></div>Current actual
-        </div>`;
-    }
-}
-
-// ── Daily log table ───────────────────────────────────────────────────────
-
-function pvaHtmlDailyLog(plans, actuals, todayStr, installByDate) {
-    if (plans.length === 0) {
-        return `<div class="pva-section">
-            <div class="pva-eyebrow">Daily plan vs actual log</div>
-            <div class="pva-empty">No plan entries yet. Add daily targets below — they will appear here.</div>
-        </div>`;
-    }
-
-    const past = plans.filter(p => p.date <= todayStr).slice(-14);
-    const future = plans.filter(p => p.date > todayStr).slice(0, 7);
-    const visible = [...past, ...future];
-
-    const catHeaders = PVA_CATS.map(c =>
-        `<th colspan="2" style="color:${c.color};text-align:center;padding:7px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;border-right:1px solid rgba(0,0,0,.07)">${c.short}</th>`
-    ).join('');
-    const subHeaders = PVA_CATS.map(() =>
-        `<th style="font-size:9px;text-align:center;opacity:.7;padding:4px 4px">P</th>
-         <th style="font-size:9px;text-align:center;opacity:.7;padding:4px 4px;border-right:1px solid rgba(0,0,0,.07)">A</th>`
-    ).join('');
-
-    function delta(a, p) {
-        const d = a - p;
-        if (d > 0) return `<span style="background:#f0fdf4;color:#15803d;font-size:8px;font-weight:700;padding:1px 4px;border-radius:100px">+${d}</span>`;
-        if (d < 0) return `<span style="background:#fef2f2;color:#dc2626;font-size:8px;font-weight:700;padding:1px 4px;border-radius:100px">${d}</span>`;
-        return `<span style="background:#f3f4f6;color:#9ca3af;font-size:8px;font-weight:700;padding:1px 4px;border-radius:100px">✓</span>`;
-    }
-
-    const rows = visible.map(p => {
+    const rtCls = {Weather:'rem-weather',Regulatory:'rem-reg',Contractor:'rem-contractor',ISP:'rem-isp',Resource:'rem-resource'};
+    let rows = '';
+    visible.forEach(p => {
         const isToday = p.date === todayStr;
-        const isPast = p.date < todayStr;
-        const rowStyle = isToday
-            ? 'background:rgba(30,107,92,.04);border-top:2px solid #1e6b5c;border-bottom:2px solid #1e6b5c'
-            : isPast ? '' : 'opacity:.65';
-
-        const cells = PVA_CATS.map(c => {
-            const pv = parseInt(p[c.key]) || 0;
-            let aCell;
-            if (c.key === 'install' && isPast) {
-                const av = installByDate[p.date] || 0;
-                aCell = `<span style="color:${c.color};font-size:13px;font-weight:700">${av}</span><br>${delta(av, pv)}`;
-            } else if (isPast || isToday) {
-                aCell = `<span style="color:var(--border-2);font-size:11px">—</span>`;
+        const allZero = PVA_CATS.every(c => !(parseInt(p[c.key+'_actual'])||0) && !(parseInt(p[c.key+'_plan'])||0));
+        rows += `<tr class="${isToday?'today-r':''} ${allZero?'zero-r':''}">`;
+        rows += `<td>${isToday
+            ? `<div class="td-today"><span class="today-ring"></span>${pvaIsoToLabel(p.date)}<span class="today-chip">today</span></div>`
+            : `<div><span style="font-size:11px;font-weight:600">${pvaIsoToLabel(p.date)}</span><div style="font-size:10px;color:var(--muted)">${pvaDayShort(p.date)}</div></div>`
+        }</td>`;
+        PVA_CATS.forEach((c, i) => {
+            const sep = i > 0 ? ' cat-sep' : '';
+            const pv = parseInt(p[c.key+'_plan']) || 0;
+            const av = parseInt(p[c.key+'_actual']) || 0;
+            if (!pv && !av) {
+                rows += `<td class="td-dash${sep}">â€”</td><td class="td-dash">â€”</td>`;
             } else {
-                aCell = `<span style="color:var(--border-2);font-size:11px">—</span>`;
+                const diff = isToday ? null : av - pv;
+                const acls = diff === null ? 'td-dash' : diff >= 0 ? 'td-g td-ac' : diff >= -2 ? 'td-ac' : 'td-b td-ac';
+                rows += `<td class="td-pl${sep}">${pv||'â€”'}</td><td class="${acls}">${isToday?'â€”':av}</td>`;
             }
-            return `<td style="text-align:center;padding:7px 4px;font-size:12px;font-variant-numeric:tabular-nums">${pv || '—'}</td>
-                    <td style="text-align:center;padding:7px 4px;border-right:1px solid rgba(0,0,0,.06)">${aCell}</td>`;
-        }).join('');
-
-        const todayTag = isToday ? '<div><span style="background:#1e6b5c;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.03em">TODAY</span></div>' : '';
-        const leftBorder = isToday ? 'border-left:4px solid #1e6b5c' : '';
-        const delBtn = (isPast || isToday)
-            ? `<button onclick="pvaDeleteRow('${p.date}')" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:11px;padding:3px 6px;border-radius:4px" title="Delete entry">✕</button>`
-            : '';
-
-        return `<tr style="${rowStyle}">
-            <td style="padding:7px 8px;white-space:nowrap;${leftBorder}">
-                <span style="font-weight:600;font-size:12px">${pvaIsoToLabel(p.date)}</span>
-                <span style="display:block;font-size:10px;color:var(--muted)">${pvaDayShort(p.date)}</span>
-                ${todayTag}
-            </td>
-            ${cells}
-            <td style="font-size:10px;color:#d97706;text-align:left;padding:7px 6px;min-width:100px;line-height:1.3">${p.notes || ''}</td>
-            <td style="text-align:center;padding:7px 4px">${delBtn}</td>
-        </tr>`;
-    }).join('');
-
-    const cumCells = PVA_CATS.map(c => {
-        const planTotal = plans.filter(p => p.date <= todayStr).reduce((s, p) => s + (parseInt(p[c.key]) || 0), 0);
-        return `<td colspan="2" style="text-align:center;color:${c.color};font-weight:700;font-size:11px;border-right:1px solid rgba(0,0,0,.07)">${actuals[c.key]} / ${planTotal}</td>`;
-    }).join('');
-    const remCells = PVA_CATS.map(c =>
-        `<td colspan="2" style="text-align:center;color:var(--muted);font-size:10px;border-right:1px solid rgba(0,0,0,.07)">${depPlanTotal - actuals[c.key]}</td>`
-    ).join('');
+        });
+        const rt = p.root_cause_type || '';
+        const tag = rt ? `<span class="rem-tag ${rtCls[rt]||'rem-progress'}">${rt}</span>` : '';
+        rows += `<td class="td-rem">${tag}${p.notes||''}</td></tr>`;
+    });
 
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Daily plan vs actual log</div>
-        <div class="pva-card" style="overflow:hidden">
-            <div style="padding:10px 14px 9px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--border)">
-                <span style="font-size:13px;font-weight:700;color:var(--text)">Daily log</span>
-                <span style="font-size:10px;color:var(--muted)">P = Plan &nbsp;|&nbsp; A = Actual (Install only — others need GSheet date columns)</span>
+        <div class="pva-eyebrow">Day-on-Day Â· daily increments â€” P = Plan Â· A = Actual</div>
+        <div class="pva-tbl-card">
+            <div class="pva-t-title">
+                <span class="pva-t-title-main">Day-on-Day</span>
+                <span class="pva-t-title-sub">Last 14 days shown Â· today highlighted Â· green = ahead Â· red = behind</span>
             </div>
-            <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-                <table style="width:100%;border-collapse:collapse;min-width:700px">
-                    <thead>
-                        <tr style="background:var(--ground);border-bottom:1px solid var(--border)">
-                            <th style="text-align:left;padding:7px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:68px">Date</th>
-                            ${catHeaders}
-                            <th style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:90px;padding:7px 4px">Notes</th>
-                            <th></th>
-                        </tr>
-                        <tr style="background:var(--ground);border-bottom:1px solid var(--border)">
-                            <th></th>${subHeaders}<th></th><th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rows}
-                        <tr style="background:rgba(30,107,92,.05);border-top:2px solid var(--accent-mid)">
-                            <td style="padding:7px 8px;font-size:11px;font-weight:700;color:var(--accent-dk)">Cumulative</td>
-                            ${cumCells}<td></td><td></td>
-                        </tr>
-                        <tr>
-                            <td style="padding:6px 8px;font-size:10px;font-weight:600;color:var(--text)">Remaining</td>
-                            ${remCells}<td></td><td></td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="pva-tbl-scroll"><table class="pva-tbl">${hdr}<tbody>${rows}</tbody></table></div>
+        </div>
+    </div>`;
+}
+
+// â”€â”€ Week-on-Week table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function pvaWowSectionHtml(plans, todayStr) {
+    const byWk = {};
+    plans.filter(p => p.date <= todayStr).forEach(p => {
+        const wk = p.week || pvaWeekNum(p.date);
+        (byWk[wk] = byWk[wk] || []).push(p);
+    });
+    const sortedWks = Object.keys(byWk).map(Number).sort((a,b)=>a-b);
+    if (!sortedWks.length) return `<div class="pva-section">
+        <div class="pva-eyebrow">Week-on-Week</div>
+        <div class="pva-empty">No weekly data yet.</div>
+    </div>`;
+
+    const curWk = pvaWeekNum(todayStr);
+    let hdr = `<thead><tr><th style="text-align:left;min-width:60px" rowspan="2">Week</th>
+        <th rowspan="2" style="color:rgba(255,255,255,.7);font-size:9px;min-width:80px">Period</th>`;
+    PVA_CATS.forEach((c, i) => {
+        const sep = i > 0 ? ' cat-sep' : '';
+        hdr += `<th colspan="2" style="border-bottom:3px solid ${c.color}" class="${sep.trim()}">${c.label}</th>`;
+    });
+    hdr += `</tr><tr class="pva-sub-hdr">`;
+    PVA_CATS.forEach((c, i) => {
+        const sep = i > 0 ? ' cat-sep' : '';
+        hdr += `<th class="${sep.trim()}">P</th><th>A</th>`;
+    });
+    hdr += `</tr></thead>`;
+
+    const cumTotPlan = {}, cumTotAct = {};
+    PVA_CATS.forEach(c => { cumTotPlan[c.key] = 0; cumTotAct[c.key] = 0; });
+
+    let rows = '';
+    sortedWks.forEach(wk => {
+        const entries = byWk[wk];
+        const wp = {}, wa = {};
+        PVA_CATS.forEach(c => {
+            wp[c.key] = entries.reduce((s,p) => s + (parseInt(p[c.key+'_plan'])||0), 0);
+            wa[c.key] = entries.reduce((s,p) => s + (parseInt(p[c.key+'_actual'])||0), 0);
+            cumTotPlan[c.key] += wp[c.key];
+            cumTotAct[c.key] += wa[c.key];
+        });
+        const isCur = wk === curWk;
+        rows += `<tr class="${isCur?'cur-wk':''}">`;
+        rows += `<td><div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700">Wk ${wk}</span>${isCur?'<span class="cur-badge">now</span>':''}</div></td>`;
+        rows += `<td style="font-size:10px;color:var(--muted);white-space:nowrap">${pvaWeekLabel(wk)}</td>`;
+        PVA_CATS.forEach((c, i) => {
+            const sep = i > 0 ? ' cat-sep' : '';
+            const pv = wp[c.key], av = wa[c.key];
+            const diff = av - pv;
+            const acls = diff >= 0 ? 'td-g td-ac' : diff >= -2 ? 'td-ac' : 'td-b td-ac';
+            rows += `<td class="td-pl${sep}">${pv}</td><td class="${acls}">${av}</td>`;
+        });
+        rows += `</tr>`;
+    });
+
+    let foot = `<tfoot><tr><td colspan="2">Cumulative</td>`;
+    PVA_CATS.forEach((c, i) => {
+        const sep = i > 0 ? ' cat-sep' : '';
+        foot += `<td class="${sep.trim()}" style="color:var(--muted);font-weight:600">${cumTotPlan[c.key]}</td><td style="color:${c.color};font-weight:800">${cumTotAct[c.key]}</td>`;
+    });
+    foot += `</tr></tfoot>`;
+
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Week-on-Week Â· weekly totals + cumulative footer</div>
+        <div class="pva-tbl-card">
+            <div class="pva-t-title">
+                <span class="pva-t-title-main">Week-on-Week</span>
+                <span class="pva-t-title-sub">Weeks with data only Â· cumulative running total at footer</span>
+            </div>
+            <div class="pva-tbl-scroll"><table class="pva-tbl">${hdr}<tbody>${rows}</tbody>${foot}</table></div>
+        </div>
+    </div>`;
+}
+
+// â”€â”€ Chart wrap HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function pvaChartWrapHtml() {
+    const legend = PVA_CATS.map(c =>
+        `<div class="pva-leg-i"><svg width="18" height="7"><line x1="0" y1="3.5" x2="18" y2="3.5" stroke="${c.color}" stroke-width="2" stroke-dasharray="5 2"/></svg>${c.short}</div>`
+    ).join('');
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Cumulative trend Â· plan vs actual Â· Jun 2 â†’ 12 weeks</div>
+        <div class="pva-chart-card">
+            <div class="pva-chart-hdr">
+                <span class="pva-chart-ttl">All 7 categories Â· cumulative rollout</span>
+                <span class="pva-chart-hint">dashed = plan Â· solid + dots = actual (GSheet data)</span>
+            </div>
+            <div class="pva-legend-row">${legend}</div>
+            <canvas id="pva-chart"></canvas>
+            <div class="pva-chart-note">
+                <span>- - - dashed = plan target (12-week curve)</span>
+                <span>â€”â— solid = weekly actual completions</span>
             </div>
         </div>
     </div>`;
 }
 
-// ── Plan entry form ───────────────────────────────────────────────────────
+// â”€â”€ Chart draw â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function pvaHtmlPlanForm(todayStr) {
+function pvaDrawChart(plans, locActuals) {
+    const cv = document.getElementById('pva-chart');
+    if (!cv) return;
+
+    const byWk = {};
+    plans.forEach(p => {
+        const wk = p.week || pvaWeekNum(p.date);
+        (byWk[wk] = byWk[wk] || []).push(p);
+    });
+
+    const maxWk = 12;
+    const WK_LABELS = Array.from({length:maxWk}, (_,i) => {
+        const d = new Date('2026-06-02T00:00:00');
+        d.setDate(d.getDate() + i * 7);
+        return d.toLocaleDateString('en-IN', {month:'short', day:'numeric'});
+    });
+
+    // Cumulative plan per week
+    const cumPlan = {};
+    PVA_CATS.forEach(c => { cumPlan[c.key] = Array(maxWk).fill(0); });
+    let running = {};
+    PVA_CATS.forEach(c => { running[c.key] = 0; });
+    for (let w = 1; w <= maxWk; w++) {
+        const entries = byWk[w] || [];
+        PVA_CATS.forEach(c => {
+            running[c.key] += entries.reduce((s,p) => s + (parseInt(p[c.key+'_plan'])||0), 0);
+            cumPlan[c.key][w-1] = running[c.key];
+        });
+    }
+
+    // Cumulative GSheet actuals per week
+    const wksWithData = Object.keys(byWk).map(Number).sort((a,b)=>a-b);
+    const cumAct = {};
+    let runAct = {};
+    PVA_CATS.forEach(c => { cumAct[c.key] = {}; runAct[c.key] = 0; });
+    wksWithData.forEach(w => {
+        const entries = byWk[w];
+        PVA_CATS.forEach(c => {
+            runAct[c.key] += entries.reduce((s,p) => s + (parseInt(p[c.key+'_actual'])||0), 0);
+            cumAct[c.key][w] = runAct[c.key];
+        });
+    });
+
+    // If no GSheet actuals yet, use location counts as single current-week dot
+    const hasActuals = wksWithData.some(w => PVA_CATS.some(c => (cumAct[c.key][w]||0) > 0));
+    const today = new Date(); today.setHours(0,0,0,0);
+    const curWk = pvaWeekNum(today.toISOString().split('T')[0]);
+    if (!hasActuals) {
+        PVA_CATS.forEach(c => { cumAct[c.key][curWk] = locActuals[c.key]; });
+        wksWithData.splice(0, wksWithData.length, curWk);
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = Math.max(200, (cv.parentElement.clientWidth || 320) - 28);
+    const H = 220;
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    const c = cv.getContext('2d'); c.scale(dpr, dpr);
+    const P = {t:18, r:14, b:34, l:40};
+    const cW = W - P.l - P.r, cH = H - P.t - P.b;
+
+    let mx = 0;
+    cumPlan[PVA_CATS[0].key].forEach(v => { if (v > mx) mx = v; });
+    mx = Math.ceil((mx || 50) * 1.1 / 50) * 50;
+
+    const sx = i => P.l + i * (cW / (maxWk - 1));
+    const sy = v => P.t + cH - (v / mx) * cH;
+
+    c.fillStyle = '#f8fbf9'; c.fillRect(0, 0, W, H);
+
+    // Grid
+    for (let v = 0; v <= mx; v += 50) {
+        const y = sy(v);
+        c.strokeStyle = '#e4eae8'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(P.l, y); c.lineTo(P.l + cW, y); c.stroke();
+        c.fillStyle = '#a0ada9'; c.font = "9px 'Segoe UI',system-ui,sans-serif"; c.textAlign = 'right';
+        c.fillText(v, P.l - 5, y + 3);
+    }
+    WK_LABELS.forEach((lbl, i) => {
+        if (i % 2 === 0) {
+            c.fillStyle = '#a0ada9'; c.font = "9px 'Segoe UI',system-ui,sans-serif"; c.textAlign = 'center';
+            c.fillText(lbl, sx(i), H - 9);
+        }
+    });
+
+    // Fade + TODAY marker
+    const lastActWk = Math.max(...wksWithData, 0);
+    if (lastActWk > 0 && lastActWk < maxWk) {
+        const fadeX = sx(lastActWk - 1) + cW / (maxWk - 1) * 0.6;
+        const g = c.createLinearGradient(fadeX, 0, fadeX + 90, 0);
+        g.addColorStop(0, 'rgba(248,251,249,0)'); g.addColorStop(1, 'rgba(248,251,249,.8)');
+        c.fillStyle = g; c.fillRect(fadeX, P.t, 90, cH);
+    }
+    const todayX = sx(Math.min(curWk - 1, maxWk - 1)) + cW / (maxWk - 1) * 0.35;
+    c.save(); c.setLineDash([5,4]); c.strokeStyle = '#1e6b5c'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(todayX, P.t); c.lineTo(todayX, P.t + cH); c.stroke(); c.restore();
+    c.fillStyle = '#1e6b5c'; c.font = "bold 8px 'Segoe UI',system-ui,sans-serif"; c.textAlign = 'center';
+    c.fillText('TODAY', todayX, P.t + 9);
+
+    // Plan lines (12 weeks, dashed)
+    PVA_CATS.forEach(cat => {
+        c.save(); c.setLineDash([5,3]); c.strokeStyle = cat.color + '80'; c.lineWidth = 1.5;
+        c.beginPath();
+        cumPlan[cat.key].forEach((v, i) => { const x = sx(i), y = sy(v); i === 0 ? c.moveTo(x,y) : c.lineTo(x,y); });
+        c.stroke(); c.restore();
+    });
+
+    // Actual lines (solid + dots)
+    PVA_CATS.forEach(cat => {
+        const pts = wksWithData.map(w => ({x: sx(w-1), y: sy(cumAct[cat.key][w]||0)}));
+        if (!pts.length) return;
+        c.strokeStyle = cat.color; c.lineWidth = 2.5;
+        c.beginPath(); pts.forEach((p,i) => i===0 ? c.moveTo(p.x,p.y) : c.lineTo(p.x,p.y)); c.stroke();
+        pts.forEach((p, i) => {
+            c.beginPath(); c.arc(p.x, p.y, i===pts.length-1?4:3, 0, Math.PI*2);
+            c.fillStyle = cat.color; c.fill();
+            c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.stroke();
+        });
+    });
+}
+
+// â”€â”€ Root Cause Analysis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function pvaRcaSectionHtml(plans, todayStr) {
+    const delayEntries = plans.filter(p => p.date <= todayStr && p.root_cause_type && p.notes);
+    if (!delayEntries.length) return `<div class="pva-section">
+        <div class="pva-eyebrow">Root Cause Analysis</div>
+        <div class="pva-empty">No delay entries yet. Add root cause + remarks in the form below when a day is behind plan.</div>
+    </div>`;
+
+    const byType = {};
+    delayEntries.forEach(p => {
+        const t = p.root_cause_type;
+        if (!byType[t]) byType[t] = {count:0, notes:[]};
+        byType[t].count++;
+        if (p.notes) byType[t].notes.push(p.notes);
+    });
+
+    const meta = {
+        Weather:    {cls:'pva-t-wx',  emoji:'ðŸŒ§', bg:'#e0f2fe', ins:'Pre-monsoon conditions causing outdoor work halts. Front-load covered-site work to mornings.'},
+        Regulatory: {cls:'pva-t-reg', emoji:'ðŸ“‹', bg:'#fef3c7', ins:'Approvals and inspections are blocking progress. Proactive BDO escalation needed.'},
+        Contractor: {cls:'pva-t-con', emoji:'ðŸ‘·', bg:'#ede9fe', ins:'Vendor availability bottleneck. Add backup contractors to remove single-vendor dependency.'},
+        ISP:        {cls:'pva-t-isp', emoji:'ðŸ“¡', bg:'#fce7f3', ins:'Last-mile fiber gaps blocking internet â€” cascades to machine install. Explore alternate ISPs.'},
+        Resource:   {cls:'pva-t-res', emoji:'ðŸ”§', bg:'#f3f4f6', ins:'Internal capacity/material constraint. Review crew allocation and supply chain.'},
+    };
+
+    const sevenDaysAgo = new Date(Date.now() - 7*86400000).toISOString().split('T')[0];
+    const statsHtml = [
+        {n: delayEntries.length,                                         l:'Delay days logged',  cls:''},
+        {n: Object.keys(byType).length,                                  l:'Cause types',        cls:'amber'},
+        {n: delayEntries.filter(p => p.date >= sevenDaysAgo).length,    l:'Last 7 days',        cls:'red'},
+    ].map(s => `<div class="pva-rca-stat"><div class="pva-rca-n ${s.cls}">${s.n}</div><div class="pva-rca-l">${s.l}</div></div>`).join('');
+
+    const insightsHtml = Object.entries(byType).slice(0,4).map(([type, data]) => {
+        const m = meta[type] || meta.Resource;
+        const latest = data.notes[data.notes.length-1] || '';
+        return `<div class="pva-ins-row">
+            <div class="pva-ins-icon" style="background:${m.bg}">${m.emoji}</div>
+            <div class="pva-ins-text"><b>${type} (${data.count}Ã— logged)</b> â€” ${m.ins}
+                ${latest ? `<div style="margin-top:3px;color:var(--muted);font-size:11px">"${latest}"</div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+
+    let tblRows = '';
+    Object.entries(byType).sort((a,b)=>b[1].count-a[1].count).forEach(([type, data]) => {
+        const m = meta[type] || meta.Resource;
+        tblRows += `<tr>
+            <td style="text-align:left"><span class="pva-type-badge ${m.cls}">${type}</span></td>
+            <td style="font-weight:800;color:#dc2626">${data.count}d</td>
+            <td style="text-align:left;font-size:10px;color:var(--text2);line-height:1.4">${data.notes.slice(-2).join(' Â· ')}</td>
+        </tr>`;
+    });
+
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Root Cause Analysis Â· why we're behind â€” from Remarks column</div>
+        <div class="pva-rca-grid">${statsHtml}</div>
+        <div class="pva-rca-insights">
+            <div class="pva-ins-title">Key Insights â€” derived from Remarks</div>
+            ${insightsHtml}
+        </div>
+        <div class="pva-tbl-card">
+            <div class="pva-t-title">
+                <span class="pva-t-title-main">Delay Root Causes</span>
+                <span class="pva-t-title-sub">Grouped by type Â· from Remarks column Â· sorted by frequency</span>
+            </div>
+            <div class="pva-tbl-scroll"><table class="pva-tbl">
+                <thead><tr>
+                    <th style="text-align:left;min-width:120px">Cause Type</th>
+                    <th>Days</th>
+                    <th style="text-align:left;min-width:180px">Recent Remarks</th>
+                </tr></thead>
+                <tbody>${tblRows}</tbody>
+            </table></div>
+        </div>
+    </div>`;
+}
+
+// â”€â”€ Plan entry form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function pvaPlanFormHtml(todayStr) {
     const d = new Date(todayStr + 'T00:00:00');
     d.setDate(d.getDate() + 1);
     const defDate = d.toISOString().split('T')[0];
-    const inputs = PVA_CATS.map(c =>
-        `<div style="display:flex;flex-direction:column;gap:4px">
-            <label for="pva-f-${c.key}" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${c.color}">${c.short}</label>
-            <input type="number" id="pva-f-${c.key}" min="0" max="99" value="0"
-                style="width:100%;height:44px;text-align:center;border:1.5px solid var(--border);border-radius:8px;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;background:var(--ground);color:var(--text);-webkit-appearance:none">
+
+    const mkInputs = (prefix, bg) => PVA_CATS.map(c =>
+        `<div style="display:flex;flex-direction:column;gap:3px">
+            <label for="pva-${prefix}-${c.key}" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${c.color}">${c.short}</label>
+            <input type="number" id="pva-${prefix}-${c.key}" min="0" max="99" value="0"
+                style="width:100%;height:40px;text-align:center;border:1.5px solid var(--border);border-radius:8px;font-size:16px;font-weight:700;background:${bg};color:var(--text)">
         </div>`
     ).join('');
+
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Add / update plan entry</div>
+        <div class="pva-eyebrow">Add / update entry</div>
         <div class="pva-card" style="padding:14px">
             <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
                 <div style="flex:1;min-width:140px">
@@ -8786,13 +8875,19 @@ function pvaHtmlPlanForm(todayStr) {
                 </div>
                 <div id="pva-f-rel" style="font-size:13px;font-weight:600;color:var(--accent);padding:0 4px 9px;min-width:80px"></div>
             </div>
-            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Daily targets <span style="font-weight:400;color:var(--muted);font-size:11px">(sites to complete that day)</span></div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">${inputs}</div>
+            <div style="margin-bottom:12px">
+                <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Plan targets (daily)</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${mkInputs('fp','var(--ground)')}</div>
+            </div>
+            <div style="margin-bottom:12px">
+                <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Actual completions (enter each evening)</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${mkInputs('fa','var(--surface)')}</div>
+            </div>
             <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">
                 <div style="flex:1;min-width:160px">
-                    <label for="pva-f-rct" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Root Cause <span style="font-weight:400;color:var(--muted);font-size:11px">(if behind plan)</span></label>
+                    <label for="pva-f-rct" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Root Cause <span style="font-weight:400;color:var(--muted)">(if behind plan)</span></label>
                     <select id="pva-f-rct" style="width:100%;height:44px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)">
-                        <option value="">— None / On track —</option>
+                        <option value="">â€” None / On track â€”</option>
                         <option value="Weather">Weather</option>
                         <option value="Regulatory">Regulatory</option>
                         <option value="Contractor">Contractor</option>
@@ -8801,19 +8896,21 @@ function pvaHtmlPlanForm(todayStr) {
                     </select>
                 </div>
                 <div style="flex:2;min-width:180px">
-                    <label for="pva-f-notes" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Remarks <span style="font-weight:400;color:var(--muted);font-size:11px">(blockers, crew changes)</span></label>
+                    <label for="pva-f-notes" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Remarks</label>
                     <input type="text" id="pva-f-notes"
                         style="width:100%;height:44px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)"
-                        placeholder="e.g. Margao civil crew short. ISP delayed in Panaji.">
+                        placeholder="Why any category is behind â€” be specific: cause, location, who acts">
                 </div>
             </div>
             <button id="pva-save-btn"
-                style="width:100%;height:44px;margin-top:2px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .2s">
+                style="width:100%;height:44px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:background .2s">
                 Save to Google Sheet
             </button>
         </div>
     </div>`;
 }
+
+// â”€â”€ Form wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function pvaWireForm(locs) {
     const dateInp = document.getElementById('pva-f-date');
@@ -8824,13 +8921,16 @@ function pvaWireForm(locs) {
         if (!rel || !dateInp.value) return;
         const today = new Date(); today.setHours(0,0,0,0);
         const diff = Math.round((new Date(dateInp.value + 'T00:00:00') - today) / 86400000);
-        rel.textContent = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : diff === -1 ? 'Yesterday' : diff > 0 ? `In ${diff} days` : `${Math.abs(diff)} days ago`;
+        rel.textContent = diff===0?'Today':diff===1?'Tomorrow':diff===-1?'Yesterday':diff>0?`In ${diff} days`:`${Math.abs(diff)} days ago`;
     }
     function prefill() {
         if (!dateInp.value) return;
         const ex = pvaGetPlans().find(p => p.date === dateInp.value);
         if (!ex) return;
-        PVA_CATS.forEach(c => { const el = document.getElementById(`pva-f-${c.key}`); if (el) el.value = ex[c.key] || 0; });
+        PVA_CATS.forEach(c => {
+            const ep = document.getElementById(`pva-fp-${c.key}`); if (ep) ep.value = ex[c.key+'_plan'] || 0;
+            const ea = document.getElementById(`pva-fa-${c.key}`); if (ea) ea.value = ex[c.key+'_actual'] || 0;
+        });
         const n = document.getElementById('pva-f-notes'); if (n) n.value = ex.notes || '';
         const rct = document.getElementById('pva-f-rct'); if (rct) rct.value = ex.root_cause_type || '';
     }
@@ -8841,117 +8941,69 @@ function pvaWireForm(locs) {
         const d = dateInp.value;
         if (!d) { showToast('Pick a date first'); return; }
         const btn = document.getElementById('pva-save-btn');
-        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        if (btn) { btn.disabled = true; btn.textContent = 'Savingâ€¦'; }
         const entry = { date: d };
-        PVA_CATS.forEach(c => { entry[c.key] = parseInt(document.getElementById(`pva-f-${c.key}`)?.value) || 0; });
+        PVA_CATS.forEach(c => {
+            entry[c.key+'_plan']   = parseInt(document.getElementById(`pva-fp-${c.key}`)?.value) || 0;
+            entry[c.key+'_actual'] = parseInt(document.getElementById(`pva-fa-${c.key}`)?.value) || 0;
+        });
         entry.notes = (document.getElementById('pva-f-notes')?.value || '').trim();
         entry.root_cause_type = (document.getElementById('pva-f-rct')?.value || '').trim();
         await pvaSavePlan(entry);
-        showToast(`Plan saved for ${pvaIsoToLabel(d)}`);
+        showToast(`Saved for ${pvaIsoToLabel(d)}`);
         depRenderPvA(locs);
     });
 }
 
-// ── Location-wise table ───────────────────────────────────────────────────
+// â”€â”€ GSheet guide accordion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function pvaHtmlLocTable(locs) {
-    function pill(v) {
-        if (v === 'Done')         return `<span style="background:#f0fdf4;color:#15803d;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;white-space:nowrap">✓</span>`;
-        if (v === 'Pending')      return `<span style="background:#fef2f2;color:#dc2626;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;white-space:nowrap">●</span>`;
-        if (v === 'Not Required') return `<span style="background:#f9fafb;color:#9ca3af;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;white-space:nowrap">N/R</span>`;
-        return `<span style="color:#d1d5db;font-size:12px">—</span>`;
-    }
-    const catHdrs = PVA_CATS.map(c =>
-        `<th style="color:${c.color};text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.04em;padding:7px 5px;background:var(--ground)">${c.short}</th>`
-    ).join('');
-    const rows = locs.map((l, i) => {
-        const cells = PVA_CATS.map(c => `<td style="text-align:center;padding:6px 5px">${pill(l[c.field])}</td>`).join('');
-        return `<tr style="${i % 2 === 1 ? 'background:#fafafa' : ''}">
-            <td style="padding:7px 10px;font-weight:600;font-size:11px;min-width:120px">${l.locationName || '—'}</td>
-            <td style="padding:7px 6px;font-size:10px;color:var(--muted);min-width:72px">${l.block || '—'}</td>
-            ${cells}
-        </tr>`;
-    }).join('');
-    return `<div class="pva-section">
-        <div class="pva-eyebrow">Location-wise — all 7 categories</div>
-        <div class="pva-card" style="overflow:hidden">
-            <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-                <table style="width:100%;border-collapse:collapse;min-width:600px">
-                    <thead><tr style="border-bottom:1px solid var(--border)">
-                        <th style="text-align:left;padding:7px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--ground)">Location</th>
-                        <th style="text-align:left;padding:7px 6px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--ground)">Block</th>
-                        ${catHdrs}
-                    </tr></thead>
-                    <tbody>${rows}</tbody>
-                </table>
-            </div>
-        </div>
-    </div>`;
-}
-
-// ── GSheet data schema ────────────────────────────────────────────────────
-
-function pvaHtmlSchema() {
-    const rows1 = [
-        ['Date','YYYY-MM-DD','Work date — one row per day (enter the evening before)'],
-        ['Civil_Plan','Number','Target civil work completions today'],
-        ['Shed_Plan','Number','Target shed completions today'],
-        ['Electrical_Plan','Number','Target electrical connections today'],
-        ['Install_Plan','Number','Target machine installations today'],
-        ['Internet_Plan','Number','Target internet connections today'],
-        ['CCTV_Plan','Number','Target CCTV installations today'],
-        ['Live_Plan','Number','Target machines to go live today'],
-        ['Notes','Text','Blockers, crew changes, site constraints'],
-    ].map(([col,type,desc]) =>
-        `<tr style="border-bottom:1px dashed var(--border)">
-            <td style="padding:6px 8px;font-weight:700;font-family:monospace;font-size:10px;color:#0b6b4f;white-space:nowrap">${col}</td>
-            <td style="padding:6px 8px;font-size:10px;color:var(--muted)">${type}</td>
-            <td style="padding:6px 8px;font-size:11px">${desc}</td>
+function pvaGuideSectionHtml() {
+    const rows = [
+        ['A','Date','Date','YYYY-MM-DD â€” one row per day (skip zero-activity days)',false],
+        ['B','Week','Number','Auto: =WEEKNUM(A2,2)-WEEKNUM(DATE(2026,6,2),2)+1',false],
+        ['C','Civil_Plan','Number','Civil completions planned today',true],
+        ['D','Civil_Actual','Number','Civil works actually completed today',false],
+        ['E','Shed_Plan','Number','Sheds planned today',true],
+        ['F','Shed_Actual','Number','Sheds completed today',false],
+        ['G','Elec_Plan','Number','Electrical planned today',true],
+        ['H','Elec_Actual','Number','Electrical done today',false],
+        ['I','Install_Plan','Number','Machine installs planned today',true],
+        ['J','Install_Actual','Number','Machines installed today',false],
+        ['K','Internet_Plan','Number','Internet connections planned today',true],
+        ['L','Internet_Actual','Number','Internet done today',false],
+        ['M','CCTV_Plan','Number','CCTV installs planned today',true],
+        ['N','CCTV_Actual','Number','CCTV done today',false],
+        ['O','Live_Plan','Number','Machines going live today (target)',true],
+        ['P','Live_Actual','Number','Machines that went live today',false],
+        ['Q','Root_Cause_Type','Dropdown','Weather Â· Regulatory Â· Contractor Â· ISP Â· Resource â€” or blank',true],
+        ['R','Remarks','Text','Why any category is behind â€” specific: cause, location, who acts',false],
+    ].map(([col,name,type,desc,sep]) =>
+        `<tr ${sep?'class="cat-grp"':''}>
+            <td>${col}</td><td>${name}</td><td>${type}</td><td>${desc}</td>
         </tr>`
     ).join('');
-    const rows2 = [
-        ['CivilWork_DoneDate','YYYY-MM-DD','Stamp when civilWorkStatus → Done'],
-        ['Shed_DoneDate','YYYY-MM-DD','Stamp when shedStatus → Done'],
-        ['Electrical_DoneDate','YYYY-MM-DD','Stamp when electricalStatus → Done'],
-        ['Internet_DoneDate','YYYY-MM-DD','Stamp when internetStatus → Done'],
-        ['CCTV_DoneDate','YYYY-MM-DD','Stamp when cctvStatus → Done'],
-        ['Live_DoneDate','YYYY-MM-DD','Stamp when machineLive → Done'],
-    ].map(([col,type,desc]) =>
-        `<tr style="border-bottom:1px dashed var(--border)">
-            <td style="padding:6px 8px;font-weight:700;font-family:monospace;font-size:10px;color:#0b6b4f;white-space:nowrap">${col}</td>
-            <td style="padding:6px 8px;font-size:10px;color:var(--muted)">${type}</td>
-            <td style="padding:6px 8px;font-size:11px">${desc}</td>
-        </tr>`
-    ).join('');
+
     return `<div class="pva-section">
-        <div class="pva-eyebrow">Google Sheet data required</div>
-        <div class="pva-card" style="padding:14px">
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">Sheet 1 — RVM-PvA-Plans (new tab, daily targets)</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">One row per day. Team lead enters targets the evening before. Currently stored in your browser — connecting to GSheet unlocks multi-device sync and history.</div>
-            <div style="overflow-x:auto;margin-bottom:16px">
-                <table style="width:100%;border-collapse:collapse;min-width:380px;font-size:11px">
-                    <thead><tr style="background:var(--accent-lt);border-bottom:1px solid var(--accent-mid)">
-                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Column</th>
-                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Type</th>
-                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Description</th>
-                    </tr></thead>
-                    <tbody>${rows1}</tbody>
-                </table>
+        <div class="pva-eyebrow">GSheet guide Â· 18-column single-tab setup</div>
+        <div class="pva-guide-card">
+            <div class="pva-guide-hdr" onclick="document.getElementById('pva-guide-body').classList.toggle('open')">
+                <div>
+                    <div class="pva-g-title">Tab: <code style="background:#e8f5f1;padding:1px 6px;border-radius:4px;font-size:12px;color:#1e6b5c">RVM-PvA</code> â€” 18 columns Aâ€“R Â· powers DoD Â· WoW Â· RCA</div>
+                    <div class="pva-g-sub">One row per day Â· enter plan targets morning Â· actual completions evening Â· remarks when behind</div>
+                </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">Sheet 2 — RVM Deployment (add 6 date columns)</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Actuals are computed from these. Backend stamps the date when each field changes to Done — no manual entry needed. Install already has installDate; the others need new columns.</div>
-            <div style="overflow-x:auto">
-                <table style="width:100%;border-collapse:collapse;min-width:380px;font-size:11px">
-                    <thead><tr style="background:var(--accent-lt);border-bottom:1px solid var(--accent-mid)">
-                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">New Column</th>
-                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Type</th>
-                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">When to stamp</th>
-                    </tr></thead>
-                    <tbody>${rows2}</tbody>
-                </table>
-            </div>
-            <div style="margin-top:12px;background:var(--warn-lt);border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:11px;color:#92400e;line-height:1.5">
-                <strong>How actuals connect:</strong> For a given date, "Civil actual = COUNT rows where CivilWork_DoneDate = that date". The app already writes status changes — backend just needs to also stamp the date when a field becomes Done. One small change in google_services.py unlocks all daily actuals automatically.
+            <div class="pva-guide-body" id="pva-guide-body">
+                <div class="pva-tbl-scroll" style="margin-bottom:14px">
+                    <table class="pva-schema-t">${rows}</table>
+                </div>
+                <div class="pva-formula-box">
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Day-on-Day â†’</span>filter Date â‰¤ today Â· one row per day Â· P vs A per category</div>
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Week-on-Week â†’</span>SUMIF on col B (Week) Â· sum Plan cols + Actual cols per week</div>
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">Cumulative trend â†’</span>running SUM of Actual cols from row 2 â†’ current date row</div>
+                    <div><span style="color:var(--muted);font-size:10px;margin-right:8px">RCA table â†’</span>GROUP BY col Q (Root_Cause_Type) Â· latest Remarks per type</div>
+                </div>
+                <div class="pva-guide-note"><b>Week auto-formula (col B):</b> <code style="background:#e8f5f1;padding:1px 5px;border-radius:4px;font-size:11px;color:#1e6b5c">=WEEKNUM(A2,2)-WEEKNUM(DATE(2026,6,2),2)+1</code></div>
             </div>
         </div>
     </div>`;

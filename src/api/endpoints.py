@@ -1143,13 +1143,20 @@ async def get_deployment_summary(request: Request):
 class PvAPlanEntry(BaseModel):
     date: str
     week: int = 0
-    civil: int = 0
-    shed: int = 0
-    elec: int = 0
-    install: int = 0
-    internet: int = 0
-    cctv: int = 0
-    live: int = 0
+    civil_plan: int = 0
+    civil_actual: int = 0
+    shed_plan: int = 0
+    shed_actual: int = 0
+    elec_plan: int = 0
+    elec_actual: int = 0
+    install_plan: int = 0
+    install_actual: int = 0
+    internet_plan: int = 0
+    internet_actual: int = 0
+    cctv_plan: int = 0
+    cctv_actual: int = 0
+    live_plan: int = 0
+    live_actual: int = 0
     root_cause_type: str = ""
     notes: str = ""
 
