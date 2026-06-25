@@ -646,7 +646,13 @@
                         <!-- Main content (hidden until loaded) -->
                         <div id="ct-main" style="display:none">
 
+                            <!-- Sub-tabs: Overview | Plan vs Actual -->
+                            <div class="dep-subtab-strip">
+                                <button class="dep-subtab active" data-dep-tab="overview">Overview</button>
+                                <button class="dep-subtab" data-dep-tab="pva">Plan vs Actual <span class="dep-subtab-badge">NEW</span></button>
+                            </div>
 
+                            <div id="dep-overview-view">
 
                             <!-- Header + 6 Filters + Deadline Picker -->
                             <div class="card dep-page-header">
@@ -773,6 +779,9 @@
                                     </table>
                                 </div>
                             </div>
+
+                            </div><!-- /dep-overview-view -->
+                            <div id="dep-pva-view" style="display:none"></div>
 
                         </div><!-- /ct-main -->
                         <div id="ct-error" style="display:none" class="ct-banner ct-banner-err"></div>
@@ -1569,6 +1578,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=87"></script>
+    <script src="/static/app.js?v=88"></script>
 </body>
 </html>

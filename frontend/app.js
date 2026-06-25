@@ -7928,6 +7928,7 @@ function depRenderCPSection(cpData, planTotal) {
 // ── Main Render + Filters ─────────────────────────────────────────────────────
 
 function renderRvmDeployment(data) {
+    depInitSubTabs();
     if (data.planTotal) depPlanTotal = data.planTotal;
     const subtitleEl = document.getElementById('dep-header-subtitle');
     if (subtitleEl) subtitleEl.textContent = `${depPlanTotal} Collection Points · Goa DRS 2026`;
@@ -8035,6 +8036,9 @@ function depApplyFilters() {
         () => depRenderBlockSummary(locs),
     ].forEach(fn => { try { fn(); } catch(e) { console.error('dep render error:', e); } });
     depApplyTableFilters();
+    // Refresh PvA view if it is currently visible
+    const pvaView = document.getElementById('dep-pva-view');
+    if (pvaView && pvaView.style.display !== 'none') depRenderPvA(locs);
 }
 
 function depParseDate(s) {
@@ -8285,3 +8289,670 @@ function ctFilterByBlock(block) {
 }
 
 window.ctFilterByBlock = ctFilterByBlock;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RVM DEPLOYMENT — Plan vs Actual sub-tab
+// Plans stored in localStorage; actuals computed live from depData.locations.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PVA_LS_KEY = 'dep_pva_plans';
+
+const PVA_CATS = [
+    { key:'civil',    label:'Civil Work',      short:'Civil',    color:'#2f6fb0', field:'civilWorkStatus'  },
+    { key:'shed',     label:'Shed',             short:'Shed',     color:'#8b6914', field:'shedStatus'       },
+    { key:'elec',     label:'Electrical',       short:'Elec',     color:'#b45309', field:'electricalStatus' },
+    { key:'install',  label:'Machine Install',  short:'Install',  color:'#6b2fa0', field:'rvmDeployed'      },
+    { key:'internet', label:'Internet',         short:'Internet', color:'#0891b2', field:'internetStatus'   },
+    { key:'cctv',     label:'CCTV',             short:'CCTV',     color:'#be185d', field:'cctvStatus'       },
+    { key:'live',     label:'Machine Live',     short:'Live',     color:'#0b6b4f', field:'machineLive'      },
+];
+
+// ── API-backed plan helpers (localStorage fallback when API unavailable) ─────
+
+let pvaCachedPlans = null;
+
+function pvaGetPlans() {
+    if (pvaCachedPlans !== null) return pvaCachedPlans;
+    try { return JSON.parse(localStorage.getItem(PVA_LS_KEY) || '[]'); } catch(e) { return []; }
+}
+async function pvaFetchPlans() {
+    try {
+        const r = await fetch('/api/pva/plans');
+        if (!r.ok) throw new Error('api_unavailable');
+        const data = await r.json();
+        pvaCachedPlans = (data.plans || []).sort((a, b) => a.date.localeCompare(b.date));
+        return pvaCachedPlans;
+    } catch(e) {
+        pvaCachedPlans = (() => { try { return JSON.parse(localStorage.getItem(PVA_LS_KEY) || '[]'); } catch(_){ return []; } })();
+        return pvaCachedPlans;
+    }
+}
+async function pvaSavePlan(entry) {
+    const origin = new Date('2026-06-02T00:00:00');
+    const d = new Date(entry.date + 'T00:00:00');
+    entry.week = Math.max(1, Math.floor((d - origin) / (7 * 86400000)) + 1);
+    try {
+        const r = await fetch('/api/pva/plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(entry),
+        });
+        if (!r.ok) throw new Error('save_failed');
+        await pvaFetchPlans();
+    } catch(e) {
+        const plans = pvaGetPlans();
+        const idx = plans.findIndex(p => p.date === entry.date);
+        if (idx >= 0) plans[idx] = entry; else plans.push(entry);
+        plans.sort((a, b) => a.date.localeCompare(b.date));
+        localStorage.setItem(PVA_LS_KEY, JSON.stringify(plans));
+        pvaCachedPlans = plans;
+    }
+}
+function pvaDeletePlan(date) {
+    if (pvaCachedPlans) pvaCachedPlans = pvaCachedPlans.filter(p => p.date !== date);
+    localStorage.setItem(PVA_LS_KEY, JSON.stringify(pvaGetPlans().filter(p => p.date !== date)));
+}
+window.pvaDeleteRow = function(date) {
+    pvaDeletePlan(date);
+    depRenderPvA(depFilteredLocs);
+};
+
+// ── Date helpers ──────────────────────────────────────────────────────────
+
+function pvaIsoToLabel(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-IN', { month:'short', day:'numeric' });
+}
+function pvaDayShort(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { weekday:'short' });
+}
+function pvaWeekStart(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    const day = d.getDay();
+    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+    return d.toISOString().split('T')[0];
+}
+function pvaWeekEnd(mon) {
+    const d = new Date(mon + 'T00:00:00');
+    d.setDate(d.getDate() + 6);
+    return d.toISOString().split('T')[0];
+}
+function pvaGroupByWeek(plans) {
+    const wks = {};
+    plans.forEach(p => { const k = pvaWeekStart(p.date); (wks[k] = wks[k] || []).push(p); });
+    return wks;
+}
+
+// ── Sub-tab wiring (called once from renderRvmDeployment) ─────────────────
+
+let _pvaSubTabsReady = false;
+function depInitSubTabs() {
+    if (_pvaSubTabsReady) return;
+    _pvaSubTabsReady = true;
+    document.querySelectorAll('.dep-subtab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.dep-subtab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const tab = btn.dataset.depTab;
+            const ov = document.getElementById('dep-overview-view');
+            const pv = document.getElementById('dep-pva-view');
+            if (ov) ov.style.display = tab === 'overview' ? '' : 'none';
+            if (pv) pv.style.display = tab === 'pva' ? '' : 'none';
+            if (tab === 'pva') pvaFetchPlans().then(() => depRenderPvA(depFilteredLocs));
+        });
+    });
+}
+
+// ── Main PvA renderer ─────────────────────────────────────────────────────
+
+function depRenderPvA(locs) {
+    const el = document.getElementById('dep-pva-view');
+    if (!el || !locs) return;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    const plans = pvaGetPlans();
+
+    const actuals = {};
+    PVA_CATS.forEach(c => { actuals[c.key] = locs.filter(l => l[c.field] === 'Done').length; });
+
+    const planCum = {};
+    PVA_CATS.forEach(c => { planCum[c.key] = 0; });
+    plans.filter(p => p.date <= todayStr).forEach(p => {
+        PVA_CATS.forEach(c => { planCum[c.key] += (parseInt(p[c.key]) || 0); });
+    });
+
+    const installByDate = pvaInstallByDate(locs);
+
+    el.innerHTML = `<div class="pva-root">
+        ${pvaHtmlKpis(actuals, planCum, locs)}
+        ${pvaHtmlWeekSection(plans, actuals)}
+        ${pvaHtmlDailyLog(plans, actuals, todayStr, installByDate)}
+        ${pvaHtmlPlanForm(todayStr)}
+        ${pvaHtmlLocTable(locs)}
+        ${pvaHtmlSchema()}
+    </div>`;
+
+    setTimeout(() => {
+        pvaDrawChart(plans, actuals);
+        pvaWireForm(locs);
+    }, 0);
+}
+
+// ── Install daily actuals (only category with date field) ─────────────────
+
+function pvaInstallByDate(locs) {
+    const byDate = {};
+    locs.forEach(l => {
+        if (l.rvmDeployed === 'Done' && l.installDate) {
+            const d = pvaParseInstallDate(l.installDate);
+            if (d) byDate[d] = (byDate[d] || 0) + 1;
+        }
+    });
+    return byDate;
+}
+function pvaParseInstallDate(s) {
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const p = s.split('/');
+    if (p.length === 3) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+    return null;
+}
+
+// ── KPI cards ─────────────────────────────────────────────────────────────
+
+function pvaHtmlKpis(actuals, planCum, locs) {
+    const T = depPlanTotal;
+    function badge(a, p) {
+        if (!p) return '';
+        const d = a - p;
+        if (d > 0) return `<span class="pva-badge pva-badge-a">+${d}</span>`;
+        if (d < 0) return `<span class="pva-badge pva-badge-b">${d}</span>`;
+        return `<span class="pva-badge pva-badge-o">✓</span>`;
+    }
+    const cards = PVA_CATS.map(c => {
+        const act = actuals[c.key], plan = planCum[c.key] || 0;
+        const nr = locs.filter(l => l[c.field] === 'Not Required').length;
+        const denom = Math.max(1, T - nr);
+        const pct = Math.round(act / denom * 100);
+        return `<div class="pva-kpi" style="--cat-clr:${c.color}">
+            <div class="pva-kpi-cat">${c.label}</div>
+            <div class="pva-kpi-num" style="color:${c.color}">${act}</div>
+            <div class="pva-kpi-row2">
+                <span class="pva-kpi-plan">${plan ? `Plan: ${plan}` : 'No plan set'}</span>
+                ${badge(act, plan)}
+            </div>
+            <div class="pva-kpi-bar-wrap"><div class="pva-kpi-bar" style="width:${pct}%;background:${c.color}"></div></div>
+            <div class="pva-kpi-rem">${denom - act} of ${denom} left</div>
+        </div>`;
+    }).join('');
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Cumulative to date — actual vs plan</div>
+        <div class="pva-kpi-grid">${cards}</div>
+    </div>`;
+}
+
+// ── Week-on-week section (chart + weekly table) ───────────────────────────
+
+function pvaHtmlWeekSection(plans, actuals) {
+    const empty = plans.length === 0;
+    const weekGroups = pvaGroupByWeek(plans);
+    const sortedWeeks = Object.keys(weekGroups).sort();
+    const catHeaders = PVA_CATS.map(c =>
+        `<th style="color:${c.color};text-align:center;font-size:9px;padding:6px 4px;text-transform:uppercase;letter-spacing:.04em;background:var(--ground)">${c.short}</th>`
+    ).join('');
+    const weekRows = sortedWeeks.map(wk => {
+        const wkLabel = `${pvaIsoToLabel(wk)} – ${pvaIsoToLabel(pvaWeekEnd(wk))}`;
+        const cells = PVA_CATS.map(c => {
+            const total = weekGroups[wk].reduce((s, p) => s + (parseInt(p[c.key]) || 0), 0);
+            return `<td style="text-align:center;color:${c.color};font-weight:700;font-variant-numeric:tabular-nums;font-size:13px;padding:8px 4px">${total}</td>`;
+        }).join('');
+        return `<tr style="border-bottom:1px dashed var(--border)">
+            <td style="font-size:11px;padding:8px 10px;white-space:nowrap;font-weight:600">${wkLabel}</td>${cells}
+        </tr>`;
+    }).join('');
+
+    const tableSection = empty ? '' : `<div style="border-top:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table style="width:100%;border-collapse:collapse;min-width:440px">
+            <thead><tr style="border-bottom:1px solid var(--border)">
+                <th style="text-align:left;padding:6px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--ground);min-width:120px">Week</th>
+                ${catHeaders}
+            </tr></thead>
+            <tbody>${weekRows}</tbody>
+        </table>
+    </div>`;
+
+    const chartBlock = empty
+        ? `<div class="pva-empty">No plan entries yet — add daily targets below to see the weekly chart and table.</div>`
+        : `<div class="pva-card" style="overflow:hidden">
+            <div style="padding:11px 14px 8px;font-size:13px;font-weight:700;color:var(--text);letter-spacing:-.01em">
+                Weekly plan totals &nbsp;<span style="font-size:10px;font-weight:400;color:var(--muted)">Solid line = plan curve · ○ = current actual</span>
+            </div>
+            <canvas id="pva-chart" style="display:block;width:100%;height:220px"></canvas>
+            <div id="pva-legend" style="display:flex;flex-wrap:wrap;gap:8px 14px;padding:10px 14px;border-top:1px solid var(--border)"></div>
+            ${tableSection}
+        </div>`;
+
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Week on week — plan by category</div>
+        ${chartBlock}
+    </div>`;
+}
+
+// ── Canvas chart ──────────────────────────────────────────────────────────
+
+function pvaDrawChart(plans, actuals) {
+    const canvas = document.getElementById('pva-chart');
+    if (!canvas || plans.length === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth || 400;
+    const H = 220;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const weekGroups = pvaGroupByWeek(plans);
+    const sortedWeeks = Object.keys(weekGroups).sort();
+    if (sortedWeeks.length === 0) return;
+
+    // cumulative plan per category per week
+    const cumPlan = {};
+    PVA_CATS.forEach(c => { cumPlan[c.key] = []; });
+    const run = {}; PVA_CATS.forEach(c => { run[c.key] = 0; });
+    sortedWeeks.forEach(wk => {
+        PVA_CATS.forEach(c => {
+            run[c.key] += weekGroups[wk].reduce((s, p) => s + (parseInt(p[c.key]) || 0), 0);
+            cumPlan[c.key].push(run[c.key]);
+        });
+    });
+
+    const todayWk = pvaWeekStart(new Date().toISOString().split('T')[0]);
+    const todayIdx = sortedWeeks.indexOf(todayWk);
+    const curIdx = todayIdx >= 0 ? todayIdx : sortedWeeks.length - 1;
+
+    const pad = { t:12, r:20, b:46, l:34 };
+    const gW = W - pad.l - pad.r;
+    const gH = H - pad.t - pad.b;
+    const allVals = Object.values(cumPlan).flat().concat(Object.values(actuals));
+    const yMax = Math.ceil(Math.max(10, ...allVals) / 5) * 5 + 5;
+
+    // grid + y-axis labels
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.t + gH - (i / 4) * gH;
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + gW, y); ctx.stroke();
+        ctx.fillStyle = '#9ca3af'; ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(Math.round((i / 4) * yMax), pad.l - 4, y + 3);
+    }
+
+    // x-axis labels + vertical guides
+    const xStep = sortedWeeks.length > 1 ? gW / (sortedWeeks.length - 1) : gW / 2;
+    sortedWeeks.forEach((wk, i) => {
+        const x = pad.l + i * xStep;
+        ctx.strokeStyle = '#f3f4f6'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + gH); ctx.stroke();
+        ctx.fillStyle = '#9ca3af'; ctx.font = '600 10px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(`W${i + 1}`, x, H - pad.b + 13);
+        const parts = wk.substring(5).split('-');
+        ctx.font = '10px system-ui';
+        ctx.fillText(`${parseInt(parts[1])}/${parseInt(parts[0])}`, x, H - pad.b + 25);
+    });
+
+    // "today" vertical marker
+    if (curIdx >= 0) {
+        const cx = pad.l + curIdx * xStep;
+        ctx.strokeStyle = 'rgba(30,107,92,.3)'; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(cx, pad.t); ctx.lineTo(cx, pad.t + gH); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // plan lines (cumulative)
+    PVA_CATS.forEach(c => {
+        const vals = cumPlan[c.key];
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+        ctx.beginPath();
+        vals.forEach((v, i) => {
+            const x = pad.l + i * xStep, y = pad.t + gH - (v / yMax) * gH;
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        // terminal dot
+        const lx = pad.l + (vals.length - 1) * xStep, ly = pad.t + gH - (vals[vals.length - 1] / yMax) * gH;
+        ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+        ctx.fillStyle = c.color; ctx.fill();
+    });
+
+    // actual dots at current week (open circles)
+    if (curIdx >= 0) {
+        PVA_CATS.forEach(c => {
+            const act = actuals[c.key];
+            const ax = pad.l + curIdx * xStep, ay = pad.t + gH - (act / yMax) * gH;
+            ctx.beginPath(); ctx.arc(ax, ay, 5.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff'; ctx.fill();
+            ctx.strokeStyle = c.color; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(ax, ay, 5.5, 0, Math.PI * 2); ctx.stroke();
+        });
+    }
+
+    // legend
+    const leg = document.getElementById('pva-legend');
+    if (leg) {
+        leg.innerHTML = PVA_CATS.map(c =>
+            `<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-2)">
+                <div style="width:18px;height:3px;border-radius:2px;background:${c.color}"></div>${c.short}
+            </div>`
+        ).join('') + `<div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)">
+            <div style="width:11px;height:11px;border-radius:50%;border:2px solid #aaa;background:#fff;flex-shrink:0"></div>Current actual
+        </div>`;
+    }
+}
+
+// ── Daily log table ───────────────────────────────────────────────────────
+
+function pvaHtmlDailyLog(plans, actuals, todayStr, installByDate) {
+    if (plans.length === 0) {
+        return `<div class="pva-section">
+            <div class="pva-eyebrow">Daily plan vs actual log</div>
+            <div class="pva-empty">No plan entries yet. Add daily targets below — they will appear here.</div>
+        </div>`;
+    }
+
+    const past = plans.filter(p => p.date <= todayStr).slice(-14);
+    const future = plans.filter(p => p.date > todayStr).slice(0, 7);
+    const visible = [...past, ...future];
+
+    const catHeaders = PVA_CATS.map(c =>
+        `<th colspan="2" style="color:${c.color};text-align:center;padding:7px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;border-right:1px solid rgba(0,0,0,.07)">${c.short}</th>`
+    ).join('');
+    const subHeaders = PVA_CATS.map(() =>
+        `<th style="font-size:9px;text-align:center;opacity:.7;padding:4px 4px">P</th>
+         <th style="font-size:9px;text-align:center;opacity:.7;padding:4px 4px;border-right:1px solid rgba(0,0,0,.07)">A</th>`
+    ).join('');
+
+    function delta(a, p) {
+        const d = a - p;
+        if (d > 0) return `<span style="background:#f0fdf4;color:#15803d;font-size:8px;font-weight:700;padding:1px 4px;border-radius:100px">+${d}</span>`;
+        if (d < 0) return `<span style="background:#fef2f2;color:#dc2626;font-size:8px;font-weight:700;padding:1px 4px;border-radius:100px">${d}</span>`;
+        return `<span style="background:#f3f4f6;color:#9ca3af;font-size:8px;font-weight:700;padding:1px 4px;border-radius:100px">✓</span>`;
+    }
+
+    const rows = visible.map(p => {
+        const isToday = p.date === todayStr;
+        const isPast = p.date < todayStr;
+        const rowStyle = isToday
+            ? 'background:rgba(30,107,92,.04);border-top:2px solid #1e6b5c;border-bottom:2px solid #1e6b5c'
+            : isPast ? '' : 'opacity:.65';
+
+        const cells = PVA_CATS.map(c => {
+            const pv = parseInt(p[c.key]) || 0;
+            let aCell;
+            if (c.key === 'install' && isPast) {
+                const av = installByDate[p.date] || 0;
+                aCell = `<span style="color:${c.color};font-size:13px;font-weight:700">${av}</span><br>${delta(av, pv)}`;
+            } else if (isPast || isToday) {
+                aCell = `<span style="color:var(--border-2);font-size:11px">—</span>`;
+            } else {
+                aCell = `<span style="color:var(--border-2);font-size:11px">—</span>`;
+            }
+            return `<td style="text-align:center;padding:7px 4px;font-size:12px;font-variant-numeric:tabular-nums">${pv || '—'}</td>
+                    <td style="text-align:center;padding:7px 4px;border-right:1px solid rgba(0,0,0,.06)">${aCell}</td>`;
+        }).join('');
+
+        const todayTag = isToday ? '<div><span style="background:#1e6b5c;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;letter-spacing:.03em">TODAY</span></div>' : '';
+        const leftBorder = isToday ? 'border-left:4px solid #1e6b5c' : '';
+        const delBtn = (isPast || isToday)
+            ? `<button onclick="pvaDeleteRow('${p.date}')" style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:11px;padding:3px 6px;border-radius:4px" title="Delete entry">✕</button>`
+            : '';
+
+        return `<tr style="${rowStyle}">
+            <td style="padding:7px 8px;white-space:nowrap;${leftBorder}">
+                <span style="font-weight:600;font-size:12px">${pvaIsoToLabel(p.date)}</span>
+                <span style="display:block;font-size:10px;color:var(--muted)">${pvaDayShort(p.date)}</span>
+                ${todayTag}
+            </td>
+            ${cells}
+            <td style="font-size:10px;color:#d97706;text-align:left;padding:7px 6px;min-width:100px;line-height:1.3">${p.notes || ''}</td>
+            <td style="text-align:center;padding:7px 4px">${delBtn}</td>
+        </tr>`;
+    }).join('');
+
+    const cumCells = PVA_CATS.map(c => {
+        const planTotal = plans.filter(p => p.date <= todayStr).reduce((s, p) => s + (parseInt(p[c.key]) || 0), 0);
+        return `<td colspan="2" style="text-align:center;color:${c.color};font-weight:700;font-size:11px;border-right:1px solid rgba(0,0,0,.07)">${actuals[c.key]} / ${planTotal}</td>`;
+    }).join('');
+    const remCells = PVA_CATS.map(c =>
+        `<td colspan="2" style="text-align:center;color:var(--muted);font-size:10px;border-right:1px solid rgba(0,0,0,.07)">${depPlanTotal - actuals[c.key]}</td>`
+    ).join('');
+
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Daily plan vs actual log</div>
+        <div class="pva-card" style="overflow:hidden">
+            <div style="padding:10px 14px 9px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--border)">
+                <span style="font-size:13px;font-weight:700;color:var(--text)">Daily log</span>
+                <span style="font-size:10px;color:var(--muted)">P = Plan &nbsp;|&nbsp; A = Actual (Install only — others need GSheet date columns)</span>
+            </div>
+            <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+                <table style="width:100%;border-collapse:collapse;min-width:700px">
+                    <thead>
+                        <tr style="background:var(--ground);border-bottom:1px solid var(--border)">
+                            <th style="text-align:left;padding:7px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:68px">Date</th>
+                            ${catHeaders}
+                            <th style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:90px;padding:7px 4px">Notes</th>
+                            <th></th>
+                        </tr>
+                        <tr style="background:var(--ground);border-bottom:1px solid var(--border)">
+                            <th></th>${subHeaders}<th></th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                        <tr style="background:rgba(30,107,92,.05);border-top:2px solid var(--accent-mid)">
+                            <td style="padding:7px 8px;font-size:11px;font-weight:700;color:var(--accent-dk)">Cumulative</td>
+                            ${cumCells}<td></td><td></td>
+                        </tr>
+                        <tr>
+                            <td style="padding:6px 8px;font-size:10px;font-weight:600;color:var(--text)">Remaining</td>
+                            ${remCells}<td></td><td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ── Plan entry form ───────────────────────────────────────────────────────
+
+function pvaHtmlPlanForm(todayStr) {
+    const d = new Date(todayStr + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    const defDate = d.toISOString().split('T')[0];
+    const inputs = PVA_CATS.map(c =>
+        `<div style="display:flex;flex-direction:column;gap:4px">
+            <label for="pva-f-${c.key}" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${c.color}">${c.short}</label>
+            <input type="number" id="pva-f-${c.key}" min="0" max="99" value="0"
+                style="width:100%;height:44px;text-align:center;border:1.5px solid var(--border);border-radius:8px;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;background:var(--ground);color:var(--text);-webkit-appearance:none">
+        </div>`
+    ).join('');
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Add / update plan entry</div>
+        <div class="pva-card" style="padding:14px">
+            <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
+                <div style="flex:1;min-width:140px">
+                    <label for="pva-f-date" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Date</label>
+                    <input type="date" id="pva-f-date" value="${defDate}"
+                        style="width:100%;height:44px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text)">
+                </div>
+                <div id="pva-f-rel" style="font-size:13px;font-weight:600;color:var(--accent);padding:0 4px 9px;min-width:80px"></div>
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Daily targets <span style="font-weight:400;color:var(--muted);font-size:11px">(sites to complete that day)</span></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">${inputs}</div>
+            <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:160px">
+                    <label for="pva-f-rct" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Root Cause <span style="font-weight:400;color:var(--muted);font-size:11px">(if behind plan)</span></label>
+                    <select id="pva-f-rct" style="width:100%;height:44px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)">
+                        <option value="">— None / On track —</option>
+                        <option value="Weather">Weather</option>
+                        <option value="Regulatory">Regulatory</option>
+                        <option value="Contractor">Contractor</option>
+                        <option value="ISP">ISP</option>
+                        <option value="Resource">Resource</option>
+                    </select>
+                </div>
+                <div style="flex:2;min-width:180px">
+                    <label for="pva-f-notes" style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px">Remarks <span style="font-weight:400;color:var(--muted);font-size:11px">(blockers, crew changes)</span></label>
+                    <input type="text" id="pva-f-notes"
+                        style="width:100%;height:44px;padding:0 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text)"
+                        placeholder="e.g. Margao civil crew short. ISP delayed in Panaji.">
+                </div>
+            </div>
+            <button id="pva-save-btn"
+                style="width:100%;height:44px;margin-top:2px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .2s">
+                Save to Google Sheet
+            </button>
+        </div>
+    </div>`;
+}
+
+function pvaWireForm(locs) {
+    const dateInp = document.getElementById('pva-f-date');
+    if (!dateInp) return;
+
+    function relLabel() {
+        const rel = document.getElementById('pva-f-rel');
+        if (!rel || !dateInp.value) return;
+        const today = new Date(); today.setHours(0,0,0,0);
+        const diff = Math.round((new Date(dateInp.value + 'T00:00:00') - today) / 86400000);
+        rel.textContent = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : diff === -1 ? 'Yesterday' : diff > 0 ? `In ${diff} days` : `${Math.abs(diff)} days ago`;
+    }
+    function prefill() {
+        if (!dateInp.value) return;
+        const ex = pvaGetPlans().find(p => p.date === dateInp.value);
+        if (!ex) return;
+        PVA_CATS.forEach(c => { const el = document.getElementById(`pva-f-${c.key}`); if (el) el.value = ex[c.key] || 0; });
+        const n = document.getElementById('pva-f-notes'); if (n) n.value = ex.notes || '';
+        const rct = document.getElementById('pva-f-rct'); if (rct) rct.value = ex.root_cause_type || '';
+    }
+    dateInp.addEventListener('input', () => { relLabel(); prefill(); });
+    relLabel(); prefill();
+
+    document.getElementById('pva-save-btn')?.addEventListener('click', async () => {
+        const d = dateInp.value;
+        if (!d) { showToast('Pick a date first'); return; }
+        const btn = document.getElementById('pva-save-btn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        const entry = { date: d };
+        PVA_CATS.forEach(c => { entry[c.key] = parseInt(document.getElementById(`pva-f-${c.key}`)?.value) || 0; });
+        entry.notes = (document.getElementById('pva-f-notes')?.value || '').trim();
+        entry.root_cause_type = (document.getElementById('pva-f-rct')?.value || '').trim();
+        await pvaSavePlan(entry);
+        showToast(`Plan saved for ${pvaIsoToLabel(d)}`);
+        depRenderPvA(locs);
+    });
+}
+
+// ── Location-wise table ───────────────────────────────────────────────────
+
+function pvaHtmlLocTable(locs) {
+    function pill(v) {
+        if (v === 'Done')         return `<span style="background:#f0fdf4;color:#15803d;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;white-space:nowrap">✓</span>`;
+        if (v === 'Pending')      return `<span style="background:#fef2f2;color:#dc2626;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;white-space:nowrap">●</span>`;
+        if (v === 'Not Required') return `<span style="background:#f9fafb;color:#9ca3af;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;white-space:nowrap">N/R</span>`;
+        return `<span style="color:#d1d5db;font-size:12px">—</span>`;
+    }
+    const catHdrs = PVA_CATS.map(c =>
+        `<th style="color:${c.color};text-align:center;font-size:9px;text-transform:uppercase;letter-spacing:.04em;padding:7px 5px;background:var(--ground)">${c.short}</th>`
+    ).join('');
+    const rows = locs.map((l, i) => {
+        const cells = PVA_CATS.map(c => `<td style="text-align:center;padding:6px 5px">${pill(l[c.field])}</td>`).join('');
+        return `<tr style="${i % 2 === 1 ? 'background:#fafafa' : ''}">
+            <td style="padding:7px 10px;font-weight:600;font-size:11px;min-width:120px">${l.locationName || '—'}</td>
+            <td style="padding:7px 6px;font-size:10px;color:var(--muted);min-width:72px">${l.block || '—'}</td>
+            ${cells}
+        </tr>`;
+    }).join('');
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Location-wise — all 7 categories</div>
+        <div class="pva-card" style="overflow:hidden">
+            <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+                <table style="width:100%;border-collapse:collapse;min-width:600px">
+                    <thead><tr style="border-bottom:1px solid var(--border)">
+                        <th style="text-align:left;padding:7px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--ground)">Location</th>
+                        <th style="text-align:left;padding:7px 6px;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--ground)">Block</th>
+                        ${catHdrs}
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ── GSheet data schema ────────────────────────────────────────────────────
+
+function pvaHtmlSchema() {
+    const rows1 = [
+        ['Date','YYYY-MM-DD','Work date — one row per day (enter the evening before)'],
+        ['Civil_Plan','Number','Target civil work completions today'],
+        ['Shed_Plan','Number','Target shed completions today'],
+        ['Electrical_Plan','Number','Target electrical connections today'],
+        ['Install_Plan','Number','Target machine installations today'],
+        ['Internet_Plan','Number','Target internet connections today'],
+        ['CCTV_Plan','Number','Target CCTV installations today'],
+        ['Live_Plan','Number','Target machines to go live today'],
+        ['Notes','Text','Blockers, crew changes, site constraints'],
+    ].map(([col,type,desc]) =>
+        `<tr style="border-bottom:1px dashed var(--border)">
+            <td style="padding:6px 8px;font-weight:700;font-family:monospace;font-size:10px;color:#0b6b4f;white-space:nowrap">${col}</td>
+            <td style="padding:6px 8px;font-size:10px;color:var(--muted)">${type}</td>
+            <td style="padding:6px 8px;font-size:11px">${desc}</td>
+        </tr>`
+    ).join('');
+    const rows2 = [
+        ['CivilWork_DoneDate','YYYY-MM-DD','Stamp when civilWorkStatus → Done'],
+        ['Shed_DoneDate','YYYY-MM-DD','Stamp when shedStatus → Done'],
+        ['Electrical_DoneDate','YYYY-MM-DD','Stamp when electricalStatus → Done'],
+        ['Internet_DoneDate','YYYY-MM-DD','Stamp when internetStatus → Done'],
+        ['CCTV_DoneDate','YYYY-MM-DD','Stamp when cctvStatus → Done'],
+        ['Live_DoneDate','YYYY-MM-DD','Stamp when machineLive → Done'],
+    ].map(([col,type,desc]) =>
+        `<tr style="border-bottom:1px dashed var(--border)">
+            <td style="padding:6px 8px;font-weight:700;font-family:monospace;font-size:10px;color:#0b6b4f;white-space:nowrap">${col}</td>
+            <td style="padding:6px 8px;font-size:10px;color:var(--muted)">${type}</td>
+            <td style="padding:6px 8px;font-size:11px">${desc}</td>
+        </tr>`
+    ).join('');
+    return `<div class="pva-section">
+        <div class="pva-eyebrow">Google Sheet data required</div>
+        <div class="pva-card" style="padding:14px">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">Sheet 1 — RVM-PvA-Plans (new tab, daily targets)</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">One row per day. Team lead enters targets the evening before. Currently stored in your browser — connecting to GSheet unlocks multi-device sync and history.</div>
+            <div style="overflow-x:auto;margin-bottom:16px">
+                <table style="width:100%;border-collapse:collapse;min-width:380px;font-size:11px">
+                    <thead><tr style="background:var(--accent-lt);border-bottom:1px solid var(--accent-mid)">
+                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Column</th>
+                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Type</th>
+                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Description</th>
+                    </tr></thead>
+                    <tbody>${rows1}</tbody>
+                </table>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">Sheet 2 — RVM Deployment (add 6 date columns)</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Actuals are computed from these. Backend stamps the date when each field changes to Done — no manual entry needed. Install already has installDate; the others need new columns.</div>
+            <div style="overflow-x:auto">
+                <table style="width:100%;border-collapse:collapse;min-width:380px;font-size:11px">
+                    <thead><tr style="background:var(--accent-lt);border-bottom:1px solid var(--accent-mid)">
+                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">New Column</th>
+                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">Type</th>
+                        <th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--accent-dk)">When to stamp</th>
+                    </tr></thead>
+                    <tbody>${rows2}</tbody>
+                </table>
+            </div>
+            <div style="margin-top:12px;background:var(--warn-lt);border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:11px;color:#92400e;line-height:1.5">
+                <strong>How actuals connect:</strong> For a given date, "Civil actual = COUNT rows where CivilWork_DoneDate = that date". The app already writes status changes — backend just needs to also stamp the date when a field becomes Done. One small change in google_services.py unlocks all daily actuals automatically.
+            </div>
+        </div>
+    </div>`;
+}

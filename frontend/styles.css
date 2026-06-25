@@ -6249,3 +6249,87 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
     border: none;
     background: var(--white);
 }
+
+/* ── RVM Deployment sub-tabs ─────────────────────────────────── */
+.dep-subtab-strip {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0;
+}
+.dep-subtab-strip::-webkit-scrollbar { display: none; }
+.dep-subtab {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    font-family: inherit;
+    position: relative;
+    bottom: -2px;
+    transition: color .2s cubic-bezier(.4,0,.2,1), border-color .2s cubic-bezier(.4,0,.2,1);
+}
+.dep-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.dep-subtab:hover:not(.active) { color: var(--text-2); }
+.dep-subtab-badge {
+    display: inline-flex;
+    margin-left: 5px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 100px;
+    letter-spacing: .02em;
+    vertical-align: middle;
+}
+
+/* ── Plan vs Actual view ──────────────────────────────────────── */
+.pva-root { padding: 14px; }
+.pva-section { margin-bottom: 14px; }
+.pva-eyebrow {
+    font-size: 10px; font-weight: 700; color: var(--accent);
+    text-transform: uppercase; letter-spacing: .09em;
+    display: flex; align-items: center; gap: 7px; margin-bottom: 10px;
+}
+.pva-eyebrow::after { content: ''; flex: 1; height: 1px; background: var(--accent-mid); opacity: .4; }
+.pva-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--sh);
+}
+.pva-empty {
+    background: var(--surface); border: 1px dashed var(--border-2);
+    border-radius: var(--radius); padding: 24px;
+    text-align: center; color: var(--muted); font-size: 13px;
+}
+.pva-kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+@media (max-width: 540px) { .pva-kpi-grid { grid-template-columns: repeat(2,1fr); } }
+.pva-kpi {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--sh);
+    padding: 11px 11px 9px; position: relative; overflow: hidden;
+}
+.pva-kpi::before {
+    content: ''; position: absolute; inset: 0 0 auto 0;
+    height: 3px; border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--cat-clr, #888);
+}
+.pva-kpi-cat { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+.pva-kpi-num { font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.pva-kpi-row2 { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; }
+.pva-kpi-plan { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pva-kpi-bar-wrap { margin-top: 7px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.pva-kpi-bar { height: 100%; border-radius: 2px; }
+.pva-kpi-rem { font-size: 9px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.pva-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 100px; white-space: nowrap; display: inline-flex; align-items: center; }
+.pva-badge-a { background: #f0fdf4; color: #16a34a; }
+.pva-badge-b { background: #fef2f2; color: #dc2626; }
+.pva-badge-o { background: #f3f4f6; color: var(--muted); }

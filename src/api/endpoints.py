@@ -1138,6 +1138,42 @@ async def get_deployment_summary(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Plan vs Actual Endpoints ====================
+
+class PvAPlanEntry(BaseModel):
+    date: str
+    week: int = 0
+    civil: int = 0
+    shed: int = 0
+    elec: int = 0
+    install: int = 0
+    internet: int = 0
+    cctv: int = 0
+    live: int = 0
+    root_cause_type: str = ""
+    notes: str = ""
+
+@app.get("/api/pva/plans")
+async def get_pva_plans(request: Request):
+    """Fetch all plan entries from the RVM-PvA GSheet tab."""
+    require_auth(request)
+    try:
+        plans = GoogleSheetsService().get_pva_plans()
+        return {"plans": plans}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/pva/plan")
+async def save_pva_plan(entry: PvAPlanEntry, request: Request):
+    """Add or update a daily plan entry in the RVM-PvA GSheet tab."""
+    require_auth(request)
+    try:
+        ok = GoogleSheetsService().save_pva_plan(entry.dict())
+        return {"ok": ok}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== Analytics / Activity Log Endpoints ====================
 
 class AnalyticsEvent(BaseModel):

@@ -532,6 +532,87 @@ class GoogleSheetsService:
         except Exception as e:
             return []
 
+    # ==================== Plan vs Actual (PvA) Methods ====================
+
+    def _get_or_create_pva_ws(self):
+        """Return the RVM-PvA worksheet, creating it with headers if it doesn't exist."""
+        spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
+        try:
+            return spreadsheet.worksheet("RVM-PvA")
+        except Exception:
+            ws = spreadsheet.add_worksheet(title="RVM-PvA", rows=500, cols=11)
+            ws.append_row([
+                "Date", "Week", "Civil_Plan", "Shed_Plan", "Elec_Plan",
+                "Install_Plan", "Internet_Plan", "CCTV_Plan", "Live_Plan",
+                "Root_Cause_Type", "Remarks",
+            ])
+            return ws
+
+    def get_pva_plans(self) -> list:
+        """Read all plan entries from the RVM-PvA tab."""
+        try:
+            spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
+            try:
+                ws = spreadsheet.worksheet("RVM-PvA")
+            except Exception:
+                return []
+            rows = ws.get_all_records()
+            plans = []
+            for r in rows:
+                if not str(r.get("Date", "")).strip():
+                    continue
+                plans.append({
+                    "date":            str(r.get("Date", "")).strip(),
+                    "week":            _safe_int(r.get("Week", 0), 0),
+                    "civil":           _safe_int(r.get("Civil_Plan", 0), 0),
+                    "shed":            _safe_int(r.get("Shed_Plan", 0), 0),
+                    "elec":            _safe_int(r.get("Elec_Plan", 0), 0),
+                    "install":         _safe_int(r.get("Install_Plan", 0), 0),
+                    "internet":        _safe_int(r.get("Internet_Plan", 0), 0),
+                    "cctv":            _safe_int(r.get("CCTV_Plan", 0), 0),
+                    "live":            _safe_int(r.get("Live_Plan", 0), 0),
+                    "root_cause_type": str(r.get("Root_Cause_Type", "") or "").strip(),
+                    "notes":           str(r.get("Remarks", "") or "").strip(),
+                })
+            return sorted(plans, key=lambda x: x["date"])
+        except Exception as e:
+            logger.error(f"get_pva_plans error: {e}")
+            return []
+
+    def save_pva_plan(self, entry: dict) -> bool:
+        """Append or overwrite a daily plan entry in the RVM-PvA tab."""
+        try:
+            ws = self._get_or_create_pva_ws()
+            all_vals = ws.get_all_values()
+            target_date = str(entry.get("date", "")).strip()
+            row_idx = None
+            if len(all_vals) > 1:
+                for i, row in enumerate(all_vals[1:], start=2):
+                    if row and str(row[0]).strip() == target_date:
+                        row_idx = i
+                        break
+            new_row = [
+                target_date,
+                str(entry.get("week", "")),
+                str(entry.get("civil", 0)),
+                str(entry.get("shed", 0)),
+                str(entry.get("elec", 0)),
+                str(entry.get("install", 0)),
+                str(entry.get("internet", 0)),
+                str(entry.get("cctv", 0)),
+                str(entry.get("live", 0)),
+                str(entry.get("root_cause_type", "")),
+                str(entry.get("notes", "")),
+            ]
+            if row_idx:
+                ws.update(f"A{row_idx}:K{row_idx}", [new_row])
+            else:
+                ws.append_row(new_row)
+            return True
+        except Exception as e:
+            logger.error(f"save_pva_plan error: {e}")
+            return False
+
     # ==================== Analytics / Activity Log Methods ====================
 
     def log_analytics_event(self, event: dict) -> None:
