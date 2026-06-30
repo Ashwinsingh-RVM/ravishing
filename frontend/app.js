@@ -14892,7 +14892,7 @@ function depRenderFunnel(s) {
 
         { label: 'Agreement Signed', val: s.agreement,                                    color: '#4a7ec0', denom: s.totalEntities },
 
-        { label: `Civil Work Done (${s.civil.not_required} N/A)`,  val: s.civil.done + s.civil.not_required,  color: '#5b8a3c', denom: T },
+        { label: `Civil Work (${s.civil.not_required} N/A)`,  val: s.civil.done + s.civil.not_required,  color: '#5b8a3c', denom: T },
 
         { label: 'Shed Ready',       val: s.shed.done,                                    color: '#8b6914', denom: T },
 
@@ -14901,8 +14901,6 @@ function depRenderFunnel(s) {
         { label: `Internet Ready (${s.internet.not_required} N/A)`,     val: s.internet.done + s.internet.not_required,    color: '#9b7b2e', denom: T },
 
         { label: `CCTV Done (${s.cctv.not_required} N/A)`,              val: s.cctv.done + s.cctv.not_required,            color: '#6b4e9e', denom: T },
-
-        { label: 'Machine Delivered', val: s.delivered,                                   color: '#13a06f', denom: T },
 
         { label: 'Machine Installed', val: s.installed.done,                              color: '#0b6b4f', denom: T },
 
@@ -15504,7 +15502,7 @@ function depRenderProjectMetrics(s, locs) {
     }
 
     const row3 = [
-        mkWkCard('Civil Work Done',  civilDone, `of ${civilReq} required`,     '#5b8a3c', 'civil'),
+        mkWkCard('Civil Work',  civilDone, `of ${civilReq} required`,     '#5b8a3c', 'civil'),
         mkWkCard('Shed Completed',   shedDone,  `of ${shedRequired} required`, '#8b6914', 'shed'),
         mkWkCard('Electrical Done',  elecDone,  `of ${elecReq} required`,      '#c27a10', 'elec'),
         mkWkCard('Internet Done',    inetDone,  `of ${inetReq} required`,      '#2f6fb0', 'inet'),
@@ -15979,9 +15977,6 @@ function renderRvmDeployment(data) {
 
 
 
-    const vsEl = document.getElementById('dep-funnel-title-vs');
-
-    if (vsEl) vsEl.textContent = `vs ${depPlanTotal} total`;
 
 
 
