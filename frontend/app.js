@@ -4958,17 +4958,17 @@ function getProgressClass(percent) {
 
 function getBadge(percent) {
 
-    if (percent >= 100) return '';
+    if (percent >= 100) return '🏆';
 
-    if (percent >= 75) return '';
+    if (percent >= 75) return '🔥';
 
-    if (percent >= 50) return '';
+    if (percent >= 50) return '💪';
 
-    if (percent >= 25) return '';
+    if (percent >= 25) return '🚀';
 
-    if (percent > 0) return '';
+    if (percent > 0) return '✨';
 
-    return '';
+    return '💤';
 
 }
 
