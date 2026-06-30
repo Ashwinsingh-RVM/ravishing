@@ -5196,11 +5196,11 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
 
 .dep-kpi {
     background: #fff;
-    border: 1.5px solid #cbd5e1;
+    border: 2px solid #94a3b8;
     color: #1a2332;
     border-radius: var(--radius);
     padding: 14px 16px;
-    border-left: 4px solid #0b6b4f;
+    border-left: 5px solid #0b6b4f;
     box-shadow: 0 1px 4px rgba(0,0,0,.07);
 }
 .dep-kpi::before { display: none; }
@@ -5606,7 +5606,7 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
     display: flex;
     gap: 8px;
     align-items: flex-end;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 .dep-header-filters .dep-filter-item { flex-shrink: 0; }
 .dep-filter-select {
@@ -5614,6 +5614,7 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
     font-size: 13px;
     width: 150px;
 }
+.dep-page-header-row { align-items: center; }
 .dep-header-deadline {
     display: flex;
     align-items: center;

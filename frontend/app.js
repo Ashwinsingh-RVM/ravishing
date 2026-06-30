@@ -13970,7 +13970,8 @@ function renderActivityFeed(events) {
 
     const last = events[0];
 
-    document.getElementById('act-kpi-last').textContent = last ? `${last.User_Name || last.User_Email} · ${(last.Timestamp || '').slice(11, 16)}` : '—';
+    const _lastIST = last ? (() => { const d = new Date((last.Timestamp||'').replace(' ','T')+'Z'); const ist = new Date(d.getTime()+19800000); return `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')} IST`; })() : '—';
+    document.getElementById('act-kpi-last').textContent = last ? `${last.User_Name || last.User_Email} · ${_lastIST}` : '—';
 
 
 
@@ -14058,6 +14059,16 @@ function paintFeedRows(events) {
 
 
 
+    const toIST = ts => {
+        if (!ts) return { date: '—', time: '—' };
+        const utc = new Date(ts.trim().replace(' ', 'T') + 'Z');
+        const ist = new Date(utc.getTime() + 5.5 * 3600000);
+        const pad = n => String(n).padStart(2,'0');
+        const date = `${ist.getUTCFullYear()}-${pad(ist.getUTCMonth()+1)}-${pad(ist.getUTCDate())}`;
+        const time = `${pad(ist.getUTCHours())}:${pad(ist.getUTCMinutes())}:${pad(ist.getUTCSeconds())}`;
+        return { date, time };
+    };
+
     let lastDate = '';
 
     const rows = [];
@@ -14066,7 +14077,7 @@ function paintFeedRows(events) {
 
         const ts = (e.Timestamp || '');
 
-        const dateStr = ts.slice(0, 10);
+        const { date: dateStr, time: timeStr } = toIST(ts);
 
         if (dateStr !== lastDate) {
 
@@ -14110,7 +14121,7 @@ function paintFeedRows(events) {
 
           <td style="padding:11px 10px;white-space:nowrap">
 
-            <div style="font-family:monospace;font-size:13px;font-weight:600;color:#111827">${ts.slice(11,19)||'—'}</div>
+            <div style="font-family:monospace;font-size:13px;font-weight:600;color:#111827">${timeStr} IST</div>
 
             <div style="font-family:monospace;font-size:11px;color:#9CA3AF;margin-top:2px">${dateStr}</div>
 
@@ -15898,7 +15909,11 @@ function renderRvmDeployment(data) {
 
     const subtitleEl = document.getElementById('dep-header-subtitle');
 
-    if (subtitleEl) subtitleEl.textContent = `${depPlanTotal} Collection Points · Goa DRS 2026`;
+    if (subtitleEl) {
+        const _rcPlanTotal = (data.rcLocations || []).reduce((s, l) => s + (parseInt(l.rcTarget) || 0), 0);
+        const _totalCP = depPlanTotal + (_rcPlanTotal || 0);
+        subtitleEl.textContent = `${_totalCP} Collection Points · Goa DRS 2026`;
+    }
 
 
 
@@ -17319,7 +17334,7 @@ function pvaWowSectionHtml(plans, todayStr) {
 
     plans.filter(p => p.date <= todayStr).forEach(p => {
 
-        const wk = p.week || pvaWeekNum(p.date);
+        const wk = pvaWeekNum(p.date);
 
         (byWk[wk] = byWk[wk] || []).push(p);
 
@@ -17592,7 +17607,7 @@ function pvaDrawChart(plans, locActuals) {
 
     plans.forEach(p => {
 
-        const wk = p.week || pvaWeekNum(p.date);
+        const wk = pvaWeekNum(p.date);
 
         (byWk[wk] = byWk[wk] || []).push(p);
 
