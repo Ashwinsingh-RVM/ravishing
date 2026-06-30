@@ -12,7 +12,7 @@ const API_BASE = '/api';  // Will be proxied or same origin
 
 
 
-// â”€â”€ Analytics Tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Analytics Tracking ──────────────────────────────────────────────────────
 
 const _ANALYTICS_SID = (() => {
 
@@ -50,7 +50,7 @@ function trackEvent(event_type, page, element = '', value = '') {
 
 
 
-// Scroll depth tracking â€” fires at 25/50/75/100% milestones, once per page per session
+// Scroll depth tracking — fires at 25/50/75/100% milestones, once per page per session
 
 let _scrollPage = '';
 
@@ -82,7 +82,7 @@ window.addEventListener('scroll', () => {
 
 }, { passive: true });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 const SHEET_ID = '1gy0xNL7-ayFfVjf3ETvi8qN3bWytNGbRZg68nShnkEo';
 
@@ -126,7 +126,7 @@ const STAGES = [
 
 
 
-// ULB identification â€” blocks "NORTH" and "SOUTH" are ULBs, everything else is a VP
+// ULB identification — blocks "NORTH" and "SOUTH" are ULBs, everything else is a VP
 
 const ULB_BLOCKS = ['NORTH', 'SOUTH'];
 
@@ -196,11 +196,11 @@ const STAGE_NUMBER_MAP = {};
 
 STAGES.forEach(s => {
 
-    STAGE_NUMBER_MAP[s.value] = s.number;                    // email_sent â†’ 7
+    STAGE_NUMBER_MAP[s.value] = s.number;                    // email_sent → 7
 
-    STAGE_NUMBER_MAP[s.label.toLowerCase()] = s.number;      // email sent â†’ 7
+    STAGE_NUMBER_MAP[s.label.toLowerCase()] = s.number;      // email sent → 7
 
-    STAGE_NUMBER_MAP[s.label] = s.number;                    // Email Sent â†’ 7
+    STAGE_NUMBER_MAP[s.label] = s.number;                    // Email Sent → 7
 
 });
 
@@ -254,7 +254,7 @@ const BDO_STAGES = [
 
 
 
-// URL route â†” tab mapping
+// URL route ↔ tab mapping
 
 const ROUTE_TO_TAB = {
 
@@ -470,7 +470,7 @@ async function checkAuth() {
 
     } catch (e) {
 
-        // Network error â€” show login
+        // Network error — show login
 
     }
 
@@ -648,7 +648,7 @@ async function handleLogout() {
 
     } catch (e) {
 
-        // Ignore â€” clear local state anyway
+        // Ignore — clear local state anyway
 
     }
 
@@ -900,7 +900,7 @@ function setupTabs() {
 
     document.querySelectorAll('.nav-item').forEach(tab => {
 
-        // Skip the More button â€” it has its own onclick handler
+        // Skip the More button — it has its own onclick handler
 
         if (tab.classList.contains('more-btn')) return;
 
@@ -928,7 +928,7 @@ function setupTabs() {
 
         } else {
 
-            // Root URL â€” go to default tab
+            // Root URL — go to default tab
 
             const firstAllowed = (currentUser && currentUser.allowed_tabs) ? currentUser.allowed_tabs[0] : 'vps';
 
@@ -1022,7 +1022,7 @@ async function switchToTab(tabId) {
 
 
 
-    // Update URL (pushState) â€” skip if already at the right URL
+    // Update URL (pushState) — skip if already at the right URL
 
     const route = TAB_TO_ROUTE[tabId] || tabId;
 
@@ -1534,7 +1534,7 @@ function renderMasterVPList() {
 
 
 
-    // Filter VPs (exclude ULBs â€” they have their own tab)
+    // Filter VPs (exclude ULBs — they have their own tab)
 
     const filtered = vpData.filter(vp => !isULB(vp)).filter(vp => {
 
@@ -1956,7 +1956,7 @@ function renderULBMasterList() {
 
 /**
 
- * Select a ULB from the ULB master list â€” reuses detail panel
+ * Select a ULB from the ULB master list — reuses detail panel
 
  */
 
@@ -2728,13 +2728,13 @@ function getCommentIcon(type) {
 
     switch (type) {
 
-        case 'direct': return 'ðŸ’¬';
+        case 'direct': return '💬';
 
-        case 'meeting': return 'ðŸ“…';
+        case 'meeting': return '📅';
 
-        case 'legacy': return 'ðŸ“œ';
+        case 'legacy': return '📜';
 
-        default: return 'ðŸ’¬';
+        default: return '💬';
 
     }
 
@@ -3090,7 +3090,7 @@ async function submitUpdate() {
 
         // Try to update via backend API
 
-        trackEvent('click', 'vps', `Stage: ${currentVP.vpName||currentVP.vpCode}`, `${currentVP.block} â†’ ${newStage}`);
+        trackEvent('click', 'vps', `Stage: ${currentVP.vpName||currentVP.vpCode}`, `${currentVP.block} → ${newStage}`);
 
         const response = await fetch(`${API_BASE}/update/stage`, {
 
@@ -3516,7 +3516,7 @@ function renderDashHoReCa(container, data) {
 
             <span class="hcrm-card-status ${statusClass}">${escapeHtml(status || 'No Status')}</span>
 
-            <div class="hcrm-recent-meta">${escapeHtml(updatedBy)}${timeAgo ? ' Â· ' + timeAgo : ''}</div>
+            <div class="hcrm-recent-meta">${escapeHtml(updatedBy)}${timeAgo ? ' · ' + timeAgo : ''}</div>
 
         </div>`;
 
@@ -3682,7 +3682,7 @@ function renderTodayActivity() {
 
             type: 'meeting',
 
-            icon: m.status === 'completed' ? 'âœ…' : 'ðŸ“…',
+            icon: m.status === 'completed' ? '✅' : '📅',
 
             title: `${m.vpName}`,
 
@@ -3726,7 +3726,7 @@ function renderTodayActivity() {
 
             <div class="today-stat-card">
 
-                <span class="today-stat-icon">ðŸ“</span>
+                <span class="today-stat-icon">📝</span>
 
                 <span class="today-stat-value">${vpCount}</span>
 
@@ -3736,7 +3736,7 @@ function renderTodayActivity() {
 
             <div class="today-stat-card">
 
-                <span class="today-stat-icon">ðŸ“…</span>
+                <span class="today-stat-icon">📅</span>
 
                 <span class="today-stat-value">${meetingCount}</span>
 
@@ -3746,7 +3746,7 @@ function renderTodayActivity() {
 
             <div class="today-stat-card">
 
-                <span class="today-stat-icon">âœ…</span>
+                <span class="today-stat-icon">✅</span>
 
                 <span class="today-stat-value">${completedCount}</span>
 
@@ -3756,7 +3756,7 @@ function renderTodayActivity() {
 
             <div class="today-stat-card">
 
-                <span class="today-stat-icon">ðŸ“Š</span>
+                <span class="today-stat-icon">📊</span>
 
                 <span class="today-stat-value">${activities.length}</span>
 
@@ -3970,7 +3970,7 @@ function loadProgressDashboard() {
 
 /**
 
- * Render holistic funnel â€” single horizontal pipeline with overlay sub-labels
+ * Render holistic funnel — single horizontal pipeline with overlay sub-labels
 
  * on key blocks to show the panch/direct split without a separate branch section.
 
@@ -3988,7 +3988,7 @@ function renderHolisticFunnel(stats) {
 
     const inPanch = stats.atPanchScheduled + stats.atPanchDone;
 
-    // VPs in panch pipeline â€” track codes to avoid double-counting with F/U
+    // VPs in panch pipeline — track codes to avoid double-counting with F/U
 
     const vpOnly = vpData.filter(vp => !isULB(vp));
 
@@ -4042,7 +4042,7 @@ function renderHolisticFunnel(stats) {
 
     meetingSubs.push(`${followUpCount} F/U sched`);
 
-    const meetingSub = meetingSubs.join(' Â· ');
+    const meetingSub = meetingSubs.join(' · ');
 
 
 
@@ -4082,7 +4082,7 @@ function renderHolisticFunnel(stats) {
 
         if (viaPanchCount > 0) {
 
-            locationSub = `Direct: ${viaDirectCount} Â· Panch: ${viaPanchCount}`;
+            locationSub = `Direct: ${viaDirectCount} · Panch: ${viaPanchCount}`;
 
         } else {
 
@@ -4268,7 +4268,7 @@ function renderULBFunnel() {
 
 
 
-    const renderArrow = () => `<div class="funnel-arrow">â†’</div>`;
+    const renderArrow = () => `<div class="funnel-arrow">→</div>`;
 
 
 
@@ -4286,7 +4286,7 @@ function renderULBFunnel() {
 
  * Render Machine Installation Status section in the Progress dashboard.
 
- * Data source: vpData (DRS-Tracker) â€” installDate, machineLive, agreedRvms, stage fields.
+ * Data source: vpData (DRS-Tracker) — installDate, machineLive, agreedRvms, stage fields.
 
  */
 
@@ -4678,7 +4678,7 @@ function renderBlockProgress() {
 
         const rankClass = index < 3 ? `rank-${index + 1}` : '';
 
-        const rankBadge = index < 3 ? `<span class="block-rank">${index === 0 ? 'ðŸ¥‡' : index === 1 ? 'ðŸ¥ˆ' : 'ðŸ¥‰'}</span>` : '';
+        const rankBadge = index < 3 ? `<span class="block-rank">${index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}</span>` : '';
 
         const filterCount = filterValue ? `<span class="filter-count">${stats.filtered} at stage</span>` : '';
 
@@ -4836,7 +4836,7 @@ function renderModalVpList(vps) {
 
                 </div>
 
-                <span class="vp-modal-arrow">â€º</span>
+                <span class="vp-modal-arrow">›</span>
 
             </div>
 
@@ -5082,7 +5082,7 @@ function loadRvmDashboard() {
 
 
 
-    // Machine deployment map â€” uses VP/ULB GPS data
+    // Machine deployment map — uses VP/ULB GPS data
 
     loadLeaflet(() => initRvmDeployMap());
 
@@ -5142,7 +5142,7 @@ function initRvmDeployMap() {
 
             marker.bindPopup(`<div style="min-width:180px;font-size:13px;line-height:1.8">
 
-                <div style="font-size:15px;font-weight:700;margin-bottom:2px">${vp.name || vp.vpName || 'â€”'}</div>
+                <div style="font-size:15px;font-weight:700;margin-bottom:2px">${vp.name || vp.vpName || '—'}</div>
 
                 <div style="color:#888;font-size:12px;margin-bottom:6px">${vp.block || ''}</div>
 
@@ -7208,7 +7208,7 @@ async function renderNeedsScheduling() {
 
                     <div class="nsc-name" title="${name}">${name}</div>
 
-                    <div class="nsc-meta">${type}${city ? ' Â· ' + city : ''}</div>
+                    <div class="nsc-meta">${type}${city ? ' · ' + city : ''}</div>
 
                     <button class="btn-schedule-nudge" onclick="openHorecaMeetingFromNudge('${placeId}', '${name.replace(/'/g, "\\'")}')">Schedule</button>
 
@@ -8742,19 +8742,19 @@ function getActivityIcon(type) {
 
     const icons = {
 
-        'stage_update': 'ðŸ“Š',
+        'stage_update': '📊',
 
-        'meeting_created': 'ðŸ“…',
+        'meeting_created': '📅',
 
-        'comment': 'ðŸ’¬',
+        'comment': '💬',
 
-        'note': 'ðŸ“',
+        'note': '📝',
 
-        'meeting': 'ðŸ›ï¸'
+        'meeting': '🏛️'
 
     };
 
-    return icons[type] || 'ðŸ“Œ';
+    return icons[type] || '📌';
 
 }
 
@@ -8940,7 +8940,7 @@ function renderEscalationTab() {
 
 
 
-        // Skip VPs with an UPCOMING meeting â€” they are being actively managed.
+        // Skip VPs with an UPCOMING meeting — they are being actively managed.
 
         // Missed meetings (past date) don't count.
 
@@ -8984,7 +8984,7 @@ function renderEscalationTab() {
 
         if (resolveStageNumber(vp) === 3) {
 
-            // First Meeting Done â€” why stuck?
+            // First Meeting Done — why stuck?
 
             if (missedMeetings.length > 0) {
 
@@ -9074,7 +9074,7 @@ function renderEscalationTab() {
 
         if (escalations.length > 0) {
 
-            summaryEl.innerHTML += ` <span class="escalation-counts">ðŸ”´ ${redCount} ðŸŸ  ${orangeCount} ðŸŸ¡ ${yellowCount}</span>`;
+            summaryEl.innerHTML += ` <span class="escalation-counts">🔴 ${redCount} 🟠 ${orangeCount} 🟡 ${yellowCount}</span>`;
 
         }
 
@@ -9112,7 +9112,7 @@ function renderEscalationTab() {
 
             <div class="empty-state" style="padding: 40px 20px; text-align: center;">
 
-                <p style="font-size: 32px; margin-bottom: 8px;">âœ…</p>
+                <p style="font-size: 32px; margin-bottom: 8px;">✅</p>
 
                 <p style="color: #64748b;">${escalations.length === 0 ? 'No VPs need escalation right now' : 'No matches for selected filters'}</p>
 
@@ -9168,15 +9168,15 @@ function renderEscalationTab() {
 
                     ${recent.map(m => {
 
-                        const mDate = m.eventDate ? new Date(m.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'â€”';
+                        const mDate = m.eventDate ? new Date(m.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
 
                         const statusCls = m.status === 'completed' ? 'done' : m.status === 'scheduled' && m.eventDate < todayStr ? 'missed' : 'upcoming';
 
-                        const statusIcon = statusCls === 'done' ? 'âœ“' : statusCls === 'missed' ? 'âœ—' : 'â—¦';
+                        const statusIcon = statusCls === 'done' ? '✓' : statusCls === 'missed' ? '✗' : '◦';
 
-                        const noteSnippet = m.notes ? m.notes.substring(0, 40) + (m.notes.length > 40 ? 'â€¦' : '') : '';
+                        const noteSnippet = m.notes ? m.notes.substring(0, 40) + (m.notes.length > 40 ? '…' : '') : '';
 
-                        return `<span class="history-item history-${statusCls}">${statusIcon} ${mDate}${noteSnippet ? ' â€” ' + noteSnippet : ''}</span>`;
+                        return `<span class="history-item history-${statusCls}">${statusIcon} ${mDate}${noteSnippet ? ' — ' + noteSnippet : ''}</span>`;
 
                     }).join('')}
 
@@ -9554,7 +9554,7 @@ async function loadHoReCaStaticData() {
 
 
 
-// â”€â”€ Leaflet dynamic loading â”€â”€
+// ── Leaflet dynamic loading ──
 
 function loadLeaflet(callback) {
 
@@ -9582,7 +9582,7 @@ function loadLeaflet(callback) {
 
 
 
-// â”€â”€ Map â”€â”€
+// ── Map ──
 
 function initHoReCaMap() {
 
@@ -9634,7 +9634,7 @@ function initHoReCaMap() {
 
 
 
-        // Layer 2: Meso zones (res-7) â€” colored by density classification
+        // Layer 2: Meso zones (res-7) — colored by density classification
 
         const MESO_COLORS = { HD: '#dc2626', MD: '#f59e0b', LD: '#3b82f6', Dead: '#9ca3af' };
 
@@ -9658,7 +9658,7 @@ function initHoReCaMap() {
 
                 const p = feature.properties;
 
-                layer.bindTooltip(`${p.name} â€” ${p.count}`, {
+                layer.bindTooltip(`${p.name} — ${p.count}`, {
 
                     permanent: false,
 
@@ -9696,7 +9696,7 @@ function initHoReCaMap() {
 
 
 
-        // Layer 3: Micro zones (res-8) â€” blue choropleth
+        // Layer 3: Micro zones (res-8) — blue choropleth
 
         hrcHexLayer = buildHoReCaHexLayer(horecaGeoHex8);
 
@@ -10082,13 +10082,13 @@ function updateHoReCaMapStats(zoneCount, pointCount) {
 
     const zones = zoneCount !== undefined ? zoneCount : (horecaGeoHex8 ? horecaGeoHex8.features.length : 0);
 
-    el.textContent = `${visible.toLocaleString()} of ${total.toLocaleString()} HoReCas Â· ${zones} zones`;
+    el.textContent = `${visible.toLocaleString()} of ${total.toLocaleString()} HoReCas · ${zones} zones`;
 
 }
 
 
 
-// â”€â”€ Explorer â”€â”€
+// ── Explorer ──
 
 function populateHoReCaFilters() {
 
@@ -10216,7 +10216,7 @@ function renderHoReCaExplorer() {
 
     const info = document.getElementById('hrc-explorer-info');
 
-    if (info) info.textContent = `${filtered.length.toLocaleString()} results Â· Page ${horecaPage} of ${totalPages}`;
+    if (info) info.textContent = `${filtered.length.toLocaleString()} results · Page ${horecaPage} of ${totalPages}`;
 
 
 
@@ -10278,7 +10278,7 @@ function renderHoReCaExplorer() {
 
                 <span class="horeca-badge ${alcBadgeClass}">${escapeHtml(r.alc)}</span>
 
-                ${r.rat ? `<span class="horeca-badge badge-rating">${r.rat} â˜… (${r.trat})</span>` : ''}
+                ${r.rat ? `<span class="horeca-badge badge-rating">${r.rat} ★ (${r.trat})</span>` : ''}
 
                 ${statusBadge}
 
@@ -10400,17 +10400,17 @@ function escapeHtml(str) {
 
 
 
-// â”€â”€ Summary â”€â”€
+// ── Summary ──
 
 const QUAD_LABELS = {
 
-    Q1: 'Q1 â€” North East (Interior North)',
+    Q1: 'Q1 — North East (Interior North)',
 
-    Q2: 'Q2 â€” North West (Tourist North)',
+    Q2: 'Q2 — North West (Tourist North)',
 
-    Q3: 'Q3 â€” South West (Tourist South)',
+    Q3: 'Q3 — South West (Tourist South)',
 
-    Q4: 'Q4 â€” South East (Interior South)',
+    Q4: 'Q4 — South East (Interior South)',
 
 };
 
@@ -10418,7 +10418,7 @@ const QUAD_SHORT = { Q1: 'NE', Q2: 'NW', Q3: 'SW', Q4: 'SE' };
 
 const DENSITY_ORDER = ['HD', 'MD', 'LD', 'Dead'];
 
-const DENSITY_LABELS = { HD: 'High Density (50+)', MD: 'Medium Density (10â€“49)', LD: 'Low Density (4â€“9)', Dead: 'Dead (â‰¤3)' };
+const DENSITY_LABELS = { HD: 'High Density (50+)', MD: 'Medium Density (10–49)', LD: 'Low Density (4–9)', Dead: 'Dead (≤3)' };
 
 const DENSITY_COLORS = { HD: '#dc2626', MD: '#f59e0b', LD: '#3b82f6', Dead: '#9ca3af' };
 
@@ -10486,7 +10486,7 @@ function renderHoReCaSummary() {
 
 
 
-    // â”€â”€ Top stat cards â”€â”€
+    // ── Top stat cards ──
 
     let html = `
 
@@ -10506,11 +10506,11 @@ function renderHoReCaSummary() {
 
 
 
-    // â”€â”€ 1. Quadrant Overview (always open) â”€â”€
+    // ── 1. Quadrant Overview (always open) ──
 
     html += `<div class="horeca-summary-table-wrapper"><h3>Quadrant Overview</h3>
 
-        <p class="hrc-table-note">Goa split into 4 quadrants â€” NH66 highway (lng 73.90Â°) Eastâ€“West Â· District boundary (lat 15.40Â°) Northâ€“South</p>
+        <p class="hrc-table-note">Goa split into 4 quadrants — NH66 highway (lng 73.90°) East–West · District boundary (lat 15.40°) North–South</p>
 
         <table class="horeca-summary-table"><thead><tr>
 
@@ -10544,11 +10544,11 @@ function renderHoReCaSummary() {
 
 
 
-    // â”€â”€ 2. Density Classification â€” Goa Level â”€â”€
+    // ── 2. Density Classification — Goa Level ──
 
-    html += `<div class="horeca-summary-table-wrapper"><h3>Density Classification â€” All Goa</h3>
+    html += `<div class="horeca-summary-table-wrapper"><h3>Density Classification — All Goa</h3>
 
-        <p class="hrc-table-note">HD = â‰¥50 HoReCas/zone Â· MD = 10â€“49 Â· LD = 4â€“9 Â· Dead = â‰¤3 (excluded from routing)</p>
+        <p class="hrc-table-note">HD = ≥50 HoReCas/zone · MD = 10–49 · LD = 4–9 · Dead = ≤3 (excluded from routing)</p>
 
         <table class="horeca-summary-table"><thead><tr>
 
@@ -10580,7 +10580,7 @@ function renderHoReCaSummary() {
 
 
 
-    // â”€â”€ 3. Density Classification â€” Per Quadrant (collapsible) â”€â”€
+    // ── 3. Density Classification — Per Quadrant (collapsible) ──
 
     for (const q of ['Q2','Q3','Q4','Q1']) {
 
@@ -10592,7 +10592,7 @@ function renderHoReCaSummary() {
 
         const qActive = qZones.filter(z => z.density !== 'Dead').length;
 
-        html += collapseOpen(`${QUAD_LABELS[q]} â€” Density`, `${qZones.length} zones Â· ${qRecs.length.toLocaleString()} HoReCas Â· ${qActive} active`, q === 'Q2');
+        html += collapseOpen(`${QUAD_LABELS[q]} — Density`, `${qZones.length} zones · ${qRecs.length.toLocaleString()} HoReCas · ${qActive} active`, q === 'Q2');
 
         html += `<table class="horeca-summary-table"><thead><tr>
 
@@ -10630,11 +10630,11 @@ function renderHoReCaSummary() {
 
 
 
-    // â”€â”€ 4. Segmentation Matrix â€” Alcohol Only (Quad Ã— Density), collapsible per quadrant â”€â”€
+    // ── 4. Segmentation Matrix — Alcohol Only (Quad × Density), collapsible per quadrant ──
 
-    html += `<div class="horeca-summary-table-wrapper"><h3>Segmentation Matrix â€” Phase 1 (Alcohol Only)</h3>
+    html += `<div class="horeca-summary-table-wrapper"><h3>Segmentation Matrix — Phase 1 (Alcohol Only)</h3>
 
-        <p class="hrc-table-note">Quadrant Ã— Density for Alcohol segment only (Confirmed + Likely + Inferred). Sorted by execution priority.</p>`;
+        <p class="hrc-table-note">Quadrant × Density for Alcohol segment only (Confirmed + Likely + Inferred). Sorted by execution priority.</p>`;
 
 
 
@@ -10650,7 +10650,7 @@ function renderHoReCaSummary() {
 
 
 
-        html += collapseOpen(`${q} ${QUAD_SHORT[q]} â€” Alcohol`, `${qAlcRecs.length.toLocaleString()} HoReCas Â· ${qAlcZones} zones Â· ${qHighC} high contact`, q === 'Q2');
+        html += collapseOpen(`${q} ${QUAD_SHORT[q]} — Alcohol`, `${qAlcRecs.length.toLocaleString()} HoReCas · ${qAlcZones} zones · ${qHighC} high contact`, q === 'Q2');
 
         html += `<table class="horeca-summary-table"><thead><tr>
 
@@ -10690,9 +10690,9 @@ function renderHoReCaSummary() {
 
 
 
-    // â”€â”€ 5. Detailed HoReCa List per Segment (Quad Ã— Density Ã— Alcohol) â”€â”€
+    // ── 5. Detailed HoReCa List per Segment (Quad × Density × Alcohol) ──
 
-    html += `<div class="horeca-summary-table-wrapper"><h3>Detailed HoReCa List â€” By Segment</h3>
+    html += `<div class="horeca-summary-table-wrapper"><h3>Detailed HoReCa List — By Segment</h3>
 
         <p class="hrc-table-note">Each segment shows individual HoReCas ranked by Priority Score within that segment.</p>`;
 
@@ -10716,9 +10716,9 @@ function renderHoReCaSummary() {
 
             html += collapseOpen(
 
-                `${q} ${QUAD_SHORT[q]} Â· ${dDot(d, 8)}${d} Â· Alcohol`,
+                `${q} ${QUAD_SHORT[q]} · ${dDot(d, 8)}${d} · Alcohol`,
 
-                `${segRecs.length.toLocaleString()} HoReCas Â· Avg ${segAvg} Â· ${segHighC} high contact`,
+                `${segRecs.length.toLocaleString()} HoReCas · Avg ${segAvg} · ${segHighC} high contact`,
 
                 false
 
@@ -10738,7 +10738,7 @@ function renderHoReCaSummary() {
 
                         <div class="hrc-seg-name">${escapeHtml(r.name)}</div>
 
-                        <div class="hrc-seg-meta">${escapeHtml(r.city || '')} Â· ${escapeHtml(r.type)} Â· ${r.alc}${r.rat ? ' Â· â˜…' + r.rat : ''}</div>
+                        <div class="hrc-seg-meta">${escapeHtml(r.city || '')} · ${escapeHtml(r.type)} · ${r.alc}${r.rat ? ' · ★' + r.rat : ''}</div>
 
                     </div>
 
@@ -10766,9 +10766,9 @@ function renderHoReCaSummary() {
 
 
 
-    // â”€â”€ 6. Further Insights â€” Good to Have (collapsible wrapper) â”€â”€
+    // ── 6. Further Insights — Good to Have (collapsible wrapper) ──
 
-    html += collapseOpen('Further Insights â€” Good to Have', 'Active zones per quadrant, breakdowns by type, alcohol signal, size, contactability', false);
+    html += collapseOpen('Further Insights — Good to Have', 'Active zones per quadrant, breakdowns by type, alcohol signal, size, contactability', false);
 
 
 
@@ -10816,7 +10816,7 @@ function renderHoReCaSummary() {
 
             });
 
-        html += `<div class="horeca-summary-table-wrapper" style="box-shadow:none;padding:12px 0"><h3>${QUAD_LABELS[q]} â€” Active Zones</h3>
+        html += `<div class="horeca-summary-table-wrapper" style="box-shadow:none;padding:12px 0"><h3>${QUAD_LABELS[q]} — Active Zones</h3>
 
             <table class="horeca-summary-table"><thead><tr>
 
@@ -10914,7 +10914,7 @@ function buildBreakdownTable(title, rows, headers, total) {
 
 let horecaCrmData = [];
 
-// â”€â”€ HoReCa Board (Kanban) â”€â”€
+// ── HoReCa Board (Kanban) ──
 
 let horecaBoardLoaded = false;
 
@@ -11198,11 +11198,11 @@ function renderBoardColumn(status) {
 
     records.forEach(r => {
 
-        const typeIcon = (r.types || '').toLowerCase().includes('bar') ? 'ðŸº' :
+        const typeIcon = (r.types || '').toLowerCase().includes('bar') ? '🍺' :
 
-                         (r.types || '').toLowerCase().includes('cafe') ? 'â˜•' :
+                         (r.types || '').toLowerCase().includes('cafe') ? '☕' :
 
-                         (r.types || '').toLowerCase().includes('hotel') ? 'ðŸ¨' : 'ðŸ½';
+                         (r.types || '').toLowerCase().includes('hotel') ? '🏨' : '🍽';
 
         const typeLabel = r.types ? r.types.split(',')[0].trim() : '';
 
@@ -11218,9 +11218,9 @@ function renderBoardColumn(status) {
 
                 ${typeLabel ? `<span>${typeIcon} ${escapeHtml(typeLabel)}</span>` : ''}
 
-                ${city ? `<span>Â· ${escapeHtml(city)}</span>` : ''}
+                ${city ? `<span>· ${escapeHtml(city)}</span>` : ''}
 
-                ${assignee ? `<span>Â· ðŸ‘¤ ${escapeHtml(assignee)}</span>` : ''}
+                ${assignee ? `<span>· 👤 ${escapeHtml(assignee)}</span>` : ''}
 
             </div>
 
@@ -11294,7 +11294,7 @@ function boardClickCard(placeId, status) {
 
 
 
-    // Search by place_id in the CRM â€” update filter and fetch
+    // Search by place_id in the CRM — update filter and fetch
 
     horecaCrmFilters.status = status;
 
@@ -11340,13 +11340,13 @@ function boardClickCard(placeId, status) {
 
         })
 
-        .catch(err => console.error('Boardâ†’CRM navigation error:', err));
+        .catch(err => console.error('Board→CRM navigation error:', err));
 
 }
 
 
 
-// â”€â”€ HoReCa CRM â”€â”€
+// ── HoReCa CRM ──
 
 let horecaCrmTotal = 0;
 
@@ -11742,7 +11742,7 @@ function selectHorecaFromMaster(placeId) {
 
 
 
-    // Status update form â€” pre-fill
+    // Status update form — pre-fill
 
     document.getElementById('hcrm-update-status').value = record.outreach_status || '';
 
@@ -12236,7 +12236,7 @@ async function submitHorecaStatusUpdate() {
 
  * Auto-create a meeting when HoReCa status changes to "Meeting aligned" or follow-up date is set.
 
- * Assigned to: HoReCa's assigned_to â†’ fallback to the person updating.
+ * Assigned to: HoReCa's assigned_to → fallback to the person updating.
 
  * Skips if a scheduled meeting already exists for the same HoReCa on the same date.
 
@@ -12278,7 +12278,7 @@ async function autoCreateHorecaMeeting(horeca, status, followUpDate, updatedBy) 
 
 
 
-    // Assigned to: HoReCa's assigned person â†’ fallback to person updating
+    // Assigned to: HoReCa's assigned person → fallback to person updating
 
     const assignedTo = horeca.assigned_to || updatedBy;
 
@@ -12496,9 +12496,9 @@ function renderHorecaAssignmentHistory(record) {
 
     for (const entry of entries) {
 
-        // Format: [YYYY-MM-DD HH:MM|author] â†’ assignee
+        // Format: [YYYY-MM-DD HH:MM|author] → assignee
 
-        const match = entry.match(/^\[(.+?)\|(.+?)\]\s*â†’\s*(.+)$/);
+        const match = entry.match(/^\[(.+?)\|(.+?)\]\s*→\s*(.+)$/);
 
         if (match) {
 
@@ -12638,7 +12638,7 @@ function horecaCrmGoPage(page) {
 
 
 
-// â”€â”€ Add New HoReCa Lead â”€â”€
+// ── Add New HoReCa Lead ──
 
 
 
@@ -12830,7 +12830,7 @@ window.submitNewHorecaLead = submitNewHorecaLead;
 
 
 
-// â”€â”€ HoReCa Meeting Scheduling â”€â”€
+// ── HoReCa Meeting Scheduling ──
 
 
 
@@ -12940,7 +12940,7 @@ window.openHorecaMeetingModal = openHorecaMeetingModal;
 
 
 
-// â”€â”€ HoReCa Dashboard â”€â”€
+// ── HoReCa Dashboard ──
 
 
 
@@ -13050,7 +13050,7 @@ function renderHorecaDashboard(data) {
 
 
 
-    // Status Ã— Type table
+    // Status × Type table
 
     let typeTableHtml = '<div class="card"><h2>Status by Type</h2><div class="hcrm-table-scroll"><table class="hcrm-table"><thead><tr><th>Type</th>';
 
@@ -13078,7 +13078,7 @@ function renderHorecaDashboard(data) {
 
 
 
-    // Status Ã— Zone table (top 20)
+    // Status × Zone table (top 20)
 
     let zoneTableHtml = '<div class="card"><h2>Status by Zone (Top 20)</h2><div class="hcrm-table-scroll"><table class="hcrm-table"><thead><tr><th>Zone</th>';
 
@@ -13242,7 +13242,7 @@ async function hydrateTrainingFromServer() {
 
         }
 
-    } catch (e) { /* silent â€” localStorage still works */ }
+    } catch (e) { /* silent — localStorage still works */ }
 
 }
 
@@ -13412,7 +13412,7 @@ async function initLearningTab() {
 
                         ${modXP ? `<span>${modXP} XP</span>` : ''}
 
-                        ${modStars ? `<span>${modStars} â˜…</span>` : ''}
+                        ${modStars ? `<span>${modStars} ★</span>` : ''}
 
                     </div>
 
@@ -13568,7 +13568,7 @@ async function loadLeaderboard() {
 
         const userEmail = currentUser ? currentUser.email : '';
 
-        const medals = ['ðŸ¥‡', 'ðŸ¥ˆ', 'ðŸ¥‰'];
+        const medals = ['🥇', '🥈', '🥉'];
 
 
 
@@ -13592,7 +13592,7 @@ async function loadLeaderboard() {
 
                         <span class="leaderboard-xp">${entry.xp} XP</span>
 
-                        <span class="leaderboard-stars">${entry.stars} â˜…</span>
+                        <span class="leaderboard-stars">${entry.stars} ★</span>
 
                         <span class="leaderboard-modules">${entry.modules}/${TRAINING_MODULES.length} modules</span>
 
@@ -13720,7 +13720,7 @@ let depFilteredLocs = null;
 
 
 
-// â”€â”€ Activity Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Activity Log ─────────────────────────────────────────────────────────────
 
 
 
@@ -13822,7 +13822,7 @@ function activityShell() {
 
     <div style="display:flex;align-items:center;gap:12px">
 
-      <div style="width:36px;height:36px;background:linear-gradient(135deg,#1e6b5c,#2d8a78);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px">ðŸ“Š</div>
+      <div style="width:36px;height:36px;background:linear-gradient(135deg,#1e6b5c,#2d8a78);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px">📊</div>
 
       <div>
 
@@ -13842,7 +13842,7 @@ function activityShell() {
 
       </div>
 
-      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:20px;padding:4px 10px;font-size:11px;color:#92400E;font-weight:600">ðŸ”’ Only visible to you</div>
+      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:20px;padding:4px 10px;font-size:11px;color:#92400E;font-weight:600">🔒 Only visible to you</div>
 
     </div>
 
@@ -13852,13 +13852,13 @@ function activityShell() {
 
   <div id="act-kpis" style="padding:16px 24px;border-bottom:1px solid #E2E8F0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:#FAFBFC">
 
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total events</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-total">â€”</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total events</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-total">—</div></div>
 
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total logins</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-logins">â€”</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Total logins</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-logins">—</div></div>
 
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Active users</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-users">â€”</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Active users</div><div style="font-size:28px;font-weight:800;color:#111827;letter-spacing:-.03em;line-height:1" id="act-kpi-users">—</div></div>
 
-    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Last activity</div><div style="font-size:13px;font-weight:600;color:#111827;margin-top:5px;line-height:1.3" id="act-kpi-last">â€”</div></div>
+    <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.04)"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9CA3AF;margin-bottom:6px">Last activity</div><div style="font-size:13px;font-weight:600;color:#111827;margin-top:5px;line-height:1.3" id="act-kpi-last">—</div></div>
 
   </div>
 
@@ -13924,7 +13924,7 @@ function activityShell() {
 
     <div style="padding:14px 24px;border-bottom:1px solid #E2E8F0;background:#FFFFFF">
 
-      <div style="font-size:13px;color:#6B7280">Engagement profile per team member Â· All time</div>
+      <div style="font-size:13px;color:#6B7280">Engagement profile per team member · All time</div>
 
     </div>
 
@@ -13966,7 +13966,7 @@ function renderActivityFeed(events) {
 
     const last = events[0];
 
-    document.getElementById('act-kpi-last').textContent = last ? `${last.User_Name || last.User_Email} Â· ${(last.Timestamp || '').slice(11, 16)}` : 'â€”';
+    document.getElementById('act-kpi-last').textContent = last ? `${last.User_Name || last.User_Email} · ${(last.Timestamp || '').slice(11, 16)}` : '—';
 
 
 
@@ -14072,7 +14072,7 @@ function paintFeedRows(events) {
 
             const label = isNaN(d) ? dateStr : d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'short', year:'numeric' });
 
-            rows.push(`<tr><td colspan="6" style="padding:16px 10px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9CA3AF;pointer-events:none;border-bottom:1px solid #F9FAFB">â€” ${label}</td></tr>`);
+            rows.push(`<tr><td colspan="6" style="padding:16px 10px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9CA3AF;pointer-events:none;border-bottom:1px solid #F9FAFB">— ${label}</td></tr>`);
 
         }
 
@@ -14094,19 +14094,19 @@ function paintFeedRows(events) {
 
             if (ev === 'dwell') return `Spent <b style="color:#0EA5E9">${e.Value}s</b> on <span style="color:${_ACT_PAGE_COLORS[e.Page]||'#1e6b5c'};font-weight:600">${e.Page}</span>`;
 
-            if (ev === 'click') return `<b style="color:#111827">${e.Element||''}</b> <span style="color:#6B7280">${e.Page ? 'on ' + e.Page : ''}</span>${e.Value ? ` <span style="color:#9CA3AF">â†’ ${e.Value}</span>` : ''}`;
+            if (ev === 'click') return `<b style="color:#111827">${e.Element||''}</b> <span style="color:#6B7280">${e.Page ? 'on ' + e.Page : ''}</span>${e.Value ? ` <span style="color:#9CA3AF">→ ${e.Value}</span>` : ''}`;
 
             return e.Element || e.Page || '';
 
         })();
 
-        const device = [e.Device_Type === 'Mobile' ? 'ðŸ“±' : 'ðŸ’»', e.Browser, e.OS].filter(Boolean).join(' Â· ');
+        const device = [e.Device_Type === 'Mobile' ? '📱' : '💻', e.Browser, e.OS].filter(Boolean).join(' · ');
 
         rows.push(`<tr style="border-bottom:1px solid #F9FAFB;transition:background .1s" onmouseenter="this.style.background='#F8FAFC'" onmouseleave="this.style.background=''">
 
           <td style="padding:11px 10px;white-space:nowrap">
 
-            <div style="font-family:monospace;font-size:13px;font-weight:600;color:#111827">${ts.slice(11,19)||'â€”'}</div>
+            <div style="font-family:monospace;font-size:13px;font-weight:600;color:#111827">${ts.slice(11,19)||'—'}</div>
 
             <div style="font-family:monospace;font-size:11px;color:#9CA3AF;margin-top:2px">${dateStr}</div>
 
@@ -14118,7 +14118,7 @@ function paintFeedRows(events) {
 
               <div style="width:32px;height:32px;border-radius:50%;background:${avatarColor(e.User_Email)};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${initials(e.User_Name||e.User_Email)}</div>
 
-              <div><div style="font-size:14px;font-weight:600;color:#111827">${e.User_Name||e.User_Email||'â€”'}</div><div style="font-size:11px;color:#9CA3AF;font-family:monospace;margin-top:1px">${e.User_Email||''}</div></div>
+              <div><div style="font-size:14px;font-weight:600;color:#111827">${e.User_Name||e.User_Email||'—'}</div><div style="font-size:11px;color:#9CA3AF;font-family:monospace;margin-top:1px">${e.User_Email||''}</div></div>
 
             </div>
 
@@ -14128,9 +14128,9 @@ function paintFeedRows(events) {
 
           <td style="padding:11px 10px;font-size:13px;color:#374151;max-width:260px">${details}</td>
 
-          <td style="padding:11px 10px"><div style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;padding:4px 9px;font-size:12px;color:#6B7280;white-space:nowrap">${device||'â€”'}</div></td>
+          <td style="padding:11px 10px"><div style="display:inline-flex;align-items:center;gap:4px;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:6px;padding:4px 9px;font-size:12px;color:#6B7280;white-space:nowrap">${device||'—'}</div></td>
 
-          <td style="padding:11px 10px;font-family:monospace;font-size:11px;color:#9CA3AF;white-space:nowrap">${(e.IP_Address||'â€”').replace(/\d+$/, 'Ã—')}</td>
+          <td style="padding:11px 10px;font-family:monospace;font-size:11px;color:#9CA3AF;white-space:nowrap">${(e.IP_Address||'—').replace(/\d+$/, '×')}</td>
 
         </tr>`);
 
@@ -14148,7 +14148,7 @@ function renderActProfiles(profiles) {
 
     if (!profiles.length) {
 
-        el.innerHTML = `<div style="color:#6B7280;font-size:13px;padding:24px;text-align:center;grid-column:1/-1">No data yet â€” events will appear after users log in and interact with the dashboard.</div>`;
+        el.innerHTML = `<div style="color:#6B7280;font-size:13px;padding:24px;text-align:center;grid-column:1/-1">No data yet — events will appear after users log in and interact with the dashboard.</div>`;
 
         return;
 
@@ -14216,7 +14216,7 @@ function renderActProfiles(profiles) {
 
                <span style="font-size:11px;color:#374151;font-weight:500">${c.element}</span>
 
-               <span style="font-size:10px;font-family:monospace;color:#059669;background:#D1FAE5;border-radius:4px;padding:1px 7px;font-weight:700">${c.count}Ã—</span>
+               <span style="font-size:10px;font-family:monospace;color:#059669;background:#D1FAE5;border-radius:4px;padding:1px 7px;font-weight:700">${c.count}×</span>
 
              </div>`
 
@@ -14226,7 +14226,7 @@ function renderActProfiles(profiles) {
 
         const hoursHTML = (u.hours||Array(24).fill(0)).map((h,i) =>
 
-            `<div style="height:14px;border-radius:2px;background:${heatColor(h,maxHour)}" title="${i}:00 â€” ${h} actions"></div>`
+            `<div style="height:14px;border-radius:2px;background:${heatColor(h,maxHour)}" title="${i}:00 — ${h} actions"></div>`
 
         ).join('');
 
@@ -14262,7 +14262,7 @@ function renderActProfiles(profiles) {
 
             </div>
 
-            <div style="font-size:11px;color:#D1D5DB;margin-left:4px">â–¼</div>
+            <div style="font-size:11px;color:#D1D5DB;margin-left:4px">▼</div>
 
           </div>
 
@@ -14270,9 +14270,9 @@ function renderActProfiles(profiles) {
 
           <div style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;background:#FAFBFC;border-bottom:1px solid #F3F4F6">
 
-            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">Last seen <b style="color:#111827">${lastSeenShort||'â€”'}</b></span>
+            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">Last seen <b style="color:#111827">${lastSeenShort||'—'}</b></span>
 
-            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">ðŸ“± <b style="color:#111827">${mobilePct}%</b> mobile</span>
+            <span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">📱 <b style="color:#111827">${mobilePct}%</b> mobile</span>
 
             ${u.pages&&u.pages[0]?`<span style="background:#F3F4F6;border-radius:5px;padding:4px 10px;font-size:12px;color:#6B7280">Top page: <b style="color:${_ACT_PAGE_COLORS[u.pages[0].name]||'#1e6b5c'}">${u.pages[0].name}</b></span>`:''}
 
@@ -14284,7 +14284,7 @@ function renderActProfiles(profiles) {
 
             ${pagesHTML ? `<div style="padding:14px 16px;border-bottom:1px solid #F3F4F6">
 
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:10px">Pages visited Â· scroll depth</div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:10px">Pages visited · scroll depth</div>
 
               ${pagesHTML}
 
@@ -14344,7 +14344,7 @@ function renderActProfiles(profiles) {
 
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 
 
@@ -14528,7 +14528,7 @@ function depComputeSummary(locs) {
 
 
 
-// â”€â”€ Deadline Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Deadline Card ─────────────────────────────────────────────────────────────
 
 
 
@@ -14750,7 +14750,7 @@ function depRenderSummary302(s) {
 
 
 
-// â”€â”€ Pie Charts (vs 302) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Pie Charts (vs 302) ───────────────────────────────────────────────────────
 
 
 
@@ -14844,19 +14844,19 @@ function depRenderKPIs(s) {
 
         { label:'Total Locations',    value: s.total,             cls:'dep-k-total', sub:'deployment sites' },
 
-        { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VP + Municipal Â· ${s.totalEntities - s.noc} pending` },
+        { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.noc} pending` },
 
-        { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VP + Municipal Â· ${s.totalEntities - s.agreement} pending` },
+        { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.agreement} pending` },
 
-        { label:'Civil Work Done',     value: s.civil.done,        cls:'dep-k-civil', sub:`of ${s.civil.done + s.civil.pending} required Â· ${s.civil.not_required} N/A` },
+        { label:'Civil Work Done',     value: s.civil.done,        cls:'dep-k-civil', sub:`of ${s.civil.done + s.civil.pending} required · ${s.civil.not_required} N/A` },
 
-        { label:'Shed Completed',     value: s.shed.done,         cls:'dep-k-shed',  sub:`of ${s.shed.done + s.shed.pending} required Â· ${s.shed.not_required} N/A` },
+        { label:'Shed Completed',     value: s.shed.done,         cls:'dep-k-shed',  sub:`of ${s.shed.done + s.shed.pending} required · ${s.shed.not_required} N/A` },
 
-        { label:'Electrical Done',    value: s.electrical.done,   cls:'dep-k-elec',  sub:`${s.electrical.not_required} N/A Â· ${s.electrical.pending} pending` },
+        { label:'Electrical Done',    value: s.electrical.done,   cls:'dep-k-elec',  sub:`${s.electrical.not_required} N/A · ${s.electrical.pending} pending` },
 
-        { label:'Internet Done',      value: s.internet.done,     cls:'dep-k-inet',  sub:`${s.internet.not_required} N/A Â· ${s.internet.pending} pending` },
+        { label:'Internet Done',      value: s.internet.done,     cls:'dep-k-inet',  sub:`${s.internet.not_required} N/A · ${s.internet.pending} pending` },
 
-        { label:'CCTV Done',          value: s.cctv.done,         cls:'dep-k-cctv',  sub:`${s.cctv.not_required} N/A Â· ${s.cctv.pending} pending` },
+        { label:'CCTV Done',          value: s.cctv.done,         cls:'dep-k-cctv',  sub:`${s.cctv.not_required} N/A · ${s.cctv.pending} pending` },
 
         { label:'Machines Delivered', value: s.delivered,         cls:'dep-k-del',   sub:`${Math.round(s.delivered/T*100)}% of ${T}` },
 
@@ -14932,7 +14932,7 @@ function depRenderFunnel(s) {
 
             </div>
 
-            ${drop > 0 ? `<div class="dep-funnel-drop">â–¼ ${drop} gap</div>` : ''}
+            ${drop > 0 ? `<div class="dep-funnel-drop">▼ ${drop} gap</div>` : ''}
 
         </div>`;
 
@@ -15064,7 +15064,7 @@ function depRenderForecast(s, locs) {
 
     function estDate(rate) {
 
-        if (!rate || rate <= 0) return 'â€”';
+        if (!rate || rate <= 0) return '—';
 
         return new Date(today.getTime() + Math.ceil(remaining / rate) * 86400000)
 
@@ -15152,7 +15152,7 @@ function depRenderForecast(s, locs) {
 
                     <div>Est. completion: <b>${estDate(dailyRate)}</b></div>
 
-                    ${dailyRate > 0 && dailyRate < reqDaily ? '<div style="color:#d1453b;font-size:11px;margin-top:3px">Behind â€” will likely miss deadline</div>' : ''}
+                    ${dailyRate > 0 && dailyRate < reqDaily ? '<div style="color:#d1453b;font-size:11px;margin-top:3px">Behind — will likely miss deadline</div>' : ''}
 
                 </div>
 
@@ -15254,7 +15254,7 @@ function depRenderForecast(s, locs) {
 
             ` : `<div style="padding:24px 0;text-align:center;color:var(--muted);font-size:13px">
 
-                <div style="font-size:28px;margin-bottom:8px">ðŸ“‹</div>
+                <div style="font-size:28px;margin-bottom:8px">📋</div>
 
                 Add a <b>Machine Install Date</b> column (YYYY-MM-DD)<br>to see installation history charts.
 
@@ -15270,7 +15270,7 @@ function depRenderForecast(s, locs) {
 
 
 
-// â”€â”€ Where We're Stuck â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Where We're Stuck ────────────────────────────────────────────────────────
 
 
 
@@ -15328,7 +15328,7 @@ function depRenderBlockers(locs) {
 
         elecPending > 0  && { count: elecPending,  label: 'Electrical pending',        color: '#8b6914', bg: '#faf6e8', detail: 'Power connection needed before RVM goes live' },
 
-        delivNotInst > 0 && { count: delivNotInst, label: 'Delivered, not installed',  color: '#0b6b4f', bg: '#f0faf5', detail: 'Machine on-site â€” commission now' },
+        delivNotInst > 0 && { count: delivNotInst, label: 'Delivered, not installed',  color: '#0b6b4f', bg: '#f0faf5', detail: 'Machine on-site — commission now' },
 
     ].filter(Boolean);
 
@@ -15366,7 +15366,7 @@ function depRenderBlockers(locs) {
 
 
 
-// â”€â”€ Project Metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Project Metrics ───────────────────────────────────────────────────────────
 
 
 
@@ -15420,7 +15420,7 @@ function depRenderProjectMetrics(s, locs) {
 
     const instDates = locs.map(l => l.installDate).filter(d => d && d.length >= 8).sort();
 
-    let actualRate = 'â€”';
+    let actualRate = '—';
 
     if (instDates.length >= 2) {
 
@@ -15438,7 +15438,7 @@ function depRenderProjectMetrics(s, locs) {
 
     const metrics = [
 
-        { val: identified,  lbl: 'Locations Identified',  sub: siteGap > 0 ? `${siteGap} more needed for ${RVM_TARGET}` : 'Target reached âœ“', color: siteGap > 0 ? '#d1453b' : '#0b6b4f' },
+        { val: identified,  lbl: 'Locations Identified',  sub: siteGap > 0 ? `${siteGap} more needed for ${RVM_TARGET}` : 'Target reached ✓', color: siteGap > 0 ? '#d1453b' : '#0b6b4f' },
 
         { val: RVM_TARGET,  lbl: 'RVM Target',            sub: `Go-live ${deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}`,      color: '#1e6b5c' },
 
@@ -15448,7 +15448,7 @@ function depRenderProjectMetrics(s, locs) {
 
         { val: daysLeft,    lbl: 'Days Left',              sub: `until ${deadlineStr}`,                                                                             color: daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f' },
 
-        { val: installed,   lbl: 'RVMs Installed',        sub: `${deployPct}% of ${RVM_TARGET} Â· ${live} live`,                                                     color: '#0b6b4f' },
+        { val: installed,   lbl: 'RVMs Installed',        sub: `${deployPct}% of ${RVM_TARGET} · ${live} live`,                                                     color: '#0b6b4f' },
 
         { val: gap,         lbl: 'Gap to Target',         sub: 'Machines still to install',                                                                         color: gap > 50 ? '#d1453b' : '#e08a1e' },
 
@@ -15482,7 +15482,7 @@ function depRenderProjectMetrics(s, locs) {
 
 
 
-// â”€â”€ Block-wise Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Block-wise Summary ────────────────────────────────────────────────────────
 
 
 
@@ -15550,7 +15550,7 @@ function depRenderBlockSummary(locs) {
 
     const cols = [
 
-        { label:'Civil Work', fn: b => { const req = breq(b,'civilWorkStatus'); return req === 0 ? 'â€”' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
+        { label:'Civil Work', fn: b => { const req = breq(b,'civilWorkStatus'); return req === 0 ? '—' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
 
         { label:'Shed',      fn: b => `${bv(b,'shedStatus','Done')}/${breq(b,'shedStatus')}` },
 
@@ -15576,7 +15576,7 @@ function depRenderBlockSummary(locs) {
 
             <h2 style="margin:0">Block-wise Progress</h2>
 
-            <div style="font-size:12px;color:var(--muted)">${blocks.length} blocks Â· ${locs.length} locations</div>
+            <div style="font-size:12px;color:var(--muted)">${blocks.length} blocks · ${locs.length} locations</div>
 
         </div>
 
@@ -15662,17 +15662,17 @@ function depRenderBlockSummary(locs) {
 
 
 
-// â”€â”€ Location Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Location Table ────────────────────────────────────────────────────────────
 
 
 
 function depFlag(val) {
 
-    if (!val || val === '') return '<span class="ct-flag-na">â€”</span>';
+    if (!val || val === '') return '<span class="ct-flag-na">—</span>';
 
-    if (val === 'Yes' || val === 'Done') return '<span class="ct-flag-yes">âœ“</span>';
+    if (val === 'Yes' || val === 'Done') return '<span class="ct-flag-yes">✓</span>';
 
-    if (val === 'No')           return '<span class="ct-flag-no">âœ—</span>';
+    if (val === 'No')           return '<span class="ct-flag-no">✗</span>';
 
     if (val === 'Pending')      return '<span class="ct-flag-pend">â—</span>';
 
@@ -15726,7 +15726,7 @@ function depPendingItems(l) {
 
     if (l.machineLive !== 'Done')         items.push('Go-Live');
 
-    if (items.length === 0) return '<span style="color:#0b6b4f;font-size:11px">Complete âœ“</span>';
+    if (items.length === 0) return '<span style="color:#0b6b4f;font-size:11px">Complete ✓</span>';
 
     return `<span style="font-size:11px;color:#e08a1e">${items.join(', ')}</span>`;
 
@@ -15750,7 +15750,7 @@ function depRenderLocTable(locs) {
 
                 ? l.installDate.substring(0, 10)
 
-                : 'â€”';
+                : '—';
 
             return `<tr>
 
@@ -15758,7 +15758,7 @@ function depRenderLocTable(locs) {
 
                 <td><b>${l.locationName}</b></td>
 
-                <td style="font-size:12px">${l.block || 'â€”'}</td>
+                <td style="font-size:12px">${l.block || '—'}</td>
 
                 <td><span class="dep-stage-pill" style="background:${hm.color}18;color:${hm.color};border:1px solid ${hm.color}33">${hm.label}</span></td>
 
@@ -15848,7 +15848,7 @@ function depRenderCPSection(cpData, planTotal) {
 
 
 
-// â”€â”€ Main Render + Filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Render + Filters ─────────────────────────────────────────────────────
 
 
 
@@ -15860,7 +15860,7 @@ function renderRvmDeployment(data) {
 
     const subtitleEl = document.getElementById('dep-header-subtitle');
 
-    if (subtitleEl) subtitleEl.textContent = `${depPlanTotal} Collection Points Â· Goa DRS 2026`;
+    if (subtitleEl) subtitleEl.textContent = `${depPlanTotal} Collection Points · Goa DRS 2026`;
 
 
 
@@ -16192,7 +16192,7 @@ function renderCtDashboard(data) {
 
     // KPIs
 
-    const rate = wd > 0 ? ((s.target - s.installed) / wd).toFixed(1) : 'â€”';
+    const rate = wd > 0 ? ((s.target - s.installed) / wd).toFixed(1) : '—';
 
     const pct  = s.target > 0 ? Math.round(s.installed / s.target * 100) : 0;
 
@@ -16202,7 +16202,7 @@ function renderCtDashboard(data) {
 
         { c:'k-goal', v: s.target,     k: 'RVM Target',           n: `<span style="color:#0b6b4f">Go-live 15 Jul 2026</span>` },
 
-        { c:'k-live', v: s.installed,  k: 'RVMs Installed',       n: `${pct}% of ${s.target} Â· ${s.live} live` },
+        { c:'k-live', v: s.installed,  k: 'RVMs Installed',       n: `${pct}% of ${s.target} · ${s.live} live` },
 
         { c:'k-gap',  v: s.target - s.installed, k: 'Gap to Target', n: `<span style="color:#d1453b">units still to deploy</span>` },
 
@@ -16272,11 +16272,11 @@ function renderCtDashboard(data) {
 
         const diff = Math.round((proj - DEADLINE) / 864e5);
 
-        let cls = 'ct-sim-green', msg = `On track â€” completes by ${projStr}`;
+        let cls = 'ct-sim-green', msg = `On track — completes by ${projStr}`;
 
-        if (diff > 7)  { cls = 'ct-sim-red';   msg = `Misses deadline by ${diff} days â€” completes ${projStr}`; }
+        if (diff > 7)  { cls = 'ct-sim-red';   msg = `Misses deadline by ${diff} days — completes ${projStr}`; }
 
-        else if (diff > 0) { cls = 'ct-sim-amber'; msg = `Just misses deadline by ${diff} days â€” completes ${projStr}`; }
+        else if (diff > 0) { cls = 'ct-sim-amber'; msg = `Just misses deadline by ${diff} days — completes ${projStr}`; }
 
         document.getElementById('ct-sim-result').className = `ct-sim-result ${cls}`;
 
@@ -16316,11 +16316,11 @@ function renderCtDashboard(data) {
 
         return `<div class="ct-funnel-stage">
 
-            <div class="ct-funnel-labels"><span class="fn">${st[0]}</span><span class="fc">${st[1]} Â· ${p}%</span></div>
+            <div class="ct-funnel-labels"><span class="fn">${st[0]}</span><span class="fc">${st[1]} · ${p}%</span></div>
 
             <div class="ct-funnel-bar"><div class="ct-funnel-fill" style="width:${Math.max(p,2)}%;background:${st[2]}">${st[1]}</div></div>
 
-            ${drop > 0 ? `<div class="ct-funnel-drop">â–¼ ${drop} drop from prev gate</div>` : ''}
+            ${drop > 0 ? `<div class="ct-funnel-drop">▼ ${drop} drop from prev gate</div>` : ''}
 
         </div>`;
 
@@ -16336,7 +16336,7 @@ function renderCtDashboard(data) {
 
         ['bn-crit', bn.site_gap,              'Site sourcing gap',          `Only ${s.identified} of ${s.target} locations mapped`],
 
-        ['bn-crit', bn.no_noc,                'NOC not received',           'Govt sign-off pending â€” gates everything downstream'],
+        ['bn-crit', bn.no_noc,                'NOC not received',           'Govt sign-off pending — gates everything downstream'],
 
         ['bn-warn', bn.no_agreement,          'Awaiting service agreement', 'NOC done but agreement unsigned'],
 
@@ -16344,7 +16344,7 @@ function renderCtDashboard(data) {
 
         ['bn-warn', bn.elec_pending,          'Electricity not ready',      'Plug-point / power supply pending'],
 
-        ['bn-ok',   bn.delivered_not_installed,'Deployed, not installed',   'RVM on-site â€” needs base-fixing (quick win)'],
+        ['bn-ok',   bn.delivered_not_installed,'Deployed, not installed',   'RVM on-site — needs base-fixing (quick win)'],
 
         ['bn-ok',   bn.cctv_pending,          'CCTV pending',               'Final step before machine goes live'],
 
@@ -16436,7 +16436,7 @@ function ctRenderBlockTable(blocks) {
 
             <td><b>${b.block}</b></td>
 
-            <td style="font-size:11.5px;color:var(--muted)">${b.poc || 'â€”'}</td>
+            <td style="font-size:11.5px;color:var(--muted)">${b.poc || '—'}</td>
 
             <td>${b.total}</td>
 
@@ -16464,13 +16464,13 @@ function ctRenderBlockTable(blocks) {
 
 function ctFlag(val) {
 
-    if (val === true  || val === 'Yes')     return '<span class="ct-flag-yes">âœ“</span>';
+    if (val === true  || val === 'Yes')     return '<span class="ct-flag-yes">✓</span>';
 
-    if (val === false || val === 'No')      return '<span class="ct-flag-no">âœ—</span>';
+    if (val === false || val === 'No')      return '<span class="ct-flag-no">✗</span>';
 
     if (val === 'Pending')                  return '<span class="ct-flag-pend">â—</span>';
 
-    if (!val || val === '' || val === 'â€”')  return '<span class="ct-flag-na">Â·</span>';
+    if (!val || val === '' || val === '—')  return '<span class="ct-flag-na">·</span>';
 
     return `<span class="ct-flag-pend">${val}</span>`;
 
@@ -16494,7 +16494,7 @@ function ctRenderLocTable(locs) {
 
             <td>${d.block}</td>
 
-            <td style="font-size:11.5px;color:var(--muted)">${d.poc || 'â€”'}</td>
+            <td style="font-size:11.5px;color:var(--muted)">${d.poc || '—'}</td>
 
             <td><span class="ct-pill ct-s${d.ctStage}">${d.ctStageName}</span></td>
 
@@ -16514,7 +16514,7 @@ function ctRenderLocTable(locs) {
 
             <td>${ctFlag(d.machineLive)}</td>
 
-            <td style="font-size:11.5px;color:var(--muted);max-width:140px">${d.blocker || 'â€”'}</td>
+            <td style="font-size:11.5px;color:var(--muted);max-width:140px">${d.blocker || '—'}</td>
 
         </tr>`).join('') || '<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--muted)">No locations match current filters.</td></tr>';
 
