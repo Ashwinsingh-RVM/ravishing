@@ -2,6 +2,7 @@
 FastAPI endpoints for the Goa DRS VP CP Mapping system
 """
 from datetime import date, datetime
+import time
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +25,10 @@ from ..models.entities import MeetingUpdate
 settings = Settings()
 
 SUPERADMIN_EMAIL = 'ashwin.singh@recykal.com'
+
+# 60-second TTL cache for the deployment summary (4 GSheets calls → expensive)
+_dep_cache: dict = {"data": None, "ts": 0.0}
+_DEP_CACHE_TTL = 60
 
 def _parse_device_info(user_agent: str) -> dict:
     ua = (user_agent or '').lower()
@@ -1120,20 +1125,48 @@ async def import_legacy_notes():
 
 @app.get("/api/deployment/summary")
 async def get_deployment_summary(request: Request):
-    """Get RVM deployment summary: locations, blocks, CP plan data"""
+    """Get RVM deployment summary: locations, blocks, CP plan data, RC data"""
     require_auth(request)
+    now = time.time()
+    if _dep_cache["data"] is not None and (now - _dep_cache["ts"]) < _DEP_CACHE_TTL:
+        return _dep_cache["data"]
     try:
         sheets_service = GoogleSheetsService()
         locations = sheets_service.get_deployment_data()
         blocks = sorted(list(set(l['block'] for l in locations if l.get('block'))))
         cp_data = sheets_service.get_cp_tab_data()
         plan_total = sheets_service.get_planned_rvms_total()
-        return {
+        rc_locations = sheets_service.get_rc_data()
+
+        # RC installed: derive from main RVM Deployment tab where Collection Point = RC / Return Center
+        _rc_keywords = ('rc', 'return center', 'return centre')
+        rc_main_locs = [l for l in locations if any(kw in l.get('collectionPoint', '').lower() for kw in _rc_keywords)]
+        rc_installed_from_main = len([l for l in rc_main_locs if l.get('machineLive') in ('Done', 'Yes')])
+
+        result = {
             "locations": locations,
             "blocks": blocks,
             "cpData": cp_data,
             "planTotal": plan_total,
+            "rcLocations": rc_locations,
+            "rcMainCount": len(rc_main_locs),
+            "rcInstalledFromMain": rc_installed_from_main,
         }
+        _dep_cache["data"] = result
+        _dep_cache["ts"] = now
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/rc/init")
+async def init_rc_tab(request: Request):
+    """Create the RC Deployment tab in Google Sheet with standard headers."""
+    require_auth(request)
+    try:
+        sheets_service = GoogleSheetsService()
+        result = sheets_service.init_rc_tab()
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1552,6 +1585,7 @@ FRONTEND_ROUTES = {'VPs', 'ULBs', 'Dashboard', 'Meetings', 'Escalation', 'Today'
 @app.get("/{path:path}")
 async def spa_catch_all(path: str):
     """Serve index.html for all frontend routes (SPA catch-all)"""
+    path = path.rstrip('.')  # strip trailing periods (browser quirk)
     # Serve Reverse Logistics standalone page
     if path == 'rl':
         rl_path = FRONTEND_DIR / "reverse-logistics.html"

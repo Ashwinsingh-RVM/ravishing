@@ -3604,7 +3604,7 @@ function renderTodayActivity() {
 
     const today = new Date();
 
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
 
 
@@ -7526,7 +7526,7 @@ function formatMeetingDate(dateStr) {
 
 
 
-    if (dateStr === today.toISOString().split('T')[0]) return 'Today';
+    if (dateStr === `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`) return 'Today';
 
     if (dateStr === tomorrow.toISOString().split('T')[0]) return 'Tomorrow';
 
@@ -13712,6 +13712,8 @@ window.selectMoreItem = selectMoreItem;
 
 let depData = null;
 
+let rcData = [];
+
 let rvmDeployMapInstance = null;
 
 let depDeadline = '2026-07-15';
@@ -14374,15 +14376,31 @@ async function loadRvmDeployment() {
 
     if (!loading) return;
 
+    errEl.style.display = 'none';
 
+    // Render immediately from cache if available (instant open)
+    if (depData) {
+
+        loading.style.display = 'none';
+
+        main.style.display    = 'block';
+
+        renderRvmDeployment(depData);
+
+        // Silently refresh in background
+        fetch('/api/deployment/summary').then(r => r.ok ? r.json() : null).then(freshData => {
+
+            if (freshData) { depData = freshData; rcData = freshData.rcLocations || []; renderRvmDeployment(depData); }
+
+        }).catch(() => {});
+
+        return;
+
+    }
 
     loading.style.display = 'block';
 
     main.style.display    = 'none';
-
-    errEl.style.display   = 'none';
-
-
 
     try {
 
@@ -14392,9 +14410,9 @@ async function loadRvmDeployment() {
 
         const freshData = await res.json();
 
-
-
         depData = freshData;
+
+        rcData = freshData.rcLocations || [];
 
         loading.style.display = 'none';
 
@@ -14494,23 +14512,31 @@ function depComputeSummary(locs) {
 
     const totalEntities = useVpData ? vpData.length : 205;
 
+    // VP counts (how many VPs have reached each milestone)
     const nocCount = useVpData
-
         ? vpData.filter(vp => resolveStageNumber(vp) >= 9).length
-
         : cvEntity('nocReceived', 'Yes');
 
     const agrCount = useVpData
-
         ? vpData.filter(vp => resolveStageNumber(vp) >= 11).length
-
         : cvEntity('agreementSigned', 'Yes');
+
+    // Planned RVM sums (sum of planned_rvms for VPs at each milestone — 1 VP can cover 3-5 RVMs)
+    const nocPlan = useVpData
+        ? vpData.filter(vp => resolveStageNumber(vp) >= 9).reduce((sum, vp) => sum + (vp.plannedRvms || 1), 0)
+        : nocCount;
+
+    const agrPlan = useVpData
+        ? vpData.filter(vp => resolveStageNumber(vp) >= 11).reduce((sum, vp) => sum + (vp.plannedRvms || 1), 0)
+        : agrCount;
 
     return {
 
         total: locs.length, totalEntities,
 
         noc: nocCount, agreement: agrCount,
+
+        nocPlan, agrPlan,
 
         civil: ps('civilWorkStatus'),
 
@@ -14692,6 +14718,8 @@ function depRenderSummary302(s) {
 
     if (!el) return;
 
+    el.innerHTML = '';  return;
+
     const T = depPlanTotal;
 
     const items = [
@@ -14699,8 +14727,6 @@ function depRenderSummary302(s) {
         { label:'Machine Delivered', val: s.delivered,      color:'#13a06f' },
 
         { label:'Machine Installed', val: s.installed.done, color:'#0b6b4f' },
-
-        { label:'Machine Live',      val: s.live,           color:'#085f40' },
 
     ];
 
@@ -14839,43 +14865,8 @@ function depRenderPieCharts(s) {
 
 
 function depRenderKPIs(s) {
-
-    const T = depPlanTotal;
-
-    document.getElementById('dep-kpis').innerHTML = [
-
-        { label:'Total Locations',    value: s.total,             cls:'dep-k-total', sub:'deployment sites' },
-
-        { label:'NOC Received',       value: s.noc,               cls:'dep-k-noc',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.noc} pending` },
-
-        { label:'Agreements Signed',  value: s.agreement,         cls:'dep-k-agr',   sub:`of ${s.totalEntities} VP + Municipal · ${s.totalEntities - s.agreement} pending` },
-
-        { label:'Civil Work Done',     value: s.civil.done,        cls:'dep-k-civil', sub:`of ${s.civil.done + s.civil.pending} required · ${s.civil.not_required} N/A` },
-
-        { label:'Shed Completed',     value: s.shed.done,         cls:'dep-k-shed',  sub:`of ${s.shed.done + s.shed.pending} required · ${s.shed.not_required} N/A` },
-
-        { label:'Electrical Done',    value: s.electrical.done,   cls:'dep-k-elec',  sub:`${s.electrical.not_required} N/A · ${s.electrical.pending} pending` },
-
-        { label:'Internet Done',      value: s.internet.done,     cls:'dep-k-inet',  sub:`${s.internet.not_required} N/A · ${s.internet.pending} pending` },
-
-        { label:'CCTV Done',          value: s.cctv.done,         cls:'dep-k-cctv',  sub:`${s.cctv.not_required} N/A · ${s.cctv.pending} pending` },
-
-        { label:'Machines Delivered', value: s.delivered,         cls:'dep-k-del',   sub:`${Math.round(s.delivered/T*100)}% of ${T}` },
-
-        { label:'Machines Installed', value: s.installed.done,    cls:'dep-k-inst',  sub:`${Math.round(s.installed.done/T*100)}% installed` },
-
-        { label:'Machines Live',      value: s.live,              cls:'dep-k-live',  sub:`${Math.round(s.live/T*100)}% of ${T}` },
-
-    ].map(k => `<div class="dep-kpi ${k.cls}">
-
-        <div class="dep-kv">${k.value}</div>
-
-        <div class="dep-kl">${k.label}</div>
-
-        <div class="dep-kn">${k.sub}</div>
-
-    </div>`).join('');
-
+    const el = document.getElementById('dep-kpis');
+    if (el) el.innerHTML = '';
 }
 
 
@@ -14952,19 +14943,17 @@ function depRenderDonuts(s) {
 
     const progItems = [
 
-        { label:'Civil Work',        stats: s.civil,      color:'#5b8a3c' },
+        { label:'Civil Work',   stats: s.civil,      color:'#5b8a3c' },
 
-        { label:'Shed',              stats: s.shed,       color:'#8b6914' },
+        { label:'Shed',         stats: s.shed,       color:'#8b6914' },
 
-        { label:'Electrical',        stats: s.electrical, color:'#c27a10' },
+        { label:'Electrical',   stats: s.electrical, color:'#c27a10' },
 
-        { label:'Machine Live',      stats: liveStats,    color:'#085f40' },
+        { label:'Internet',     stats: s.internet,   color:'#2f6fb0' },
 
-        { label:'Internet',          stats: s.internet,   color:'#2f6fb0' },
+        { label:'CCTV',         stats: s.cctv,       color:'#6b2fa0' },
 
-        { label:'CCTV',              stats: s.cctv,       color:'#6b2fa0' },
-
-        { label:'Machine Installed', stats: s.installed,  color:'#0b6b4f' },
+        { label:'Machine Live', stats: liveStats,    color:'#085f40' },
 
     ];
 
@@ -15006,7 +14995,6 @@ function depRenderDonuts(s) {
 
                 <span class="dep-ps dep-ps-pend">${st.pending} Pending</span>
 
-                <span class="dep-ps dep-ps-na">${st.not_required} N/A</span>
 
             </div>
 
@@ -15046,7 +15034,7 @@ function depRenderForecast(s, locs) {
 
     if (withDates.length >= 2) {
 
-        const dates = withDates.map(l => new Date(l.installDate.substring(0,10)+'T00:00:00')).sort((a,b)=>a-b);
+        const dates = withDates.map(l => depParseDate(l.installDate)).filter(d => d).sort((a,b)=>a-b);
 
         const span  = Math.max(1, Math.ceil((dates[dates.length-1] - dates[0]) / 86400000) + 1);
 
@@ -15080,7 +15068,7 @@ function depRenderForecast(s, locs) {
 
     locs.filter(l => l.rvmDeployed === 'Done' && l.installDate && typeof l.installDate === 'string' && l.installDate.length >= 10).forEach(l => {
 
-        const d = l.installDate.substring(0,10); byDate[d] = (byDate[d] || 0) + 1;
+        const _dpd = depParseDate(l.installDate); if (!_dpd) return; const d = `${_dpd.getFullYear()}-${String(_dpd.getMonth()+1).padStart(2,'0')}-${String(_dpd.getDate()).padStart(2,'0')}`; byDate[d] = (byDate[d] || 0) + 1;
 
     });
 
@@ -15094,7 +15082,7 @@ function depRenderForecast(s, locs) {
 
         try {
 
-            const d = new Date(l.installDate.substring(0,10)+'T00:00:00');
+            const d = depParseDate(l.installDate);
 
             if (isNaN(d.getTime())) return;
 
@@ -15378,19 +15366,15 @@ function depRenderProjectMetrics(s, locs) {
 
     if (!el) return;
 
-    const RVM_TARGET = depPlanTotal;
+    const RVM_TARGET  = depPlanTotal;
 
     const identified  = locs.length;
 
-    const siteGap     = Math.max(0, RVM_TARGET - identified);
-
     const installed   = s.installed.done;
 
-    const live        = s.live ? s.live.done || s.live : 0;
+    const live        = s.live ? (s.live.done !== undefined ? s.live.done : s.live) : 0;
 
     const gap         = Math.max(0, RVM_TARGET - installed);
-
-
 
     const deadlineStr = depGetDeadline();
 
@@ -15400,85 +15384,137 @@ function depRenderProjectMetrics(s, locs) {
 
     const daysLeft    = Math.max(1, Math.ceil((deadline - today) / 86400000));
 
-    const reqPerDay   = (gap / daysLeft).toFixed(1);
+    const rrr         = (gap / daysLeft).toFixed(1);
 
+    const deadlineFmt = deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
 
+    const dColor      = daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f';
 
-    const projStart = new Date('2026-01-01T00:00:00');
+    // Shed: only count rows where Shed Required = Yes
+    const shedRequired = locs.filter(l => l.shedRequired === 'Yes').length;
 
-    const totalSpan = Math.max(1, Math.ceil((deadline - projStart) / 86400000));
+    const shedDone     = locs.filter(l => l.shedRequired === 'Yes' && l.shedStatus === 'Done').length;
 
-    const elapsed   = Math.ceil((today - projStart) / 86400000);
-
-    const timePct   = Math.min(100, Math.max(0, Math.round(elapsed / totalSpan * 100)));
-
-    const deployPct = Math.round(installed / RVM_TARGET * 100);
-
-    const behind    = timePct > deployPct;
-
-    const schedGap  = Math.abs(timePct - deployPct);
-
-
-
-    const instDates = locs.map(l => l.installDate).filter(d => d && d.length >= 8).sort();
-
-    let actualRate = '—';
-
-    if (instDates.length >= 2) {
-
-        const first = new Date(instDates[0]);
-
-        const last  = new Date(instDates[instDates.length - 1]);
-
-        const span  = Math.max(1, Math.ceil((last - first) / 86400000));
-
-        actualRate  = (installed / span * 7).toFixed(1) + '/wk';
-
+    function mkCard(lbl, val, sub, color, minW) {
+        return '<div style="flex:1;min-width:' + (minW||'95px') + ';background:' + color + '10;border-top:3px solid ' + color + ';border-radius:8px;padding:9px 10px">' +
+            '<div style="font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + lbl + '</div>' +
+            '<div style="font-size:20px;font-weight:700;color:' + color + ';line-height:1.1;margin-bottom:2px">' + val + '</div>' +
+            '<div style="font-size:10px;color:#94a3b8;line-height:1.3">' + sub + '</div>' +
+            '</div>';
     }
 
+    function mkDualCard(lbl, valRvm, valRc, color, minW) {
+        return '<div style="flex:1;min-width:' + (minW||'160px') + ';background:' + color + '10;border-top:3px solid ' + color + ';border-radius:8px;padding:9px 10px">' +
+            '<div style="font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">' + lbl + '</div>' +
+            '<div style="margin-bottom:4px">' +
+                '<div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:1px">RVM</div>' +
+                '<div style="font-size:20px;font-weight:700;color:' + color + ';line-height:1.1">' + valRvm + '</div>' +
+            '</div>' +
+            '<div style="height:1px;background:#e2e8f0;margin:4px 0"></div>' +
+            '<div>' +
+                '<div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:1px">RC</div>' +
+                '<div style="font-size:14px;font-weight:600;color:#94a3b8;line-height:1.1">' + valRc + '</div>' +
+            '</div>' +
+            '</div>';
+    }
 
+    // RC metrics — target from RC Deployment tab, installed from main RVM Deployment (CP type = RC)
+    const rcTarget    = rcData.reduce((s, l) => s + (parseInt(l.rcTarget) || 0), 0) || (rcData.length ? 0 : '—');
+    const rcMainCount = s.rcMainCount || 0;
+    const rcInstalled = typeof s.rcInstalledFromMain === 'number' ? s.rcInstalledFromMain :
+                        rcData.filter(l => l.rcDeployed === 'Done').length;
+    const rcGap       = typeof rcTarget === 'number' && typeof rcInstalled === 'number'
+                        ? Math.max(0, rcTarget - rcInstalled) : '—';
+    const rcRrr       = typeof rcGap === 'number' && daysLeft > 0
+                        ? (rcGap / daysLeft).toFixed(1) : '—';
 
-    const metrics = [
+    // Row 1a: Targets + Installed
+    const gapColor = gap > 50 ? '#d1453b' : '#e08a1e';
+    const row1a = [
+        mkCard('RVM Target',    RVM_TARGET,    'Go-live ' + deadlineFmt,                              '#1e6b5c'),
+        mkCard('RC Target',     typeof rcTarget === 'number' ? rcTarget : '—', rcData.length ? 'from ' + rcData.length + ' RC locations' : 'Not in data source', '#6366f1'),
+        mkCard('Target Date',   deadlineFmt,   'Go-live target date',                                 dColor),
+        mkCard('Days Left',     daysLeft,      'until ' + deadlineStr,                                dColor),
+        mkCard('RVM Installed', installed,     Math.round(installed/RVM_TARGET*100) + '% of ' + RVM_TARGET, '#0b6b4f'),
+        mkCard('RC Installed',  rcInstalled,   rcMainCount > 0 ? Math.round(rcInstalled/(rcMainCount||1)*100) + '% of ' + rcMainCount + ' RC CPs' : 'No RC Collection Points', '#6366f1'),
+    ].join('');
 
-        { val: identified,  lbl: 'Locations Identified',  sub: siteGap > 0 ? `${siteGap} more needed for ${RVM_TARGET}` : 'Target reached ✓', color: siteGap > 0 ? '#d1453b' : '#0b6b4f' },
+    // Row 1b: GAP + RRR dual cards (larger, prominent)
+    const row1b = [
+        mkDualCard('Gap to Target',   gap,  rcGap,   gapColor,  '200px'),
+        mkDualCard('Run Rate Needed', rrr + '/day', typeof rcRrr === 'number' ? rcRrr + '/day' : '—', '#2f6fb0', '200px'),
+    ].join('');
 
-        { val: RVM_TARGET,  lbl: 'RVM Target',            sub: `Go-live ${deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}`,      color: '#1e6b5c' },
+    const row1 = row1a; // used below for display
 
-        { val: deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),
+    // Row 2: Pipeline Metrics (5 cards)
+    const totalE  = s.totalEntities || RVM_TARGET;
+    const row2 = [
+        mkCard('Location Identified', identified,  `${Math.max(0,RVM_TARGET-identified)} RVM · ${rcData.length} RC locations`, identified >= RVM_TARGET ? '#0b6b4f' : '#d1453b', '110px'),
+        mkCard('NOC Received',     s.noc,               `${s.totalEntities} VPs · ${s.totalEntities - s.noc} pending`,           '#2f6fb0', '110px'),
+        mkCard('NOC Plan (RVMs)',  s.nocPlan || '—',   `planned RVMs covered by NOC`,                                            '#2f6fb0', '110px'),
+        mkCard('Agreement Signed', s.agreement,         `${s.totalEntities} VPs · ${s.totalEntities - s.agreement} pending`,     '#5b8fd4', '110px'),
+        mkCard('Agr. Plan (RVMs)', s.agrPlan || '—',   `planned RVMs covered by agreement`,                                      '#5b8fd4', '110px'),
+    ].join('');
 
-                            lbl: 'Project Deadline',       sub: 'Go-live target date',                                                                              color: daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f' },
+    // Row 3: Work KPI (6 cards) — dep-kpi style with icons
+    const civilDone = s.civil ? s.civil.done  : 0;
+    const civilReq  = s.civil ? (s.civil.done + s.civil.pending) : 0;
+    const elecDone  = s.electrical ? s.electrical.done  : 0;
+    const elecReq   = s.electrical ? (s.electrical.done + s.electrical.pending) : 0;
+    const inetDone  = s.internet ? s.internet.done  : 0;
+    const inetReq   = s.internet ? (s.internet.done + s.internet.pending) : 0;
+    const cctvDone  = s.cctv ? s.cctv.done  : 0;
+    const cctvReq   = s.cctv ? (s.cctv.done + s.cctv.pending) : 0;
 
-        { val: daysLeft,    lbl: 'Days Left',              sub: `until ${deadlineStr}`,                                                                             color: daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f' },
+    function mkWkIcon(key, color) {
+        const paths = {
+            civil:   `<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>`,
+            shed:    `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
+            elec:    `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
+            inet:    `<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="${color}"/>`,
+            cctv:    `<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>`,
+            live:    `<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>`,
+        };
+        return `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7">${paths[key]||''}</svg>`;
+    }
 
-        { val: installed,   lbl: 'RVMs Installed',        sub: `${deployPct}% of ${RVM_TARGET} · ${live} live`,                                                     color: '#0b6b4f' },
+    function mkWkCard(lbl, val, sub, color, iconKey) {
+        return `<div class="dep-kpi" style="border-left-color:${color};flex:1;min-width:110px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+                <div style="flex:1">
+                    <div class="dep-kv" style="color:${color}">${val}</div>
+                    <div class="dep-kl">${lbl}</div>
+                    ${sub ? `<div class="dep-kn" style="margin-top:3px;font-size:10px;color:#64748b">${sub}</div>` : ''}
+                </div>
+                <div style="flex-shrink:0;margin-top:2px">${mkWkIcon(iconKey, color)}</div>
+            </div>
+        </div>`;
+    }
 
-        { val: gap,         lbl: 'Gap to Target',         sub: 'Machines still to install',                                                                         color: gap > 50 ? '#d1453b' : '#e08a1e' },
+    const row3 = [
+        mkWkCard('Civil Work Done',  civilDone, `of ${civilReq} required`,     '#5b8a3c', 'civil'),
+        mkWkCard('Shed Completed',   shedDone,  `of ${shedRequired} required`, '#8b6914', 'shed'),
+        mkWkCard('Electrical Done',  elecDone,  `of ${elecReq} required`,      '#c27a10', 'elec'),
+        mkWkCard('Internet Done',    inetDone,  `of ${inetReq} required`,      '#2f6fb0', 'inet'),
+        mkWkCard('CCTV Done',        cctvDone,  `of ${cctvReq} required`,      '#6b4e9e', 'cctv'),
+        mkWkCard('Machine Live',     live,      `of ${RVM_TARGET} target`,     '#085f40', 'live'),
+    ].join('');
 
-        { val: reqPerDay,   lbl: 'Req. Installs / Day',   sub: `Actual: ${actualRate}`,                                                                             color: '#2f6fb0' },
-
-    ];
-
-
-
-    el.innerHTML = `<div class="card" style="margin-bottom:16px">
-
-        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Project Metrics</div>
-
-        <div style="display:flex;gap:10px;flex-wrap:nowrap;overflow-x:auto">
-
-            ${metrics.map(m => `<div style="flex:1;min-width:110px;background:${m.color}10;border-top:3px solid ${m.color};border-radius:8px;padding:10px 12px">
-
-                <div style="font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.lbl}</div>
-
-                <div style="font-size:22px;font-weight:700;color:${m.color};line-height:1.1;margin-bottom:3px">${m.val}</div>
-
-                <div style="font-size:10px;color:#94a3b8;line-height:1.3">${m.sub}</div>
-
-            </div>`).join('')}
-
-        </div>
-
-    </div>`;
+    el.innerHTML =
+        `<div class="card" style="margin-bottom:12px">` +
+            `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Project Metrics</div>` +
+            `<div style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:10px">${row1a}</div>` +
+            `<div style="display:flex;gap:12px;flex-wrap:nowrap;overflow-x:auto">${row1b}</div>` +
+        `</div>` +
+        `<div class="card" style="margin-bottom:12px">` +
+            `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Pipeline Metrics</div>` +
+            `<div style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto">${row2}</div>` +
+        `</div>` +
+        `<div class="card" style="margin-bottom:16px">` +
+            `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Work KPI</div>` +
+            `<div style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto">${row3}</div>` +
+        `</div>`;
 
 }
 
@@ -15552,9 +15588,9 @@ function depRenderBlockSummary(locs) {
 
     const cols = [
 
-        { label:'Civil Work', fn: b => { const req = breq(b,'civilWorkStatus'); return req === 0 ? '—' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
+        { label:'Civil Work', fn: b => { const req = locs.filter(l => l.block === b && l.civilWorkStatus !== 'Not Required').length; return req === 0 ? '—' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
 
-        { label:'Shed',      fn: b => `${bv(b,'shedStatus','Done')}/${breq(b,'shedStatus')}` },
+        { label:'Shed',      fn: b => { const req = locs.filter(l => l.block === b && l.shedRequired === 'Yes').length; const done = locs.filter(l => l.block === b && l.shedRequired === 'Yes' && l.shedStatus === 'Done').length; return req === 0 ? '—' : `${done}/${req}`; } },
 
         { label:'Electrical',fn: b => `${bv(b,'electricalStatus','Done')}/${breq(b,'electricalStatus')}` },
 
@@ -15676,7 +15712,7 @@ function depFlag(val) {
 
     if (val === 'No')           return '<span class="ct-flag-no">✗</span>';
 
-    if (val === 'Pending')      return '<span class="ct-flag-pend">â—</span>';
+    if (val === 'Pending')      return '<span class="ct-flag-pend">●</span>';
 
     if (val === 'Not Required') return '<span class="ct-flag-na">N/A</span>';
 
@@ -16470,7 +16506,7 @@ function ctFlag(val) {
 
     if (val === false || val === 'No')      return '<span class="ct-flag-no">✗</span>';
 
-    if (val === 'Pending')                  return '<span class="ct-flag-pend">â—</span>';
+    if (val === 'Pending')                  return '<span class="ct-flag-pend">●</span>';
 
     if (!val || val === '' || val === '—')  return '<span class="ct-flag-na">·</span>';
 
@@ -16752,6 +16788,15 @@ function pvaWeekLabel(wk) {
 
 }
 
+function pvaISOWeek(projWk) {
+    const d = new Date('2026-06-02T00:00:00');
+    d.setDate(d.getDate() + (projWk - 1) * 7);
+    const dayOfWeek = d.getDay() || 7;
+    d.setDate(d.getDate() + (4 - dayOfWeek));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+}
+
 
 
 // ── Sub-tab wiring ────────────────────────────────────────────────────────
@@ -16806,9 +16851,15 @@ function depRenderPvA(locs) {
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 
     const plans = pvaGetPlans();
+
+    _pvaDodPlans = plans;
+
+    _pvaDodToday = todayStr;
+
+    _pvaDodCurrentOpts = null;
 
 
 
@@ -16874,45 +16925,7 @@ function depRenderPvA(locs) {
 
 function pvaBannerHtml(plans, actuals, planCum, todayStr) {
 
-    const wk = pvaWeekNum(todayStr);
-
-    const paceCats = PVA_CATS.filter(c => c.pace);
-
-    const denom = paceCats.filter(c => planCum[c.key] > 0).length;
-
-    const pace = denom > 0
-
-        ? Math.round(paceCats.reduce((s, c) => s + (planCum[c.key] > 0 ? actuals[c.key] / planCum[c.key] * 100 : 0), 0) / denom)
-
-        : null;
-
-    const paceClr = pace === null ? 'var(--muted)' : pace >= 90 ? '#16a34a' : pace >= 70 ? '#d97706' : '#dc2626';
-
-    return `<div class="pva-banner">
-
-        <div class="pva-meta-row">
-
-            <div class="pva-meta-p">Rollout: <b>${depPlanTotal} RVMs</b></div>
-
-            <div class="pva-meta-div"></div>
-
-            <div class="pva-meta-p">Week: <b>${wk}</b></div>
-
-            <div class="pva-meta-div"></div>
-
-            <div class="pva-meta-p">Machine Live: <b>${actuals.live}</b></div>
-
-            <div class="pva-meta-div"></div>
-
-            <div class="pva-meta-p">Overall pace: <b style="color:${paceClr}">${pace !== null ? pace + '% of plan' : '—'}</b></div>
-
-            <div class="pva-meta-div"></div>
-
-            <div class="pva-meta-p" style="font-size:10px;color:var(--muted)">avg. Civil · Shed · Elec · Install · Net · CCTV</div>
-
-        </div>
-
-    </div>`;
+    return '';
 
 }
 
@@ -16938,45 +16951,49 @@ function pvaKpiSectionHtml(actuals, planCum, locs) {
 
     }
 
+    const _pvaIcons = {
+        civil:   `<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>`,
+        shed:    `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
+        elec:    `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
+        install: `<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><circle cx="12" cy="16" r="2"/>`,
+        internet:`<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>`,
+        cctv:    `<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>`,
+        live:    `<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>`,
+    };
+
     const cards = PVA_CATS.map(c => {
 
         const act = actuals[c.key], plan = planCum[c.key] || 0;
 
-        const nr = locs.filter(l => l[c.field] === 'Not Required').length;
+        const diff = plan > 0 ? act - plan : null;
 
-        const denom = Math.max(1, depPlanTotal - nr);
+        const badgeHtml = diff !== null
+            ? (diff >= 0
+                ? `<span style="font-size:10px;font-weight:700;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px">+${diff} ahead</span>`
+                : diff >= -3
+                    ? `<span style="font-size:10px;font-weight:700;color:#d97706;background:#fef3c7;padding:2px 7px;border-radius:10px">${diff}</span>`
+                    : `<span style="font-size:10px;font-weight:700;color:#dc2626;background:#fee2e2;padding:2px 7px;border-radius:10px">${diff} behind</span>`)
+            : '';
 
-        const pct = Math.round(act / denom * 100);
+        const ico = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${c.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7">${_pvaIcons[c.key]||''}</svg>`;
 
-        return `<div class="pva-kpi" style="border-top:3px solid ${c.color}">
-
-            <div class="pva-kpi-cat" style="color:${c.color}">${c.label}</div>
-
-            <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:6px">
-
-                <span class="pva-kpi-num" style="color:${c.color}">${act}</span>
-
-                <span class="pva-kpi-plan"> / ${plan || '—'}</span>
-
+        return `<div class="dep-kpi" style="border-left-color:${c.color};flex:1;min-width:100px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;margin-bottom:2px">
+                <div class="dep-kl" style="color:${c.color}">${c.label}</div>
+                <div style="flex-shrink:0">${ico}</div>
             </div>
-
-            <div class="pva-kpi-bar-wrap"><div class="pva-kpi-bar" style="width:${pct}%;background:${c.color}"></div></div>
-
-            <div class="pva-kpi-row2">
-
-                <span class="pva-kpi-rem">${pct}%</span>
-
-                ${badge(act, plan)}
-
+            <div class="dep-kv" style="color:${c.color}">${act}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                <span class="dep-kn">Plan: <b style="color:#64748b">${plan || '—'}</b></span>
+                ${badgeHtml}
             </div>
-
         </div>`;
 
     }).join('');
 
     return `<div class="pva-section">
 
-        <div class="pva-eyebrow">Category snapshot · cumulative to date</div>
+        <div class="pva-eyebrow">Progress Pipeline</div>
 
         <div class="pva-kpi-grid">${cards}</div>
 
@@ -16990,17 +17007,163 @@ function pvaKpiSectionHtml(actuals, planCum, locs) {
 
 
 
-function pvaDodSectionHtml(plans, todayStr) {
+let _pvaDodPlans = null;
 
-    const visible = plans.filter(p => p.date <= todayStr).slice(-14);
+let _pvaDodToday = null;
 
-    if (!visible.length) return `<div class="pva-section">
+let _pvaDodCurrentOpts = null;
 
-        <div class="pva-eyebrow">Day-on-Day · daily increments</div>
 
-        <div class="pva-empty">No entries yet — add plan data using the form below.</div>
 
-    </div>`;
+function pvaDodOnDaysChange() {
+
+    const sel = document.getElementById('pva-dod-days-sel');
+
+    if (!sel) return;
+
+    const f = document.getElementById('pva-dod-from');
+
+    const t = document.getElementById('pva-dod-to');
+
+    if (f) f.value = '';
+
+    if (t) t.value = '';
+
+    pvaDodRefresh({ days: parseInt(sel.value) || 7 });
+
+}
+
+
+
+function pvaDodApply() {
+
+    const f = document.getElementById('pva-dod-from');
+
+    const t = document.getElementById('pva-dod-to');
+
+    const sel = document.getElementById('pva-dod-days-sel');
+
+    if (f && t && f.value && t.value) {
+
+        if (sel) sel.value = '7';
+
+        pvaDodRefresh({ from: f.value, to: t.value });
+
+    } else {
+
+        const n = sel ? (parseInt(sel.value) || 7) : 7;
+
+        pvaDodRefresh({ days: n });
+
+    }
+
+}
+
+
+
+function pvaDodReset() {
+
+    const sel = document.getElementById('pva-dod-days-sel');
+
+    const f = document.getElementById('pva-dod-from');
+
+    const t = document.getElementById('pva-dod-to');
+
+    if (sel) sel.value = '7';
+
+    if (f) f.value = '';
+
+    if (t) t.value = '';
+
+    pvaDodRefresh({ days: 7 });
+
+}
+
+
+
+function pvaDodRefresh(opts) {
+
+    if (!_pvaDodPlans || !_pvaDodToday) return;
+
+    const wrap = document.getElementById('pva-dod-table-wrap');
+
+    if (wrap) wrap.innerHTML = pvaDodTableHtml(_pvaDodPlans, _pvaDodToday, opts);
+
+    _pvaDodCurrentOpts = opts;
+
+}
+
+
+
+function pvaDodDownload() {
+
+    if (!_pvaDodPlans || !_pvaDodToday) return;
+
+    const visible = pvaDodGetVisible(_pvaDodPlans, _pvaDodToday, _pvaDodCurrentOpts);
+
+    if (!visible.length) return;
+
+    const headers = ['Date', ...PVA_CATS.flatMap(c => [`${c.label} Plan`, `${c.label} Actual`]), 'Root Cause', 'Remarks'];
+
+    const rows = visible.map(p => [
+
+        p.date,
+
+        ...PVA_CATS.flatMap(c => [p[c.key + '_plan'] || 0, p[c.key + '_actual'] || 0]),
+
+        p.root_cause_type || '',
+
+        p.notes || ''
+
+    ]);
+
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+
+    a.href = url;
+
+    a.download = `dod-${_pvaDodCurrentOpts && _pvaDodCurrentOpts.wk ? 'week' + _pvaDodCurrentOpts.wk : _pvaDodCurrentOpts && _pvaDodCurrentOpts.from ? _pvaDodCurrentOpts.from + '_to_' + _pvaDodCurrentOpts.to : 'last7'}.csv`;
+
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+
+}
+
+
+
+function pvaDodGetVisible(plans, todayStr, opts) {
+
+    const past = plans.filter(p => p.date <= todayStr);
+
+    if (opts && opts.from && opts.to) return past.filter(p => p.date >= opts.from && p.date <= opts.to);
+
+    if (opts && opts.wk) {
+
+        const days = past.filter(p => (p.week || pvaWeekNum(p.date)) === opts.wk);
+
+        return days.length ? days : past.filter(p => pvaWeekNum(p.date) === opts.wk);
+
+    }
+
+    const n = (opts && opts.days) ? opts.days : 7;
+
+    return past.slice(-n);
+
+}
+
+
+
+function pvaDodTableHtml(plans, todayStr, opts) {
+
+    const visible = pvaDodGetVisible(plans, todayStr, opts);
+
+    if (!visible.length) return `<p style="padding:16px;color:#94a3b8;font-size:13px;text-align:center">No entries for selected range.</p>`;
 
 
 
@@ -17010,7 +17173,7 @@ function pvaDodSectionHtml(plans, todayStr) {
 
         const sep = i > 0 ? ' cat-sep' : '';
 
-        hdr += `<th colspan="2" style="border-bottom:3px solid ${c.color}" class="${sep.trim()}">${c.label}</th>`;
+        hdr += `<th colspan="2" style="border-bottom:3px solid ${c.color};text-align:center" class="${sep.trim()}">${c.label}</th>`;
 
     });
 
@@ -17082,21 +17245,61 @@ function pvaDodSectionHtml(plans, todayStr) {
 
 
 
+    return `<div class="pva-tbl-scroll"><table class="pva-tbl">${hdr}<tbody>${rows}</tbody></table></div>`;
+
+}
+
+
+
+function pvaDodSectionHtml(plans, todayStr) {
+
     return `<div class="pva-section">
 
-        <div class="pva-eyebrow">Day-on-Day · daily increments — P = Plan · A = Actual</div>
+        <div class="pva-eyebrow">Day-on-Day</div>
 
         <div class="pva-tbl-card">
 
-            <div class="pva-t-title">
+            <div class="pva-t-title" style="flex-direction:column;align-items:flex-start;gap:10px">
 
                 <span class="pva-t-title-main">Day-on-Day</span>
 
-                <span class="pva-t-title-sub">Last 14 days shown · today highlighted · green = ahead · red = behind</span>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+
+                    <select id="pva-dod-days-sel" onchange="pvaDodOnDaysChange()" style="height:30px;font-size:11px;border-radius:6px;border:1px solid #d1d5db;padding:0 8px;color:#374151;background:#fff">
+
+                        <option value="7" selected>Last 7 days</option>
+
+                        <option value="14">Last 14 days</option>
+
+                        <option value="21">Last 21 days</option>
+
+                        <option value="30">Last 30 days</option>
+
+                    </select>
+
+                    <span style="font-size:11px;color:#94a3b8">or custom range:</span>
+
+                    <input type="date" id="pva-dod-from" style="height:30px;font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:0 6px;width:130px">
+
+                    <span style="font-size:11px;color:#94a3b8">→</span>
+
+                    <input type="date" id="pva-dod-to" style="height:30px;font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:0 6px;width:130px">
+
+                    <button onclick="pvaDodApply()" style="height:30px;padding:0 12px;font-size:11px;font-weight:600;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer">Apply</button>
+
+                    <button onclick="pvaDodReset()" style="height:30px;padding:0 12px;font-size:11px;font-weight:600;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;cursor:pointer">Reset</button>
+
+                    <button onclick="pvaDodDownload()" style="height:30px;padding:0 12px;font-size:11px;font-weight:600;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;cursor:pointer">↓ CSV</button>
+
+                </div>
 
             </div>
 
-            <div class="pva-tbl-scroll"><table class="pva-tbl">${hdr}<tbody>${rows}</tbody></table></div>
+            <div id="pva-dod-table-wrap">
+
+                ${pvaDodTableHtml(plans, todayStr, {days: 7})}
+
+            </div>
 
         </div>
 
@@ -17122,7 +17325,8 @@ function pvaWowSectionHtml(plans, todayStr) {
 
     });
 
-    const sortedWks = Object.keys(byWk).map(Number).sort((a,b)=>a-b);
+    const curWkFilter = pvaWeekNum(todayStr);
+    const sortedWks = Array.from({length: curWkFilter}, (_, i) => i + 1);
 
     if (!sortedWks.length) return `<div class="pva-section">
 
@@ -17144,7 +17348,7 @@ function pvaWowSectionHtml(plans, todayStr) {
 
         const sep = i > 0 ? ' cat-sep' : '';
 
-        hdr += `<th colspan="2" style="border-bottom:3px solid ${c.color}" class="${sep.trim()}">${c.label}</th>`;
+        hdr += `<th colspan="2" style="border-bottom:3px solid ${c.color};text-align:center" class="${sep.trim()}">${c.label}</th>`;
 
     });
 
@@ -17172,7 +17376,7 @@ function pvaWowSectionHtml(plans, todayStr) {
 
     sortedWks.forEach(wk => {
 
-        const entries = byWk[wk];
+        const entries = byWk[wk] || [];
 
         const wp = {}, wa = {};
 
@@ -17192,7 +17396,7 @@ function pvaWowSectionHtml(plans, todayStr) {
 
         rows += `<tr class="${isCur?'cur-wk':''}">`;
 
-        rows += `<td><div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700">Wk ${wk}</span>${isCur?'<span class="cur-badge">now</span>':''}</div></td>`;
+        rows += `<td><div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;font-weight:700">Week ${pvaISOWeek(wk)}</span>${isCur?'<span class="cur-badge">now</span>':''}</div></td>`;
 
         rows += `<td style="font-size:10px;color:var(--muted);white-space:nowrap">${pvaWeekLabel(wk)}</td>`;
 
@@ -17232,15 +17436,13 @@ function pvaWowSectionHtml(plans, todayStr) {
 
     return `<div class="pva-section">
 
-        <div class="pva-eyebrow">Week-on-Week · weekly totals + cumulative footer</div>
+        <div class="pva-eyebrow">Week-on-Week</div>
 
         <div class="pva-tbl-card">
 
             <div class="pva-t-title">
 
                 <span class="pva-t-title-main">Week-on-Week</span>
-
-                <span class="pva-t-title-sub">Weeks with data only · cumulative running total at footer</span>
 
             </div>
 
@@ -17260,41 +17462,115 @@ function pvaWowSectionHtml(plans, todayStr) {
 
 function pvaChartWrapHtml() {
 
-    const legend = PVA_CATS.map(c =>
-
-        `<div class="pva-leg-i"><svg width="18" height="7"><line x1="0" y1="3.5" x2="18" y2="3.5" stroke="${c.color}" stroke-width="2" stroke-dasharray="5 2"/></svg>${c.short}</div>`
-
-    ).join('');
-
     return `<div class="pva-section">
 
-        <div class="pva-eyebrow">Cumulative trend · plan vs actual · Jun 2 → 12 weeks</div>
+        <div class="pva-eyebrow">Cumulative Trend</div>
 
         <div class="pva-chart-card">
 
             <div class="pva-chart-hdr">
 
-                <span class="pva-chart-ttl">All 7 categories · cumulative rollout</span>
+                <span class="pva-chart-ttl">Cumulative rollout · plan vs actual</span>
 
-                <span class="pva-chart-hint">dashed = plan · solid + dots = actual (GSheet data)</span>
+                <span class="pva-chart-hint">dashed = plan · solid = actual (weekly)</span>
 
             </div>
-
-            <div class="pva-legend-row">${legend}</div>
 
             <canvas id="pva-chart"></canvas>
-
-            <div class="pva-chart-note">
-
-                <span>- - - dashed = plan target (12-week curve)</span>
-
-                <span>—● solid = weekly actual completions</span>
-
-            </div>
 
         </div>
 
     </div>`;
+
+}
+
+
+
+function pvaDrawCatCards(plans, locActuals, todayStr) {
+
+    const el = document.getElementById('pva-cat-cards');
+
+    if (!el) return;
+
+    const planCum = {};
+
+    PVA_CATS.forEach(c => { planCum[c.key] = 0; });
+
+    plans.filter(p => p.date <= todayStr).forEach(p => {
+
+        PVA_CATS.forEach(c => { planCum[c.key] += (parseInt(p[c.key + '_plan']) || 0); });
+
+    });
+
+    el.innerHTML = PVA_CATS.map(c => {
+
+        const act = locActuals[c.key] || 0;
+
+        const plan = planCum[c.key] || 0;
+
+        const pct = plan > 0 ? Math.min(100, Math.round(act / plan * 100)) : 0;
+
+        const diff = plan > 0 ? act - plan : null;
+
+        const status = diff === null ? '' : diff >= 0
+
+            ? `<span style="font-size:10px;color:#16a34a;font-weight:700">+${diff} ahead</span>`
+
+            : `<span style="font-size:10px;color:#dc2626;font-weight:700">${diff} behind</span>`;
+
+        const bar = `<div style="height:5px;background:#e5e7eb;border-radius:3px;margin:6px 0 4px;overflow:hidden">
+
+            <div style="height:100%;width:${pct}%;background:${c.color};border-radius:3px;transition:width .4s"></div>
+
+        </div>`;
+
+        const icons = {
+
+            civil:`<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>`,
+
+            shed:`<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
+
+            elec:`<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
+
+            install:`<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><circle cx="12" cy="16" r="2"/>`,
+
+            internet:`<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="${c.color}"/>`,
+
+            cctv:`<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>`,
+
+            live:`<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>`,
+
+        };
+
+        const ico = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${c.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[c.key]||''}</svg>`;
+
+        return `<div style="flex:1;min-width:130px;max-width:200px;background:#fff;border-radius:10px;border-left:3px solid ${c.color};padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,.07)">
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+
+                <span style="font-size:11px;font-weight:700;color:${c.color};text-transform:uppercase;letter-spacing:.04em">${c.label}</span>
+
+                ${ico}
+
+            </div>
+
+            <div style="font-size:26px;font-weight:800;color:${c.color};line-height:1.1">${act}</div>
+
+            <div style="font-size:10px;color:#94a3b8">Plan: ${plan || '—'}</div>
+
+            ${bar}
+
+            <div style="display:flex;justify-content:space-between;align-items:center">
+
+                <span style="font-size:10px;color:#64748b">${pct}% complete</span>
+
+                ${status}
+
+            </div>
+
+        </div>`;
+
+    }).join('');
 
 }
 
@@ -17324,7 +17600,7 @@ function pvaDrawChart(plans, locActuals) {
 
 
 
-    const maxWk = 12;
+    const _todayLocal = new Date(); const _todayStr = `${_todayLocal.getFullYear()}-${String(_todayLocal.getMonth()+1).padStart(2,'0')}-${String(_todayLocal.getDate()).padStart(2,'0')}`; const maxWk = Math.min(12, pvaWeekNum(_todayStr) + 2);
 
     const WK_LABELS = Array.from({length:maxWk}, (_,i) => {
 
@@ -17396,7 +17672,7 @@ function pvaDrawChart(plans, locActuals) {
 
     const today = new Date(); today.setHours(0,0,0,0);
 
-    const curWk = pvaWeekNum(today.toISOString().split('T')[0]);
+    const curWk = pvaWeekNum(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`);
 
     if (!hasActuals) {
 
@@ -17426,9 +17702,12 @@ function pvaDrawChart(plans, locActuals) {
 
     let mx = 0;
 
-    cumPlan[PVA_CATS[0].key].forEach(v => { if (v > mx) mx = v; });
+    PVA_CATS.forEach(cat => {
+        cumPlan[cat.key].forEach(v => { if (v > mx) mx = v; });
+        if (cumAct[cat.key]) Object.values(cumAct[cat.key]).forEach(v => { if (v > mx) mx = v; });
+    });
 
-    mx = Math.ceil((mx || 50) * 1.1 / 50) * 50;
+    mx = Math.ceil((mx || 10) * 1.15 / 5) * 5;
 
 
 
@@ -17442,9 +17721,11 @@ function pvaDrawChart(plans, locActuals) {
 
 
 
-    // Grid
+    // Grid — dynamic step size based on max value
 
-    for (let v = 0; v <= mx; v += 50) {
+    const gridStep = mx <= 5 ? 1 : mx <= 15 ? 3 : mx <= 30 ? 5 : mx <= 60 ? 10 : mx <= 150 ? 25 : 50;
+
+    for (let v = 0; v <= mx; v += gridStep) {
 
         const y = sy(v);
 
@@ -17520,7 +17801,7 @@ function pvaDrawChart(plans, locActuals) {
 
     PVA_CATS.forEach(cat => {
 
-        const pts = wksWithData.map(w => ({x: sx(w-1), y: sy(cumAct[cat.key][w]||0)}));
+        const pts = wksWithData.map(w => ({x: sx(w-1), y: sy(cumAct[cat.key][w]||0), v: cumAct[cat.key][w]||0}));
 
         if (!pts.length) return;
 
@@ -17538,7 +17819,52 @@ function pvaDrawChart(plans, locActuals) {
 
         });
 
+        // Endpoint value label
+        if (pts.length > 0) {
+            const last = pts[pts.length - 1];
+            if (last.v > 0) {
+                c.fillStyle = cat.color;
+                c.font = "bold 9px 'Segoe UI',system-ui,sans-serif";
+                c.textAlign = 'left';
+                c.fillText(last.v, Math.min(last.x + 6, W - P.r - 14), last.y + 3);
+            }
+        }
+
     });
+
+    // Hover tooltip setup
+    (function() {
+        const tipId = 'pva-chart-tip';
+        let tip = document.getElementById(tipId);
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = tipId;
+            tip.style.cssText = 'position:absolute;display:none;background:#1e293b;color:#fff;font-size:11px;padding:8px 10px;border-radius:6px;pointer-events:none;z-index:10;line-height:1.7;min-width:140px;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+            const par = cv.parentElement;
+            if (par.style.position === '' || !par.style.position) par.style.position = 'relative';
+            par.appendChild(tip);
+        }
+        cv.onmousemove = function(e) {
+            const rect = cv.getBoundingClientRect();
+            const mx_pos = e.clientX - rect.left;
+            if (mx_pos < P.l || mx_pos > P.l + cW) { tip.style.display = 'none'; return; }
+            const wkIdx = Math.round((mx_pos - P.l) / (cW / (maxWk - 1)));
+            const wkNum = Math.max(1, Math.min(maxWk, wkIdx + 1));
+            const lbl = WK_LABELS[wkIdx] || '';
+            let html = `<div style="font-weight:700;color:#94a3b8;font-size:10px;margin-bottom:4px">Week ${pvaISOWeek(wkNum)} · ${lbl}</div>`;
+            PVA_CATS.forEach(cat => {
+                const planVal = cumPlan[cat.key][wkIdx] || 0;
+                const actVal  = cumAct[cat.key] ? (cumAct[cat.key][wkNum] || 0) : 0;
+                html += `<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:${cat.color}">${cat.label}</span><span>${actVal}<span style="color:#64748b;font-size:9px"> /P:${planVal}</span></span></div>`;
+            });
+            tip.innerHTML = html;
+            tip.style.display = 'block';
+            const tipLeft = Math.min(e.clientX - rect.left + 12, rect.width - 160);
+            tip.style.left = tipLeft + 'px';
+            tip.style.top  = (e.clientY - rect.top - 10) + 'px';
+        };
+        cv.onmouseleave = function() { tip.style.display = 'none'; };
+    })();
 
 }
 
@@ -17703,9 +18029,8 @@ function pvaRcaSectionHtml(plans, todayStr) {
 
 
 function pvaPlanFormHtml(todayStr) {
-
+    return '';
     const d = new Date(todayStr + 'T00:00:00');
-
     d.setDate(d.getDate() + 1);
 
     const defDate = d.toISOString().split('T')[0];
@@ -17915,6 +18240,8 @@ function pvaWireForm(locs) {
 
 
 function pvaGuideSectionHtml() {
+
+    return '';
 
     const rows = [
 

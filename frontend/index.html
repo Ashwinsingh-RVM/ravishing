@@ -656,32 +656,30 @@
 
                             <!-- Header + 6 Filters + Deadline Picker -->
                             <div class="card dep-page-header">
-                                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">
-                                    <div>
+                                <div class="dep-page-header-row">
+                                    <div class="dep-header-title" style="text-align:left">
                                         <h2 style="margin:0;font-size:20px">RVM Deployment Dashboard</h2>
                                         <span id="dep-header-subtitle" style="color:var(--muted);font-size:13px">301 Collection Points &middot; Goa DRS 2026</span>
                                     </div>
-                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                    <div class="dep-header-deadline">
                                         <label style="font-size:12px;color:var(--muted);font-weight:600">Deadline:</label>
                                         <input type="date" id="dep-deadline-input" value="2026-07-15" class="input" style="height:34px;font-size:13px;width:152px">
                                     </div>
-                                </div>
-                                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
-                                    <div class="dep-filter-item">
-                                        <label class="dep-filter-label">Block</label>
-                                        <select id="dep-filter-block" class="select" style="height:36px;font-size:13px">
-                                            <option value="">All Blocks</option>
-                                        </select>
+                                    <div class="dep-header-filters">
+                                        <div class="dep-filter-item">
+                                            <label class="dep-filter-label">Block</label>
+                                            <select id="dep-filter-block" class="select dep-filter-select">
+                                                <option value="">All Blocks</option>
+                                            </select>
+                                        </div>
+                                        <div class="dep-filter-item">
+                                            <label class="dep-filter-label">Location</label>
+                                            <select id="dep-filter-location" class="select dep-filter-select">
+                                                <option value="">All Locations</option>
+                                            </select>
+                                        </div>
+                                        <button id="dep-filter-reset" class="btn btn-secondary btn-small" style="align-self:flex-end">Reset</button>
                                     </div>
-                                    <div class="dep-filter-item">
-                                        <label class="dep-filter-label">Location</label>
-                                        <select id="dep-filter-location" class="select" style="height:36px;font-size:13px">
-                                            <option value="">All Locations</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div style="text-align:right;margin-top:8px">
-                                    <button id="dep-filter-reset" class="btn btn-secondary btn-small">Reset Filters</button>
                                 </div>
                             </div>
 
@@ -1578,6 +1576,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=89"></script>
+    <script src="/static/app.js?v=90"></script>
 </body>
 </html>

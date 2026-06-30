@@ -5226,6 +5226,8 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
 .dep-k-inst .dep-kv { color: #0b6b4f; }
 .dep-k-live  { border-left-color: #085f40; }
 .dep-k-live .dep-kv { color: #085f40; }
+.dep-k-civil { border-left-color: #5b8a3c; }
+.dep-k-civil .dep-kv { color: #5b8a3c; }
 
 /* Two-col */
 .dep-two-col {
@@ -5588,6 +5590,83 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
     font-weight: 700;
     color: var(--primary);
     font-variant-numeric: tabular-nums;
+}
+
+/* RVM header layout */
+.dep-page-header-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.dep-header-title { flex: 1; min-width: 0; }
+.dep-header-filters {
+    flex: 2;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.dep-header-filters .dep-filter-item { flex: 1; min-width: 140px; }
+.dep-filter-select {
+    height: 36px;
+    font-size: 13px;
+    width: 100%;
+    min-width: 130px;
+}
+.dep-header-deadline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+/* Location tracker table enhancements */
+.ct-table thead tr th {
+    background: #f8fafc;
+    color: #374151;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border-bottom: 2px solid #d1d5db;
+    padding: 10px 12px;
+    white-space: nowrap;
+}
+.ct-table tbody tr {
+    border-bottom: 1px solid #f1f5f9;
+    transition: background .12s;
+}
+.ct-table tbody tr:hover { background: #f8fafc; }
+.ct-table tbody td {
+    padding: 9px 12px;
+    font-size: 12.5px;
+    border-right: 1px solid #f1f5f9;
+}
+.ct-table tbody td:last-child { border-right: none; }
+.ct-table-wrap {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    overflow-x: auto;
+}
+
+/* Work KPI card number sizing */
+.dep-kpi .dep-kv {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.05;
+}
+.dep-kpi .dep-kl {
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    margin: 3px 0 2px;
+}
+.dep-kpi .dep-kn {
+    font-size: 10px;
+    color: #94a3b8;
 }
 
 .hrc-seg-contact {

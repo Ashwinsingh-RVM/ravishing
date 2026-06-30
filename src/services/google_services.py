@@ -532,6 +532,99 @@ class GoogleSheetsService:
         except Exception as e:
             return []
 
+    def get_rc_data(self) -> list:
+        """Fetch all rows from the 'RC Deployment' sheet tab.
+        Returns empty list if tab does not exist yet.
+        """
+        try:
+            spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
+            try:
+                worksheet = spreadsheet.worksheet("RC Deployment")
+            except Exception:
+                return []
+            all_values = worksheet.get_all_values()
+            if not all_values:
+                return []
+            headers = [str(h).strip() for h in all_values[0]]
+            _sn = {'done':'Done','yes':'Yes','no':'No','pending':'Pending',
+                   'not required':'Not Required','not req':'Not Required','n/a':'Not Required','na':'Not Required'}
+            locations = []
+            for row_vals in all_values[1:]:
+                row = {headers[i]: (row_vals[i].strip() if i < len(row_vals) else '') for i in range(len(headers))}
+                row = {k: _sn.get(str(v).strip().lower(), str(v).strip()) for k, v in row.items()}
+                loc_name = str(row.get('Location Name', '') or row.get('Location_Name', '')).strip()
+                if not loc_name:
+                    continue
+                locations.append({
+                    'locationName':    loc_name,
+                    'block':           str(row.get('Block', '')).strip(),
+                    'entityName':      str(row.get('Entity Name', '') or row.get('Entity_Name', '')).strip(),
+                    'rcTarget':        str(row.get('RC Target', '') or row.get('RC_Target', '')).strip(),
+                    'nocReceived':     str(row.get('NOC Received', '')).strip(),
+                    'agreementSigned': str(row.get('Service Agreement Signed', '')).strip(),
+                    'civilWorkStatus': str(row.get('Civil Work Status', '')).strip(),
+                    'shedStatus':      str(row.get('Shed Status', '')).strip(),
+                    'electricalStatus':str(row.get('Electrical Connection for Installation', '')).strip(),
+                    'internetStatus':  str(row.get('Internet Status', '')).strip(),
+                    'cctvStatus':      str(row.get('CCTV Installation Status', '')).strip(),
+                    'rcDelivery':      str(row.get('RC Delivery', '')).strip(),
+                    'rcDeployed':      str(row.get('RC Deployed', '')).strip(),
+                    'machineLive':     str(row.get('RC Working Condition', '')).strip(),
+                    'installDate':     str(row.get('Machine Install Date', '')).strip(),
+                    'lat':             str(row.get('Latitude', '') or row.get('Lat', '')).strip(),
+                    'lng':             str(row.get('Longitude', '') or row.get('Lng', '')).strip(),
+                })
+            return locations
+        except Exception as e:
+            return []  # Gracefully return empty if sheet does not exist
+
+    def init_rc_tab(self) -> dict:
+        """Create the 'RC Deployment' tab in the Google Sheet with standard headers.
+        Safe to call multiple times — skips if tab already exists.
+        """
+        try:
+            spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
+            # Check if tab already exists
+            try:
+                spreadsheet.worksheet("RC Deployment")
+                return {"status": "exists", "message": "RC Deployment tab already exists"}
+            except Exception:
+                pass
+            # Create tab
+            ws = spreadsheet.add_worksheet(title="RC Deployment", rows=200, cols=25)
+            headers = [
+                "Location Name", "Block", "Entity Name", "Entity Type",
+                "RC Target", "Difficulty",
+                "NOC Received", "Service Agreement Signed",
+                "Civil Work Requirement", "Civil Work Status",
+                "Shed Required", "Shed Type", "Shed Status",
+                "Electrical Connection for Installation",
+                "Internet Required", "Internet Status",
+                "CCTV Installation Status",
+                "RC Delivery", "RC Deployed",
+                "Machine Install Date", "RC Working Condition",
+                "Latitude", "Longitude", "Notes",
+            ]
+            ws.update('A1', [headers])
+            # Add one dummy row so the sheet is not empty
+            dummy = [
+                "RC Demo Location", "North Goa", "Demo Entity", "Return Center",
+                "1", "Low",
+                "Yes", "Yes",
+                "Yes", "Done",
+                "No", "", "Not Required",
+                "Done",
+                "Yes", "Done",
+                "Done",
+                "Yes", "Done",
+                "2026-07-01", "Done",
+                "15.4909", "73.8278", "Dummy row — replace with real RC data",
+            ]
+            ws.update('A2', [dummy])
+            return {"status": "created", "message": "RC Deployment tab created with headers and 1 dummy row", "tab": "RC Deployment"}
+        except Exception as e:
+            raise RuntimeError(f"Failed to init RC Deployment tab: {e}")
+
     # ==================== Plan vs Actual (PvA) Methods ====================
 
     def _get_or_create_pva_ws(self):
