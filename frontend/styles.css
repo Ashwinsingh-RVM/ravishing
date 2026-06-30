@@ -5196,6 +5196,7 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
 
 .dep-kpi {
     background: #fff;
+    border: 1.5px solid #cbd5e1;
     color: #1a2332;
     border-radius: var(--radius);
     padding: 14px 16px;
@@ -5595,9 +5596,9 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
 /* RVM header layout */
 .dep-page-header-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 16px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 .dep-header-title { flex: 1; min-width: 0; }
 .dep-header-filters {

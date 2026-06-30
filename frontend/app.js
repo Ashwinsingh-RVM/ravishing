@@ -15396,19 +15396,19 @@ function depRenderProjectMetrics(s, locs) {
     const shedDone     = locs.filter(l => l.shedRequired === 'Yes' && l.shedStatus === 'Done').length;
 
     function mkCard(lbl, val, sub, color, minW) {
-        return '<div class="dep-kpi" style="flex:1;min-width:' + (minW||'95px') + ';border-left-color:' + color + '">' +
-            '<div class="dep-kv" style="color:' + color + '">' + val + '</div>' +
-            '<div class="dep-kl">' + lbl + '</div>' +
-            '<div class="dep-kn" style="margin-top:3px">' + sub + '</div>' +
+        return '<div style="flex:1;min-width:' + (minW||'95px') + ';background:' + color + '18;border-top:3px solid ' + color + ';border-radius:8px;padding:10px 12px">' +
+            '<div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + lbl + '</div>' +
+            '<div style="font-size:22px;font-weight:700;color:' + color + ';line-height:1.1;margin-bottom:3px">' + val + '</div>' +
+            '<div style="font-size:10px;color:#94a3b8;line-height:1.3">' + sub + '</div>' +
             '</div>';
     }
 
     function mkDualCard(lbl, valRvm, valRc, color, minW) {
-        return '<div class="dep-kpi" style="flex:1;min-width:' + (minW||'160px') + ';border-left-color:' + color + '">' +
-            '<div class="dep-kl">' + lbl + '</div>' +
-            '<div style="margin-bottom:3px">' +
+        return '<div style="flex:1;min-width:' + (minW||'160px') + ';background:' + color + '18;border-top:3px solid ' + color + ';border-radius:8px;padding:10px 12px">' +
+            '<div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">' + lbl + '</div>' +
+            '<div style="margin-bottom:4px">' +
                 '<div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:1px">RVM</div>' +
-                '<div class="dep-kv" style="color:' + color + '">' + valRvm + '</div>' +
+                '<div style="font-size:22px;font-weight:700;color:' + color + ';line-height:1.1">' + valRvm + '</div>' +
             '</div>' +
             '<div style="height:1px;background:#e2e8f0;margin:4px 0"></div>' +
             '<div>' +
@@ -17600,13 +17600,17 @@ function pvaDrawChart(plans, locActuals) {
 
 
 
-    const _todayLocal = new Date(); const _todayStr = `${_todayLocal.getFullYear()}-${String(_todayLocal.getMonth()+1).padStart(2,'0')}-${String(_todayLocal.getDate()).padStart(2,'0')}`; const maxWk = Math.min(12, pvaWeekNum(_todayStr) + 2);
+    const _todayLocal = new Date(); const _todayStr = `${_todayLocal.getFullYear()}-${String(_todayLocal.getMonth()+1).padStart(2,'0')}-${String(_todayLocal.getDate()).padStart(2,'0')}`; const maxWk = pvaWeekNum(_todayStr);
 
-    const WK_LABELS = Array.from({length:maxWk}, (_,i) => {
+    const startWk = 2; // chart starts at week containing Jun 12
+
+    const displayWks = Math.max(1, maxWk - startWk + 1);
+
+    const WK_LABELS = Array.from({length: displayWks}, (_, i) => {
 
         const d = new Date('2026-06-02T00:00:00');
 
-        d.setDate(d.getDate() + i * 7);
+        d.setDate(d.getDate() + (i + startWk - 1) * 7);
 
         return d.toLocaleDateString('en-IN', {month:'short', day:'numeric'});
 
@@ -17711,7 +17715,7 @@ function pvaDrawChart(plans, locActuals) {
 
 
 
-    const sx = i => P.l + i * (cW / (maxWk - 1));
+    const sx = i => P.l + i * (cW / Math.max(1, displayWks - 1));
 
     const sy = v => P.t + cH - (v / mx) * cH;
 
@@ -17755,11 +17759,13 @@ function pvaDrawChart(plans, locActuals) {
 
     // Fade + TODAY marker
 
-    const lastActWk = Math.max(...wksWithData, 0);
+    const visibleWks = wksWithData.filter(w => w >= startWk);
 
-    if (lastActWk > 0 && lastActWk < maxWk) {
+    const lastActWk = visibleWks.length ? Math.max(...visibleWks) : 0;
 
-        const fadeX = sx(lastActWk - 1) + cW / (maxWk - 1) * 0.6;
+    if (lastActWk >= startWk && lastActWk < maxWk) {
+
+        const fadeX = sx(lastActWk - startWk) + cW / Math.max(1, displayWks - 1) * 0.6;
 
         const g = c.createLinearGradient(fadeX, 0, fadeX + 90, 0);
 
@@ -17769,7 +17775,7 @@ function pvaDrawChart(plans, locActuals) {
 
     }
 
-    const todayX = sx(Math.min(curWk - 1, maxWk - 1)) + cW / (maxWk - 1) * 0.35;
+    const todayX = sx(Math.min(curWk - startWk, displayWks - 1));
 
     c.save(); c.setLineDash([5,4]); c.strokeStyle = '#1e6b5c'; c.lineWidth = 1.5;
 
@@ -17781,7 +17787,7 @@ function pvaDrawChart(plans, locActuals) {
 
 
 
-    // Plan lines (12 weeks, dashed)
+    // Plan lines (from startWk to maxWk, dashed)
 
     PVA_CATS.forEach(cat => {
 
@@ -17789,7 +17795,7 @@ function pvaDrawChart(plans, locActuals) {
 
         c.beginPath();
 
-        cumPlan[cat.key].forEach((v, i) => { const x = sx(i), y = sy(v); i === 0 ? c.moveTo(x,y) : c.lineTo(x,y); });
+        cumPlan[cat.key].slice(startWk - 1).forEach((v, i) => { const x = sx(i), y = sy(v); i === 0 ? c.moveTo(x,y) : c.lineTo(x,y); });
 
         c.stroke(); c.restore();
 
@@ -17797,11 +17803,11 @@ function pvaDrawChart(plans, locActuals) {
 
 
 
-    // Actual lines (solid + dots)
+    // Actual lines (solid + dots, only from startWk)
 
     PVA_CATS.forEach(cat => {
 
-        const pts = wksWithData.map(w => ({x: sx(w-1), y: sy(cumAct[cat.key][w]||0), v: cumAct[cat.key][w]||0}));
+        const pts = wksWithData.filter(w => w >= startWk).map(w => ({x: sx(w - startWk), y: sy(cumAct[cat.key][w]||0), v: cumAct[cat.key][w]||0}));
 
         if (!pts.length) return;
 
@@ -17848,8 +17854,8 @@ function pvaDrawChart(plans, locActuals) {
             const rect = cv.getBoundingClientRect();
             const mx_pos = e.clientX - rect.left;
             if (mx_pos < P.l || mx_pos > P.l + cW) { tip.style.display = 'none'; return; }
-            const wkIdx = Math.round((mx_pos - P.l) / (cW / (maxWk - 1)));
-            const wkNum = Math.max(1, Math.min(maxWk, wkIdx + 1));
+            const wkIdx = Math.round((mx_pos - P.l) / (cW / Math.max(1, displayWks - 1)));
+            const wkNum = Math.max(startWk, Math.min(maxWk, wkIdx + startWk));
             const lbl = WK_LABELS[wkIdx] || '';
             let html = `<div style="font-weight:700;color:#94a3b8;font-size:10px;margin-bottom:4px">Week ${pvaISOWeek(wkNum)} · ${lbl}</div>`;
             PVA_CATS.forEach(cat => {
