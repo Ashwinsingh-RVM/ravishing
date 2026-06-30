@@ -656,33 +656,14 @@
 
                             <!-- Header + 6 Filters + Deadline Picker -->
                             <div class="card dep-page-header">
-                                <div class="dep-page-header-row">
-                                    <!-- LEFT: filters side by side -->
-                                    <div class="dep-header-filters" style="flex-wrap:nowrap;flex-shrink:0">
-                                        <div class="dep-filter-item" style="flex-shrink:0">
-                                            <label class="dep-filter-label">Block</label>
-                                            <select id="dep-filter-block" class="select dep-filter-select" style="width:130px">
-                                                <option value="">All Blocks</option>
-                                            </select>
-                                        </div>
-                                        <div class="dep-filter-item" style="flex-shrink:0">
-                                            <label class="dep-filter-label">Location</label>
-                                            <select id="dep-filter-location" class="select dep-filter-select" style="width:130px">
-                                                <option value="">All Locations</option>
-                                            </select>
-                                        </div>
-                                        <button id="dep-filter-reset" class="btn btn-secondary btn-small" style="align-self:flex-end">Reset</button>
-                                    </div>
-                                    <!-- RIGHT: title + deadline + subtitle -->
-                                    <div class="dep-header-title" style="text-align:right">
-                                        <div style="display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap">
-                                            <h2 style="margin:0;font-size:20px">RVM Deployment Dashboard</h2>
-                                            <div class="dep-header-deadline">
-                                                <label style="font-size:12px;color:var(--muted);font-weight:600">Deadline:</label>
-                                                <input type="date" id="dep-deadline-input" value="2026-07-15" class="input" style="height:34px;font-size:13px;width:152px">
-                                            </div>
-                                        </div>
+                                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+                                    <div>
+                                        <h2 style="margin:0;font-size:20px">RVM Deployment Dashboard</h2>
                                         <span id="dep-header-subtitle" style="color:var(--muted);font-size:13px">301 Collection Points &middot; Goa DRS 2026</span>
+                                    </div>
+                                    <div class="dep-header-deadline">
+                                        <label style="font-size:12px;color:var(--muted);font-weight:600">Deadline:</label>
+                                        <input type="date" id="dep-deadline-input" value="2026-07-15" class="input" style="height:34px;font-size:13px;width:152px">
                                     </div>
                                 </div>
                             </div>
@@ -1580,6 +1561,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=95"></script>
+    <script src="/static/app.js?v=96"></script>
 </body>
 </html>
