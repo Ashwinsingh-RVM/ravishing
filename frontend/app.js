@@ -4096,15 +4096,15 @@ function renderHolisticFunnel(stats) {
 
     const row1 = [
 
-        { label: 'Blocks', value: stats.totalBlocks, cls: 'step-blocks' },
+        { label: 'Blocks', value: stats.totalBlocks, icon: '🏛️', cls: 'step-blocks' },
 
-        { label: 'Blocks Unlocked', value: stats.blocksUnlocked, cls: 'step-unlocked' },
+        { label: 'Blocks Unlocked', value: stats.blocksUnlocked, icon: '🔓', cls: 'step-unlocked' },
 
-        { label: 'VPs Accessible', value: stats.vpsUnlocked, cls: 'step-vps' },
+        { label: 'VPs Accessible', value: stats.vpsUnlocked, icon: '📍', cls: 'step-vps' },
 
-        { label: 'Contacted', value: stats.contacted, cls: 'step-contacted' },
+        { label: 'Contacted', value: stats.contacted, icon: '📞', cls: 'step-contacted' },
 
-        { label: '1st Meeting', value: stats.meetingsDone, cls: 'step-meetings',
+        { label: '1st Meeting', value: stats.meetingsDone, icon: '🤝', cls: 'step-meetings',
 
           sub: meetingSub },
 
@@ -4114,19 +4114,19 @@ function renderHolisticFunnel(stats) {
 
     const row2 = [
 
-        { label: 'Location OK', value: stats.locationsFinalized, cls: 'step-location',
+        { label: 'Location OK', value: stats.locationsFinalized, icon: '📍', cls: 'step-location',
 
           sub: locationSub },
 
-        { label: 'Email Sent', value: stats.emailSent, cls: 'step-email' },
+        { label: 'Email Sent', value: stats.emailSent, icon: '📧', cls: 'step-email' },
 
-        { label: 'NOC Received', value: stats.nocReceived, cls: 'step-noc' },
+        { label: 'NOC Received', value: stats.nocReceived, icon: '📄', cls: 'step-noc' },
 
-        { label: 'Agr Sent', value: stats.agreementSent, cls: 'step-agrsent' },
+        { label: 'Agr Sent', value: stats.agreementSent, icon: '📨', cls: 'step-agrsent' },
 
-        { label: 'Agr Signed', value: stats.agreementSigned, cls: 'step-agreement' },
+        { label: 'Agr Signed', value: stats.agreementSigned, icon: '✍️', cls: 'step-agreement' },
 
-        { label: 'Installed', value: stats.devicesInstalled, cls: 'step-installed' },
+        { label: 'Installed', value: stats.devicesInstalled, icon: '✅', cls: 'step-installed' },
 
     ];
 
@@ -4144,6 +4144,7 @@ function renderHolisticFunnel(stats) {
 
         <div class="funnel-step ${step.cls}">
 
+            ${step.icon ? `<div class="funnel-step-icon">${step.icon}</div>` : ''}
 
             <div class="funnel-step-value">${step.value}</div>
 
@@ -4235,21 +4236,21 @@ function renderULBFunnel() {
 
     const steps = [
 
-        { label: 'Total ULBs', value: total, cls: 'step-blocks' },
+        { label: 'Total ULBs', value: total, icon: '🏢', cls: 'step-blocks' },
 
-        { label: 'Contacted', value: contacted, cls: 'step-contacted' },
+        { label: 'Contacted', value: contacted, icon: '📞', cls: 'step-contacted' },
 
-        { label: '1st Meeting', value: meetingsDone, cls: 'step-meetings' },
+        { label: '1st Meeting', value: meetingsDone, icon: '🤝', cls: 'step-meetings' },
 
-        { label: 'Location OK', value: locationsFinalized, cls: 'step-location' },
+        { label: 'Location OK', value: locationsFinalized, icon: '📍', cls: 'step-location' },
 
-        { label: 'Email Sent', value: emailSent, cls: 'step-email' },
+        { label: 'Email Sent', value: emailSent, icon: '📧', cls: 'step-email' },
 
-        { label: 'NOC Received', value: nocReceived, cls: 'step-noc' },
+        { label: 'NOC Received', value: nocReceived, icon: '📄', cls: 'step-noc' },
 
-        { label: 'Agreement', value: agreementSigned, cls: 'step-agreement' },
+        { label: 'Agreement', value: agreementSigned, icon: '✍️', cls: 'step-agreement' },
 
-        { label: 'Installed', value: installed, cls: 'step-installed' },
+        { label: 'Installed', value: installed, icon: '✅', cls: 'step-installed' },
 
     ];
 
@@ -4259,6 +4260,7 @@ function renderULBFunnel() {
 
         <div class="funnel-step ${step.cls}">
 
+            ${step.icon ? `<div class="funnel-step-icon">${step.icon}</div>` : ''}
 
             <div class="funnel-step-value">${step.value}</div>
 
