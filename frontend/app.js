@@ -4958,17 +4958,17 @@ function getProgressClass(percent) {
 
 function getBadge(percent) {
 
-    if (percent >= 100) return 'ðŸ†';
+    if (percent >= 100) return '';
 
-    if (percent >= 75) return 'ðŸ”¥';
+    if (percent >= 75) return '';
 
-    if (percent >= 50) return 'ðŸ’ª';
+    if (percent >= 50) return '';
 
-    if (percent >= 25) return 'ðŸš€';
+    if (percent >= 25) return '';
 
-    if (percent > 0) return 'âœ¨';
+    if (percent > 0) return '';
 
-    return 'ðŸ’¤';
+    return '';
 
 }
 
