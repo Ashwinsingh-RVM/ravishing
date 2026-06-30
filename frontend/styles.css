@@ -5595,24 +5595,23 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
 /* RVM header layout */
 .dep-page-header-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 16px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 .dep-header-title { flex: 1; min-width: 0; }
 .dep-header-filters {
-    flex: 2;
+    flex-shrink: 0;
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: flex-end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
-.dep-header-filters .dep-filter-item { flex: 1; min-width: 140px; }
+.dep-header-filters .dep-filter-item { flex-shrink: 0; }
 .dep-filter-select {
     height: 36px;
     font-size: 13px;
-    width: 100%;
-    min-width: 130px;
+    width: 150px;
 }
 .dep-header-deadline {
     display: flex;

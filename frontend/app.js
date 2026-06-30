@@ -15396,24 +15396,24 @@ function depRenderProjectMetrics(s, locs) {
     const shedDone     = locs.filter(l => l.shedRequired === 'Yes' && l.shedStatus === 'Done').length;
 
     function mkCard(lbl, val, sub, color, minW) {
-        return '<div style="flex:1;min-width:' + (minW||'95px') + ';background:' + color + '10;border-top:3px solid ' + color + ';border-radius:8px;padding:9px 10px">' +
-            '<div style="font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + lbl + '</div>' +
-            '<div style="font-size:20px;font-weight:700;color:' + color + ';line-height:1.1;margin-bottom:2px">' + val + '</div>' +
-            '<div style="font-size:10px;color:#94a3b8;line-height:1.3">' + sub + '</div>' +
+        return '<div class="dep-kpi" style="flex:1;min-width:' + (minW||'95px') + ';border-left-color:' + color + '">' +
+            '<div class="dep-kv" style="color:' + color + '">' + val + '</div>' +
+            '<div class="dep-kl">' + lbl + '</div>' +
+            '<div class="dep-kn" style="margin-top:3px">' + sub + '</div>' +
             '</div>';
     }
 
     function mkDualCard(lbl, valRvm, valRc, color, minW) {
-        return '<div style="flex:1;min-width:' + (minW||'160px') + ';background:' + color + '10;border-top:3px solid ' + color + ';border-radius:8px;padding:9px 10px">' +
-            '<div style="font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">' + lbl + '</div>' +
-            '<div style="margin-bottom:4px">' +
+        return '<div class="dep-kpi" style="flex:1;min-width:' + (minW||'160px') + ';border-left-color:' + color + '">' +
+            '<div class="dep-kl">' + lbl + '</div>' +
+            '<div style="margin-bottom:3px">' +
                 '<div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:1px">RVM</div>' +
-                '<div style="font-size:20px;font-weight:700;color:' + color + ';line-height:1.1">' + valRvm + '</div>' +
+                '<div class="dep-kv" style="color:' + color + '">' + valRvm + '</div>' +
             '</div>' +
             '<div style="height:1px;background:#e2e8f0;margin:4px 0"></div>' +
             '<div>' +
                 '<div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:1px">RC</div>' +
-                '<div style="font-size:14px;font-weight:600;color:#94a3b8;line-height:1.1">' + valRc + '</div>' +
+                '<div style="font-size:16px;font-weight:600;color:#94a3b8;line-height:1.1">' + valRc + '</div>' +
             '</div>' +
             '</div>';
     }
