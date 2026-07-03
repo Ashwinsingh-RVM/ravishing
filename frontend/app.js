@@ -3858,7 +3858,7 @@ function loadProgressDashboard() {
 
     const devicesInstalled = (depData && depData.locations && depData.locations.length > 0)
 
-        ? depData.locations.filter(l => l.rvmDeployed === 'Done').length
+        ? depData.locations.filter(l => depIsDone(l.rvmDeployed)).length
 
         : vpOnly.filter(vp => resolveStageNumber(vp) >= 15).length;
 
@@ -14481,16 +14481,36 @@ function depMarkerColor(stage) {
 
 
 
+// A work status counts as complete when the sheet says either "Done" or "Yes"
+function depIsDone(v) { return v === 'Done' || v === 'Yes'; }
+
 function depComputeSummary(locs) {
 
     function cv(key, val) { return locs.filter(l => l[key] === val).length; }
 
     function ps(key) {
 
-        const done = cv(key, 'Done'), pending = cv(key, 'Pending'), not_required = cv(key, 'Not Required');
+        const done = locs.filter(l => depIsDone(l[key])).length, pending = cv(key, 'Pending'), not_required = cv(key, 'Not Required');
 
         return { done, pending, not_required, pct: (done + pending) > 0 ? Math.round(done / (done + pending) * 100) : 0 };
 
+    }
+
+    // Gated stats for Civil/Shed: denominator = rows where the requirement is
+    // 'Yes' or blank (blank treated as required); "done" = status is Yes or Done.
+    function psGated(reqKey, statusKey) {
+        const req = locs.filter(l => l[reqKey] === 'Yes' || !l[reqKey]);
+        const done = req.filter(l => depIsDone(l[statusKey])).length;
+        const not_required = locs.filter(l => l[reqKey] === 'No').length;
+        return { done, pending: Math.max(0, req.length - done), not_required, required: req.length, total: req.length, pct: req.length ? Math.round(done / req.length * 100) : 0 };
+    }
+
+    // Stats over ALL identified locations (denominator = total locations),
+    // e.g. Electrical: done / total location identified.
+    function psTotal(statusKey) {
+        const total = locs.length;
+        const done = locs.filter(l => depIsDone(l[statusKey])).length;
+        return { done, pending: Math.max(0, total - done), not_required: 0, required: total, total, pct: total ? Math.round(done / total * 100) : 0 };
     }
 
     function cvEntity(key, val) {
@@ -14549,17 +14569,17 @@ function depComputeSummary(locs) {
 
         nocPlan, agrPlan,
 
-        civil: ps('civilWorkStatus'),
+        civil: psGated('civilWorkReq', 'civilWorkStatus'),
 
-        shed: ps('shedStatus'), electrical: ps('electricalStatus'),
+        shed: psGated('shedRequired', 'shedStatus'), electrical: psTotal('electricalStatus'),
 
-        internet: ps('internetStatus'), cctv: ps('cctvStatus'),
+        internet: psTotal('internetStatus'), cctv: psTotal('cctvStatus'),
 
-        delivered: cv('rvmDelivery', 'Done'),
+        delivered: locs.filter(l => depIsDone(l.rvmDelivery)).length,
 
         installed: ps('rvmDeployed'),
 
-        live: cv('machineLive', 'Done'),
+        live: locs.filter(l => depIsDone(l.machineLive)).length,
 
     };
 
@@ -14892,15 +14912,15 @@ function depRenderFunnel(s) {
 
         { label: 'Agreement Signed', val: s.agreement,                                    color: '#4a7ec0', denom: s.totalEntities },
 
-        { label: `Civil Work (${s.civil.not_required} N/A)`,  val: s.civil.done + s.civil.not_required,  color: '#5b8a3c', denom: T },
+        { label: 'Civil Work',       val: s.civil.done,                                   color: '#5b8a3c', denom: s.civil.required },
 
-        { label: 'Shed Ready',       val: s.shed.done,                                    color: '#8b6914', denom: T },
+        { label: 'Shed Ready',       val: s.shed.done,                                    color: '#8b6914', denom: s.shed.required },
 
-        { label: `Electrical Ready (${s.electrical.not_required} N/A)`, val: s.electrical.done + s.electrical.not_required, color: '#c27a10', denom: T },
+        { label: 'Electrical Ready', val: s.electrical.done, color: '#c27a10', denom: T },
 
-        { label: `Internet Ready (${s.internet.not_required} N/A)`,     val: s.internet.done + s.internet.not_required,    color: '#9b7b2e', denom: T },
+        { label: 'Internet Ready',   val: s.internet.done,                                color: '#9b7b2e', denom: T },
 
-        { label: `CCTV Done (${s.cctv.not_required} N/A)`,              val: s.cctv.done + s.cctv.not_required,            color: '#6b4e9e', denom: T },
+        { label: 'CCTV Done',        val: s.cctv.done,                                    color: '#6b4e9e', denom: T },
 
         { label: 'Machine Installed', val: s.installed.done,                              color: '#0b6b4f', denom: T },
 
@@ -14948,7 +14968,7 @@ function depRenderDonuts(s) {
 
     const T = depPlanTotal;
 
-    const liveStats = { done: s.live, pending: Math.max(0, T - s.live), not_required: 0, pct: T > 0 ? Math.round(s.live / T * 100) : 0 };
+    const liveStats = { done: s.live, pending: Math.max(0, s.total - s.live), not_required: 0, pct: s.total > 0 ? Math.round(s.live / s.total * 100) : 0 };
 
     const progItems = [
 
@@ -15037,7 +15057,7 @@ function depRenderForecast(s, locs) {
 
     // Actual velocity
 
-    const withDates = locs.filter(l => l.rvmDeployed === 'Done' && l.installDate && l.installDate.length >= 10);
+    const withDates = locs.filter(l => depIsDone(l.rvmDeployed) && l.installDate && l.installDate.length >= 10);
 
     let dailyRate = 0;
 
@@ -15075,7 +15095,7 @@ function depRenderForecast(s, locs) {
 
     const byDate = {};
 
-    locs.filter(l => l.rvmDeployed === 'Done' && l.installDate && typeof l.installDate === 'string' && l.installDate.length >= 10).forEach(l => {
+    locs.filter(l => depIsDone(l.rvmDeployed) && l.installDate && typeof l.installDate === 'string' && l.installDate.length >= 10).forEach(l => {
 
         const _dpd = depParseDate(l.installDate); if (!_dpd) return; const d = `${_dpd.getFullYear()}-${String(_dpd.getMonth()+1).padStart(2,'0')}-${String(_dpd.getDate()).padStart(2,'0')}`; byDate[d] = (byDate[d] || 0) + 1;
 
@@ -15087,7 +15107,7 @@ function depRenderForecast(s, locs) {
 
     const byWeek = {};
 
-    locs.filter(l => l.rvmDeployed === 'Done' && l.installDate && typeof l.installDate === 'string' && l.installDate.length >= 10).forEach(l => {
+    locs.filter(l => depIsDone(l.rvmDeployed) && l.installDate && typeof l.installDate === 'string' && l.installDate.length >= 10).forEach(l => {
 
         try {
 
@@ -15311,10 +15331,6 @@ function depRenderBlockers(locs) {
 
 
 
-    const elecPending  = locs.filter(l => l.electricalStatus === 'Pending').length;
-
-    const delivNotInst = locs.filter(l => l.rvmDelivery === 'Done' && l.rvmDeployed !== 'Done').length;
-
 
 
     const blockers = [
@@ -15324,10 +15340,6 @@ function depRenderBlockers(locs) {
         nocPending > 0   && { count: nocPending,   label: 'NOC not received',          color: '#e08a1e', bg: '#fffbf0', detail: 'Panchayat/municipality sign-off pending' },
 
         agrPending > 0   && { count: agrPending,   label: 'Agreement pending',         color: '#c27a10', bg: '#fef9f0', detail: `${agrPending} NOC done, agreement not signed yet` },
-
-        elecPending > 0  && { count: elecPending,  label: 'Electrical pending',        color: '#8b6914', bg: '#faf6e8', detail: 'Power connection needed before RVM goes live' },
-
-        delivNotInst > 0 && { count: delivNotInst, label: 'Delivered, not installed',  color: '#0b6b4f', bg: '#f0faf5', detail: 'Machine on-site — commission now' },
 
     ].filter(Boolean);
 
@@ -15400,9 +15412,9 @@ function depRenderProjectMetrics(s, locs) {
     const dColor      = daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f';
 
     // Shed: only count rows where Shed Required = Yes
-    const shedRequired = locs.filter(l => l.shedRequired === 'Yes').length;
+    const shedRequired = locs.filter(l => l.shedRequired === 'Yes' || !l.shedRequired).length;
 
-    const shedDone     = locs.filter(l => l.shedRequired === 'Yes' && l.shedStatus === 'Done').length;
+    const shedDone     = locs.filter(l => (l.shedRequired === 'Yes' || !l.shedRequired) && depIsDone(l.shedStatus)).length;
 
     function mkCard(lbl, val, sub, color, minW) {
         return '<div style="flex:1;min-width:' + (minW||'95px') + ';background:' + color + '18;border-top:3px solid ' + color + ';border-radius:8px;padding:10px 12px">' +
@@ -15467,8 +15479,8 @@ function depRenderProjectMetrics(s, locs) {
     ].join('');
 
     // Row 3: Work KPI (6 cards) — dep-kpi style with icons
-    const civilDone = s.civil ? s.civil.done  : 0;
-    const civilReq  = s.civil ? (s.civil.done + s.civil.pending) : 0;
+    const civilReq  = locs.filter(l => l.civilWorkReq === 'Yes' || !l.civilWorkReq).length;
+    const civilDone = locs.filter(l => (l.civilWorkReq === 'Yes' || !l.civilWorkReq) && depIsDone(l.civilWorkStatus)).length;
     const elecDone  = s.electrical ? s.electrical.done  : 0;
     const elecReq   = s.electrical ? (s.electrical.done + s.electrical.pending) : 0;
     const inetDone  = s.internet ? s.internet.done  : 0;
@@ -15504,10 +15516,10 @@ function depRenderProjectMetrics(s, locs) {
     const row3 = [
         mkWkCard('Civil Work',  civilDone, `of ${civilReq} required`,     '#5b8a3c', 'civil'),
         mkWkCard('Shed Completed',   shedDone,  `of ${shedRequired} required`, '#8b6914', 'shed'),
-        mkWkCard('Electrical Done',  elecDone,  `of ${elecReq} required`,      '#c27a10', 'elec'),
-        mkWkCard('Internet Done',    inetDone,  `of ${inetReq} required`,      '#2f6fb0', 'inet'),
-        mkWkCard('CCTV Done',        cctvDone,  `of ${cctvReq} required`,      '#6b4e9e', 'cctv'),
-        mkWkCard('Machine Live',     live,      `of ${RVM_TARGET} target`,     '#085f40', 'live'),
+        mkWkCard('Electrical Done',  elecDone,  `of ${identified} locations`,  '#c27a10', 'elec'),
+        mkWkCard('Internet Done',    inetDone,  `of ${identified} locations`,  '#2f6fb0', 'inet'),
+        mkWkCard('CCTV Done',        cctvDone,  `of ${identified} locations`,  '#6b4e9e', 'cctv'),
+        mkWkCard('Machine Live',     live,      `of ${identified} locations`,  '#085f40', 'live'),
     ].join('');
 
     el.innerHTML =
@@ -15549,13 +15561,13 @@ function depRenderBlockSummary(locs) {
 
     const T = depPlanTotal;
 
-    const totalInstalled = locs.filter(l => l.rvmDeployed === 'Done').length;
+    const totalInstalled = locs.filter(l => depIsDone(l.rvmDeployed)).length;
 
     const instPct = Math.round(totalInstalled / T * 100);
 
 
 
-    function bv(b, key, val) { return locs.filter(l => l.block === b && l[key] === val).length; }
+    function bv(b, key, val) { return locs.filter(l => l.block === b && (val === 'Done' ? depIsDone(l[key]) : l[key] === val)).length; }
 
     function btotal(b) { return locs.filter(l => l.block === b).length; }
 
@@ -15597,9 +15609,9 @@ function depRenderBlockSummary(locs) {
 
     const cols = [
 
-        { label:'Civil Work', fn: b => { const req = locs.filter(l => l.block === b && l.civilWorkStatus !== 'Not Required').length; return req === 0 ? '—' : `${bv(b,'civilWorkStatus','Done')}/${req}`; } },
+        { label:'Civil Work', fn: b => { const req = locs.filter(l => l.block === b && (l.civilWorkReq === 'Yes' || !l.civilWorkReq)).length; const done = locs.filter(l => l.block === b && (l.civilWorkReq === 'Yes' || !l.civilWorkReq) && depIsDone(l.civilWorkStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
 
-        { label:'Shed',      fn: b => { const req = locs.filter(l => l.block === b && l.shedRequired === 'Yes').length; const done = locs.filter(l => l.block === b && l.shedRequired === 'Yes' && l.shedStatus === 'Done').length; return req === 0 ? '—' : `${done}/${req}`; } },
+        { label:'Shed',      fn: b => { const req = locs.filter(l => l.block === b && (l.shedRequired === 'Yes' || !l.shedRequired)).length; const done = locs.filter(l => l.block === b && (l.shedRequired === 'Yes' || !l.shedRequired) && depIsDone(l.shedStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
 
         { label:'Electrical',fn: b => `${bv(b,'electricalStatus','Done')}/${breq(b,'electricalStatus')}` },
 
@@ -15735,7 +15747,7 @@ function depHighestMilestone(l) {
 
     if (l.machineLive === 'Done')    return { label: 'Machine Live',      color: '#085f40' };
 
-    if (l.rvmDeployed === 'Done')    return { label: 'Machine Installed', color: '#0b6b4f' };
+    if (depIsDone(l.rvmDeployed))    return { label: 'Machine Installed', color: '#0b6b4f' };
 
     if (l.rvmDelivery === 'Done')    return { label: 'Machine Delivered', color: '#2f6fb0' };
 

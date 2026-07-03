@@ -424,16 +424,30 @@ class GoogleSheetsService:
     # ==================== RVM Deployment Methods ====================
 
     def get_planned_rvms_total(self) -> int:
-        """Sum Planned_RVMs from DRS-Tracker sheet."""
+        """Sum of the 'Planned_RVMs' column in the DRS-Tracker sheet.
+
+        Non-numeric cells (e.g. formula errors like #REF!) are treated as 0.
+        Falls back to 301 only if the column/tab can't be read.
+        """
         try:
             spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
             worksheet = spreadsheet.worksheet("DRS-Tracker")
-            all_data = worksheet.get_all_records()
+            all_values = worksheet.get_all_values()
+            if not all_values:
+                return 301
+
+            def _nk(s):
+                return " ".join(str(s).split()).strip().lower()
+
+            headers = [_nk(h) for h in all_values[0]]
+            ci = next((i for i, h in enumerate(headers)
+                       if h in ('planned_rvms', 'planned rvms', 'planned_rvm', 'planned rvm')), None)
+            if ci is None:
+                return 301
             total = 0
-            for row in all_data:
-                if not row.get('Block'):
-                    continue
-                total += _safe_int(row.get('Planned_RVMs'), 0)
+            for row in all_values[1:]:
+                if ci < len(row):
+                    total += _safe_int(row[ci].replace(',', ''), 0)
             return total if total > 0 else 301
         except Exception:
             return 301
@@ -459,42 +473,68 @@ class GoogleSheetsService:
                     row[header] = row_vals[i].strip() if i < len(row_vals) else ''
                 records.append(row)
             locations = []
+            # Value normalizer (case-insensitive) for common status tokens
+            _sn = {'done':'Done','yes':'Yes','no':'No','pending':'Pending',
+                   'not required':'Not Required','not req':'Not Required','n/a':'Not Required','na':'Not Required'}
+            def _nk(s):
+                # normalize a header key: collapse internal whitespace/newlines, lowercase
+                return " ".join(str(s).split()).strip().lower()
             for row in records:
-                row = {k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
-                _sn = {'done':'Done','yes':'Yes','no':'No','pending':'Pending',
-                       'not required':'Not Required','not req':'Not Required','n/a':'Not Required','na':'Not Required'}
-                row = {k: _sn.get(str(v).strip().lower(), str(v).strip()) if isinstance(v, str) else v for k, v in row.items()}
-                loc_name = str(row.get('Location Name', '') or row.get('Location_Name', '')).strip()
-                if not loc_name:
+                # Build a normalized-key view of the row so header renames, embedded
+                # newlines, and case differences in the sheet don't break lookups.
+                nrow = {}
+                for k, v in row.items():
+                    val = v.strip() if isinstance(v, str) else v
+                    if isinstance(val, str):
+                        val = _sn.get(val.lower(), val)
+                    nrow[_nk(k)] = val
+                def g(*names):
+                    """First non-empty value among the given header aliases (normalized match)."""
+                    found = None
+                    for n in names:
+                        k = _nk(n)
+                        if k in nrow:
+                            val = str(nrow.get(k) or '').strip()
+                            if val:
+                                return val
+                            if found is None:
+                                found = ''
+                    return found if found is not None else ''
+                loc_name = g('Location Name', 'Location_Name')
+                entity_name = g('Entity Name', 'Entity_Name')
+                # Keep any row that identifies a place. Some rows have an Entity Name
+                # but no Location Name yet — those are still real locations and must
+                # be counted (Location Identified should match the sheet's row count).
+                if not loc_name and not entity_name:
                     continue
                 current_stage = self._compute_deployment_stage(row)
                 locations.append({
                     'locationName':    loc_name,
-                    'block':           str(row.get('Block', '')).strip(),
-                    'entityName':      str(row.get('Entity Name', '') or row.get('Entity_Name', '')).strip(),
-                    'entityType':      str(row.get('Entity Type', '') or row.get('Entity_Type', '')).strip(),
-                    'difficulty':      str(row.get('Difficulty', '')).strip(),
-                    'collectionPoint': str(row.get('Collection Point', '') or row.get('Collection_Point', '')).strip(),
-                    'nocReceived':     str(row.get('NOC Received', '') or row.get('NOC_Received', '')).strip(),
-                    'agreementSigned': str(row.get('Service Agreement Signed', '') or row.get('Service_Agreement_Signed', '')).strip(),
-                    'siteClearanceReq':    str(row.get('Site Clearance Requirement', '')).strip(),
-                    'siteClearanceStatus': str(row.get('Site Clearance Status', '')).strip(),
-                    'civilWorkReq':    str(row.get('Civil Work Requirement', '')).strip(),
-                    'civilWorkStatus': str(row.get('Civil Work Status', '')).strip(),
-                    'electricalStatus': str(row.get('Electrical Connection for Installation', '')).strip(),
-                    'shedRequired': str(row.get('Shed Required', '')).strip(),
-                    'shedType':     str(row.get('Shed Type', '')).strip(),
-                    'shedStatus':   str(row.get('Shed Status', '')).strip(),
-                    'internetRequired': str(row.get('Internet Required', '')).strip(),
-                    'internetStatus':   str(row.get('Internet Status', '')).strip(),
-                    'cctvStatus': str(row.get('CCTV Installation Status', '')).strip(),
-                    'rvmDelivery': str(row.get('RVM Delivery', '')).strip(),
-                    'rvmDeployed': str(row.get('RVM Deployed with Base Fixing', '')).strip(),
-                    'finalCheck':  str(row.get('Final Check', '')).strip(),
-                    'machineLive': str(row.get('RVM Working Condition Check', '')).strip(),
-                    'installDate': str(row.get('Machine Install Date', '')).strip(),
-                    'lat': str(row.get('Latitude', '') or row.get('Lat', '')).strip(),
-                    'lng': str(row.get('Longitude', '') or row.get('Lng', '')).strip(),
+                    'block':           g('Block'),
+                    'entityName':      g('Entity Name', 'Entity_Name'),
+                    'entityType':      g('Entity Type', 'Entity_Type'),
+                    'difficulty':      g('Difficulty'),
+                    'collectionPoint': g('Collection Point', 'Collection_Point'),
+                    'nocReceived':     g('NOC Received', 'NOC_Received'),
+                    'agreementSigned': g('Service Agreement Signed', 'Service_Agreement_Signed'),
+                    'siteClearanceReq':    g('Site Clearance Requirement'),
+                    'siteClearanceStatus': g('Site Clearance Status'),
+                    'civilWorkReq':    g('Civil Work Requirement'),
+                    'civilWorkStatus': g('Civil Work Status'),
+                    'electricalStatus': g('Electrical Work status', 'Electrical Connection for Installation'),
+                    'shedRequired': g('Shed Required'),
+                    'shedType':     g('Shed Type'),
+                    'shedStatus':   g('Shed Installation Status', 'Shed Status'),
+                    'internetRequired': g('Internet Required'),
+                    'internetStatus':   g('Internet Status'),
+                    'cctvStatus': g('CCTV Installation Status'),
+                    'rvmDelivery': g('RVM Delivery'),
+                    'rvmDeployed': g('Machine install', 'RVM install', 'RVM Deployed with Base Fixing'),
+                    'finalCheck':  g('Final Check'),
+                    'machineLive': g('RVM Working Condition Check'),
+                    'installDate': g('Machine install date', 'Machine Install Date'),
+                    'lat': g('Lat', 'Latitude'),
+                    'lng': g('Long', 'Longitude', 'Lng'),
                     'currentStage': current_stage,
                 })
             return locations
@@ -847,31 +887,48 @@ class GoogleSheetsService:
 
     @staticmethod
     def _compute_deployment_stage(row) -> str:
-        """Auto-compute current stage as the first incomplete deployment step."""
-        def v(key, alt=''):
-            return str(row.get(key, '') or (row.get(alt, '') if alt else '')).strip()
+        """Auto-compute current stage as the first incomplete deployment step.
+
+        Matches sheet headers via a normalized key (collapses whitespace/newlines,
+        case-insensitive) so column renames don't silently break stage computation.
+        A step counts as complete when its cell is 'Done' or 'Yes'.
+        """
+        def _nk(s):
+            return " ".join(str(s).split()).strip().lower()
+        nrow = {_nk(k): (str(val).strip() if isinstance(val, str) else val)
+                for k, val in row.items()}
+
+        def v(*keys):
+            for k in keys:
+                val = nrow.get(_nk(k))
+                if val not in (None, ''):
+                    return str(val).strip()
+            return ''
+
+        def done(val):
+            return val in ('Done', 'Yes')
 
         if v('NOC Received', 'NOC_Received') != 'Yes':
             return 'NOC Pending'
         if v('Service Agreement Signed', 'Service_Agreement_Signed') != 'Yes':
             return 'Agreement Pending'
-        shed = v('Shed Status', 'Shed_Status')
-        if shed and shed not in ('Done', 'Not Required'):
+        shed = v('Shed Installation Status', 'Shed Status', 'Shed_Status')
+        if shed and not done(shed) and shed != 'Not Required':
             return 'Shed Pending'
-        elec = v('Electrical Connection for Installation')
-        if elec and elec not in ('Done', 'Not Required'):
+        elec = v('Electrical Work status', 'Electrical Connection for Installation')
+        if elec and not done(elec) and elec != 'Not Required':
             return 'Electrical Pending'
         inet = v('Internet Status', 'Internet_Status')
-        if inet and inet not in ('Done', 'Not Required'):
+        if inet and not done(inet) and inet != 'Not Required':
             return 'Internet Pending'
         cctv = v('CCTV Installation Status')
-        if cctv and cctv not in ('Done', 'Not Required'):
+        if cctv and not done(cctv) and cctv != 'Not Required':
             return 'CCTV Pending'
-        if v('RVM Delivery') != 'Done':
+        if not done(v('RVM Delivery')):
             return 'Machine Delivery Pending'
-        if v('RVM Deployed with Base Fixing') != 'Done':
+        if not done(v('Machine install', 'RVM install', 'RVM Deployed with Base Fixing')):
             return 'Machine Installation Pending'
-        if v('RVM Working Condition Check') != 'Done':
+        if not done(v('RVM Working Condition Check')):
             return 'Machine Live Pending'
         return 'Completed'
 
