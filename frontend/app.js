@@ -15872,7 +15872,7 @@ function depRenderLocTable(locs) {
 
                 <td style="color:var(--muted)">${i+1}</td>
 
-                <td><b>${l.locationName}</b></td>
+                <td><b>${l.entityName || l.locationName || '—'}</b>${l.entityName && l.locationName ? ' - ' + l.locationName : ''}</td>
 
                 <td style="font-size:12px">${l.block || '—'}</td>
 
@@ -15891,8 +15891,6 @@ function depRenderLocTable(locs) {
                 <td>${depFlag(l.internetStatus)}</td>
 
                 <td>${depFlag(l.cctvStatus)}</td>
-
-                <td>${depFlag(l.rvmDelivery)}</td>
 
                 <td>${depFlag(l.rvmDeployed)}</td>
 
@@ -16150,6 +16148,8 @@ function depApplyFilters() {
     if (locName) locs = locs.filter(l => l.locationName === locName);
 
     if (search)  locs = locs.filter(l =>
+
+        (l.entityName || '').toLowerCase().includes(search) ||
 
         (l.locationName || '').toLowerCase().includes(search) ||
 
