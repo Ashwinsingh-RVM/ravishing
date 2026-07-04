@@ -15416,27 +15416,84 @@ function depRenderProjectMetrics(s, locs) {
 
     const shedDone     = locs.filter(l => (l.shedRequired === 'Yes' || !l.shedRequired) && depIsDone(l.shedStatus)).length;
 
-    function mkCard(lbl, val, sub, color, minW) {
-        return '<div style="flex:1;min-width:' + (minW||'95px') + ';background:' + color + '18;border-top:3px solid ' + color + ';border-radius:8px;padding:10px 12px">' +
-            '<div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + lbl + '</div>' +
-            '<div style="font-size:22px;font-weight:700;color:' + color + ';line-height:1.1;margin-bottom:3px">' + val + '</div>' +
-            '<div style="font-size:10px;color:#94a3b8;line-height:1.3">' + sub + '</div>' +
-            '</div>';
+    // Icon helper for redesigned Project/Pipeline metric cards (separate from mkWkIcon).
+    // Icon is derived from the card label — call-site arguments are never touched.
+    function depMetricIcon(lbl, color) {
+        const paths = {
+            'RVM Target':          '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.5" fill="' + color + '"/>',
+            'RC Target':           '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.5" fill="' + color + '"/>',
+            'Target Date':         '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+            'Days Left':           '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+            'RVM Installed':       '<polyline points="20 6 9 17 4 12"/>',
+            'RC Installed':        '<polyline points="20 6 9 17 4 12"/>',
+            'Gap to Target':       '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+            'Run Rate Needed':     '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+            'Location Identified': '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+            'NOC Received':        '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/>',
+            'NOC Plan (RVMs)':     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
+            'Agreement Signed':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'Agr. Plan (RVMs)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+        };
+        const p = paths[lbl] || '<circle cx="12" cy="12" r="9"/>';
+        return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
     }
 
+    // Progress-bar fill (0..1) derived from closure vars, keyed by label. Visual only.
+    function depMetricFill(lbl) {
+        let f = null;
+        if (lbl === 'RVM Installed') f = RVM_TARGET ? installed / RVM_TARGET : 0;
+        else if (lbl === 'RC Installed') f = (typeof rcInstalled === 'number' && rcMainCount > 0) ? rcInstalled / rcMainCount : null;
+        else if (lbl === 'Location Identified') f = RVM_TARGET ? identified / RVM_TARGET : 0;
+        else if (lbl === 'NOC Received') f = s.totalEntities ? s.noc / s.totalEntities : 0;
+        else if (lbl === 'Agreement Signed') f = s.totalEntities ? s.agreement / s.totalEntities : 0;
+        else if (lbl === 'NOC Plan (RVMs)') f = (typeof s.nocPlan === 'number' && RVM_TARGET) ? s.nocPlan / RVM_TARGET : null;
+        else if (lbl === 'Agr. Plan (RVMs)') f = (typeof s.agrPlan === 'number' && RVM_TARGET) ? s.agrPlan / RVM_TARGET : null;
+        if (f === null || !isFinite(f)) return null;
+        return Math.max(0, Math.min(1, f));
+    }
+
+    function depMetricBar(lbl, color) {
+        const f = depMetricFill(lbl);
+        if (f === null) return '';
+        return '<div class="dep-metric-bar"><span style="width:' + Math.round(f * 100) + '%"></span></div>';
+    }
+
+    // Project Metrics card (redesigned). Args/values unchanged; render only.
+    function mkCard(lbl, val, sub, color, minW) {
+        const pipelineLbls = ['Location Identified', 'NOC Received', 'NOC Plan (RVMs)', 'Agreement Signed', 'Agr. Plan (RVMs)'];
+        const isPipeline = pipelineLbls.indexOf(lbl) !== -1;
+        const cls = 'dep-metric-card' + (isPipeline ? ' dep-metric-card--pipeline' : '');
+        const numColor = isPipeline ? 'color:var(--dep-accent)' : '';
+        return '<div class="' + cls + '" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '95px') + '">' +
+            '<div class="dep-metric-top">' +
+                '<div class="dep-metric-label">' + lbl + '</div>' +
+                '<div class="dep-metric-icon">' + depMetricIcon(lbl, color) + '</div>' +
+            '</div>' +
+            '<div class="dep-metric-value" style="' + numColor + '">' + val + '</div>' +
+            depMetricBar(lbl, color) +
+            '<div class="dep-metric-sub">' + sub + '</div>' +
+        '</div>';
+    }
+
+    // Wide dual card (Gap to Target / Run Rate Needed). Args/values unchanged; render only.
     function mkDualCard(lbl, valRvm, valRc, color, minW) {
-        return '<div style="flex:1;min-width:' + (minW||'160px') + ';background:' + color + '18;border-top:3px solid ' + color + ';border-radius:8px;padding:10px 12px">' +
-            '<div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">' + lbl + '</div>' +
-            '<div style="margin-bottom:4px">' +
-                '<div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:1px">RVM</div>' +
-                '<div style="font-size:22px;font-weight:700;color:' + color + ';line-height:1.1">' + valRvm + '</div>' +
+        return '<div class="dep-metric-card dep-metric-card--dual" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '160px') + '">' +
+            '<div class="dep-metric-top">' +
+                '<div class="dep-metric-label">' + lbl + '</div>' +
+                '<div class="dep-metric-icon">' + depMetricIcon(lbl, color) + '</div>' +
             '</div>' +
-            '<div style="height:1px;background:#e2e8f0;margin:4px 0"></div>' +
-            '<div>' +
-                '<div style="font-size:9px;color:#94a3b8;font-weight:600;margin-bottom:1px">RC</div>' +
-                '<div style="font-size:16px;font-weight:600;color:#94a3b8;line-height:1.1">' + valRc + '</div>' +
+            '<div class="dep-dual-cols">' +
+                '<div class="dep-dual-col">' +
+                    '<div class="dep-dual-key">RVM</div>' +
+                    '<div class="dep-dual-val">' + valRvm + '</div>' +
+                '</div>' +
+                '<div class="dep-dual-div"></div>' +
+                '<div class="dep-dual-col">' +
+                    '<div class="dep-dual-key">RC</div>' +
+                    '<div class="dep-dual-val dep-dual-val--rc">' + valRc + '</div>' +
+                '</div>' +
             '</div>' +
-            '</div>';
+        '</div>';
     }
 
     // RC metrics — target from RC Deployment tab, installed from main RVM Deployment (CP type = RC)
@@ -15523,14 +15580,14 @@ function depRenderProjectMetrics(s, locs) {
     ].join('');
 
     el.innerHTML =
-        `<div class="card" style="margin-bottom:12px">` +
-            `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Project Metrics</div>` +
-            `<div style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:10px">${row1a}</div>` +
-            `<div style="display:flex;gap:12px;flex-wrap:nowrap;overflow-x:auto">${row1b}</div>` +
+        `<div class="dep-metric-section">` +
+            `<div class="dep-metric-heading">Project Metrics</div>` +
+            `<div class="dep-metric-row" style="margin-bottom:10px">${row1a}</div>` +
+            `<div class="dep-metric-row dep-metric-row--dual">${row1b}</div>` +
         `</div>` +
-        `<div class="card" style="margin-bottom:12px">` +
-            `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Pipeline Metrics</div>` +
-            `<div style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto">${row2}</div>` +
+        `<div class="dep-metric-section">` +
+            `<div class="dep-metric-heading">Pipeline Metrics</div>` +
+            `<div class="dep-metric-row">${row2}</div>` +
         `</div>` +
         `<div class="card" style="margin-bottom:16px">` +
             `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Work KPI</div>` +
