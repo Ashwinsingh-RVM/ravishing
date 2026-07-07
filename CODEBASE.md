@@ -656,6 +656,10 @@ sheets_service.update_vp_row(row_num, updates)
 | GET | `/api/horeca/crm/statuses` | Get valid outreach status list |
 | POST | `/api/horeca/crm/init` | Initialize CRM column headers (BB-BM) |
 | POST | `/api/horeca/crm/migrate-assignment` | Add assignment headers (BN-BO) |
+| GET | `/api/horeca/map` | Compact HoReCa pins + heat points for the Deployment Map sub-tab (roles: admin, vp, horeca). Returns `{pins, heat, counts}`: pins = geocoded outlets with an Outreach_Status (onboarded = 'OB Form Filled'), heat = [lat,lng] of not-yet-contacted outlets; excludes De-listed, duplicates, temporarily closed. Backed by `get_horeca_map_data()` in `google_services.py` (uses the 2-min CRM cache). |
+
+### Deployment Map sub-tab (Dashboard → RVM Deployment → Map)
+Third `dep-subtab` (`data-dep-tab="map"`), all code in `frontend/app.js` (`depInitMap`, `depMap*` functions, `DEPMAP_STAGES`). Leaflet 1.9.4 + leaflet.heat + markercluster lazy-loaded from cdnjs on first open (reuses `window.L` if `loadLeaflet()` already ran); Goa boundaries in `frontend/data/goa_geo.js` (`GOA_GEO`, `TALUKA_GEO`, `PANCHAYAT_GEO`, `MUNI_GEO`, extracted from the RVM_RC/NOC prototypes). Pins from `depData.locations` (RVM Deployment sheet only): green = done, amber = pending per `depIsDone()`; Civil/Shed gated on requirement = 'Yes' or blank (same rule as `psGated`). Filters: CP type (RVM/RC/CPC), Entity Type (Panchayat/Public/Private/ULB from the sheet's Entity Type column, blank = Unspecified). Extras: taluka % choropleth overlay, heatmap modes (HoReCa density / pending work / installed), HoReCa layer (clustered pins onboarded/pipeline + unreached heatmap via `/api/horeca/map`).
 
 **Meeting Create Request**:
 ```python

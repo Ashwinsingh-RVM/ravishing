@@ -1434,6 +1434,17 @@ async def update_horeca_crm(request: HoReCaOutreachUpdate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/horeca/map")
+async def get_horeca_map(request: Request):
+    """Compact HoReCa pins + heatmap points for the deployment map"""
+    require_role(request, {'admin', 'vp', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_map_data()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/horeca/crm/summary")
 async def get_horeca_crm_summary(assigned_to: str = ''):
     """Get HoReCa CRM dashboard summary"""

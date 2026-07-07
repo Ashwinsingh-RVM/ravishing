@@ -1522,6 +1522,58 @@ class GoogleSheetsService:
             'assignment_history': safe_get(h.get('Assignment_History', 66)),
         }
 
+    def get_horeca_map_data(self) -> dict:
+        """Compact HoReCa dataset for the deployment map.
+
+        pins  = outlets with an Outreach_Status (onboarded/pipeline), full detail
+        heat  = [lat, lng] pairs for not-yet-contacted outlets (density heatmap)
+        De-listed, duplicate and temporarily-closed rows are excluded.
+        """
+        rows, headers = self._get_horeca_crm_cache()
+        h = {hdr: i for i, hdr in enumerate(headers)}
+
+        def val(row, name, default_idx):
+            idx = h.get(name, default_idx)
+            return row[idx].strip() if idx < len(row) else ''
+
+        def fnum(s):
+            try:
+                v = float(s)
+                return v if v != 0 else None
+            except (ValueError, TypeError):
+                return None
+
+        pins, heat = [], []
+        counts = {'onboarded': 0, 'pipeline': 0, 'unreached': 0}
+        for row in rows:
+            if val(row, 'Is_Duplicate', 42).upper() in ('TRUE', 'YES', '1'):
+                continue
+            lat = fnum(val(row, 'Latitude', 10))
+            lng = fnum(val(row, 'Longitude', 11))
+            if lat is None or lng is None:
+                continue
+            status = val(row, 'Outreach_Status', 53)
+            if status == 'De-listed':
+                continue
+            if status:
+                onboarded = status == 'OB Form Filled'
+                counts['onboarded' if onboarded else 'pipeline'] += 1
+                pins.append({
+                    'name': val(row, 'Name', 1),
+                    'type': val(row, 'HoReCa_Type', 34) or val(row, 'Primary Type', 3),
+                    'city': val(row, 'City', 6),
+                    'lat': round(lat, 5),
+                    'lng': round(lng, 5),
+                    'status': status,
+                    'onboarded': onboarded,
+                })
+            else:
+                if val(row, 'Business Status', 28) == 'CLOSED_TEMPORARILY':
+                    continue
+                counts['unreached'] += 1
+                heat.append([round(lat, 5), round(lng, 5)])
+        return {'pins': pins, 'heat': heat, 'counts': counts}
+
     def get_horeca_crm_data(self, search='', status='', htype='',
                             zone='', city='', assigned_to='', page=1, page_size=50):
         """Get filtered, paginated HoReCa CRM data"""

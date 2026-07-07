@@ -652,6 +652,7 @@
                             <div class="dep-subtab-strip">
                                 <button class="dep-subtab active" data-dep-tab="overview">Overview</button>
                                 <button class="dep-subtab" data-dep-tab="pva">Plan vs Actual <span class="dep-subtab-badge">NEW</span></button>
+                                <button class="dep-subtab" data-dep-tab="map">Map <span class="dep-subtab-badge">NEW</span></button>
                             </div>
 
                             <div id="dep-overview-view">
@@ -780,6 +781,30 @@
 
                             </div><!-- /dep-overview-view -->
                             <div id="dep-pva-view" style="display:none"></div>
+
+                            <!-- Deployment Map -->
+                            <div id="dep-map-view" style="display:none">
+                                <div class="card depmap-card">
+                                    <div id="depmap-loading" class="hcrm-dash-loading">Loading map...</div>
+                                    <div class="depmap-layout" style="display:none">
+                                        <aside class="depmap-side">
+                                            <div class="depmap-sec"><div class="depmap-sec-title">Stage Layer</div><div id="depmap-stages"></div></div>
+                                            <div class="depmap-sec"><div class="depmap-sec-title">Show Pins</div><div id="depmap-showopts"></div></div>
+                                            <div class="depmap-sec"><div class="depmap-sec-title">CP Type</div><div id="depmap-cptypes"></div></div>
+                                            <div class="depmap-sec"><div class="depmap-sec-title">Entity Type</div><div id="depmap-entities"></div></div>
+                                            <div class="depmap-sec"><div class="depmap-sec-title">Boundaries</div><div id="depmap-bounds"></div></div>
+                                            <div class="depmap-sec"><div class="depmap-sec-title">Taluka Overlay</div><div id="depmap-overlays"></div></div>
+                                            <div class="depmap-sec"><div class="depmap-sec-title">Heatmap</div><div id="depmap-heat"></div></div>
+                                            <div class="depmap-sec"><div class="depmap-sec-title">HoReCa</div><div id="depmap-horeca"></div></div>
+                                        </aside>
+                                        <div class="depmap-main">
+                                            <div id="depmap-legend"></div>
+                                            <div id="dep-map"></div>
+                                        </div>
+                                    </div>
+                                    <div id="depmap-error" style="display:none" class="ct-banner ct-banner-err"></div>
+                                </div>
+                            </div>
 
                         </div><!-- /ct-main -->
                         <div id="ct-error" style="display:none" class="ct-banner ct-banner-err"></div>
@@ -1576,6 +1601,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=109"></script>
+    <script src="/static/app.js?v=110"></script>
 </body>
 </html>

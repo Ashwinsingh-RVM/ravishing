@@ -16906,6 +16906,12 @@ function depInitSubTabs() {
 
             if (ov) ov.style.display = tab === 'overview' ? '' : 'none';
 
+            const mv = document.getElementById('dep-map-view');
+
+            if (mv) mv.style.display = tab === 'map' ? '' : 'none';
+
+            if (tab === 'map') depInitMap();
+
             if (pv) pv.style.display = tab === 'pva' ? '' : 'none';
 
             if (tab === 'pva') pvaFetchPlans().then(() => depRenderPvA(depFilteredLocs));
@@ -18428,3 +18434,461 @@ function pvaGuideSectionHtml() {
 
 }
 
+
+
+// ============================================================================
+// DEPLOYMENT MAP - 3rd sub-tab of RVM Deployment dashboard
+// Data: RVM Deployment tab only (via /api/deployment/summary) + /api/horeca/map
+// ============================================================================
+
+const DEPMAP_STAGES = [
+    { key: 'noc',        label: 'NOC Received',      field: 'nocReceived',      color: '#15803d' },
+    { key: 'agreement',  label: 'Agreement Signed',  field: 'agreementSigned',  color: '#0d9488' },
+    { key: 'civil',      label: 'Civil Work',        field: 'civilWorkStatus',  color: '#0ea5e9', gate: 'civilWorkReq' },
+    { key: 'shed',       label: 'Shed',              field: 'shedStatus',       color: '#b45309', gate: 'shedRequired' },
+    { key: 'electrical', label: 'Electrical',        field: 'electricalStatus', color: '#eab308' },
+    { key: 'internet',   label: 'Internet',          field: 'internetStatus',   color: '#8b5cf6' },
+    { key: 'cctv',       label: 'CCTV',              field: 'cctvStatus',       color: '#db2777' },
+    { key: 'machine',    label: 'Machine Installed', field: 'rvmDeployed',      color: '#16a34a' },
+];
+
+let _depMap = null;
+let _depMapLibsLoaded = false;
+let _depMapCounts = null;
+let _depMapHoreca = null;
+let _depMapHorecaLoading = false;
+let _depMapLayers = { pins: null, heat: null, horeca: null, talukaFill: null, talukaLabels: null,
+                      talukas: null, panchayats: null, ulbs: null, districts: null };
+let _depMapState = {
+    stage: 'machine',
+    showDone: true,
+    showPending: true,
+    cpType: { RVM: true, RC: true, CPC: true },
+    entity: {},
+    bounds: { talukas: true, panchayats: false, ulbs: false, districts: false },
+    talukaOverlay: false,
+    heat: 'none',            // none | horeca | pending | installed
+    horecaPins: false,
+};
+
+function depMapEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function depMapLoadCss(href) {
+    if (!document.querySelector('link[href="' + href + '"]')) {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet'; l.href = href;
+        document.head.appendChild(l);
+    }
+}
+
+const _depMapJsPromises = {};
+
+function depMapLoadJs(src) {
+    if (!_depMapJsPromises[src]) {
+        _depMapJsPromises[src] = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = src;
+            s.onload = resolve;
+            s.onerror = () => {
+                s.remove();
+                delete _depMapJsPromises[src];   // allow retry on next tab open
+                reject(new Error('Failed to load ' + src));
+            };
+            document.head.appendChild(s);
+        });
+    }
+    return _depMapJsPromises[src];
+}
+
+async function depMapLoadLibs() {
+    if (_depMapLibsLoaded) return;
+    depMapLoadCss('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css');
+    depMapLoadCss('https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css');
+    depMapLoadCss('https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css');
+    // Reuse Leaflet if loadLeaflet() (RVM/HoReCa maps) already loaded it
+    if (!window.L) await depMapLoadJs('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js');
+    await Promise.all([
+        depMapLoadJs('https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js'),
+        depMapLoadJs('https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js'),
+        depMapLoadJs('/static/data/goa_geo.js'),
+    ]);
+    _depMapLibsLoaded = true;
+}
+
+let _depMapIniting = false;
+
+async function depInitMap() {
+    const loading = document.getElementById('depmap-loading');
+    const layout  = document.querySelector('#dep-map-view .depmap-layout');
+    const errEl   = document.getElementById('depmap-error');
+    if (_depMap) {
+        errEl.style.display = 'none';
+        setTimeout(() => _depMap.invalidateSize(), 60);
+        depMapRefresh();
+        return;
+    }
+    if (_depMapIniting) return;
+    _depMapIniting = true;
+    try {
+        errEl.style.display = 'none';
+        loading.style.display = 'block';
+        await depMapLoadLibs();
+        if (!depData) {
+            const res = await fetch('/api/deployment/summary');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            depData = await res.json();
+        }
+        loading.style.display = 'none';
+        layout.style.display = 'flex';
+        _depMap = L.map('dep-map', { zoomSnap: 0.25, zoomDelta: 0.5, minZoom: 8.5, maxZoom: 18 })
+            .setView([15.38, 74.02], 10);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19,
+        }).addTo(_depMap);
+        depMapBuildBoundaries();
+        depMapBuildEntityFilter();
+        depMapRefresh();
+        setTimeout(() => _depMap.invalidateSize(), 80);
+    } catch (e) {
+        loading.style.display = 'none';
+        errEl.style.display = 'block';
+        errEl.textContent = 'Failed to load map: ' + e.message;
+    } finally {
+        _depMapIniting = false;
+    }
+}
+
+function depMapLocs() { return (depData && depData.locations) || []; }
+
+function depMapCpTypeOf(l) {
+    const v = (l.collectionPoint || '').toLowerCase();
+    if (v.indexOf('cpc') !== -1) return 'CPC';
+    if (v.indexOf('retearn') !== -1 || v.indexOf('return') !== -1 || v === 'rc') return 'RC';
+    return 'RVM';
+}
+
+function depMapEntityOf(l) {
+    const v = (l.entityType || '').trim().toLowerCase();
+    if (!v) return 'Unspecified';
+    if (v.indexOf('panch') === 0) return 'Panchayat';
+    if (v.indexOf('pub') === 0) return 'Public';
+    if (v.indexOf('pri') === 0) return 'Private';
+    if (v.indexOf('ulb') !== -1 || v.indexOf('munic') !== -1) return 'ULB';
+    return 'Unspecified';
+}
+
+function depMapStageObj() {
+    return DEPMAP_STAGES.find(s => s.key === _depMapState.stage) || DEPMAP_STAGES[DEPMAP_STAGES.length - 1];
+}
+
+// Civil/Shed only where required (gate = 'Yes' or blank) - exact same rule as KPI cards (psGated)
+function depMapApplicable(l, st) {
+    if (st.gate) {
+        const g = l[st.gate];
+        if (!(g === 'Yes' || !g)) return false;
+    }
+    if (l[st.field] === 'Not Required') return false;
+    return true;
+}
+
+function depMapFiltered() {
+    return depMapLocs().filter(l =>
+        _depMapState.cpType[depMapCpTypeOf(l)] !== false &&
+        _depMapState.entity[depMapEntityOf(l)] !== false);
+}
+
+function depMapCoord(l) {
+    let lat = parseFloat(l.lat), lng = parseFloat(l.lng);
+    if (!isFinite(lat) || !isFinite(lng) || !lat || !lng) return null;
+    // swapped columns fix
+    if (lat > 70 && lng < 20) { const t = lat; lat = lng; lng = t; }
+    if (lat < 14.5 || lat > 16 || lng < 73 || lng > 75) return null;
+    return [lat, lng];
+}
+
+function depMapBuildEntityFilter() {
+    const found = {};
+    depMapLocs().forEach(l => { found[depMapEntityOf(l)] = true; });
+    ['Panchayat', 'Public', 'Private', 'ULB', 'Unspecified'].forEach(k => {
+        if (found[k] && !(k in _depMapState.entity)) _depMapState.entity[k] = true;
+    });
+}
+
+function depMapBuildBoundaries() {
+    _depMapLayers.districts = L.geoJSON(GOA_GEO, { style: { color: '#334155', weight: 2, fill: false, dashArray: '4 3' } });
+    _depMapLayers.talukas = L.geoJSON(TALUKA_GEO, { style: { color: '#64748b', weight: 1.4, fillColor: '#94a3b8', fillOpacity: 0.05 } });
+    _depMapLayers.panchayats = L.geoJSON(PANCHAYAT_GEO, { style: { color: '#9aa7b4', weight: 0.7, fill: false } });
+    _depMapLayers.ulbs = L.geoJSON(MUNI_GEO, { style: { color: '#6366f1', weight: 1.1, fillColor: '#6366f1', fillOpacity: 0.05 } });
+}
+
+function depMapApplyBounds() {
+    ['talukas', 'panchayats', 'ulbs', 'districts'].forEach(k => {
+        const lyr = _depMapLayers[k];
+        if (!lyr) return;
+        if (_depMapState.bounds[k]) { lyr.addTo(_depMap); lyr.bringToBack(); }
+        else if (_depMap.hasLayer(lyr)) _depMap.removeLayer(lyr);
+    });
+}
+
+function depMapRefresh() {
+    if (!_depMap) return;
+    depMapApplyBounds();
+    depMapRebuildPins();
+    depMapRebuildTalukaOverlay();
+    depMapRebuildHeat();
+    depMapRebuildHoreca();
+    depMapRenderSidebar();
+    depMapRenderLegend();
+}
+
+function depMapPopup(l, st, isDone) {
+    const rows = [
+        ['Block', l.block], ['Entity', l.entityName], ['CP Type', depMapCpTypeOf(l)],
+        ['Entity Type', depMapEntityOf(l)], ['Current Stage', l.currentStage],
+        ['NOC', l.nocReceived], ['Agreement', l.agreementSigned],
+        ['Civil', l.civilWorkStatus], ['Shed', l.shedStatus],
+        ['Electrical', l.electricalStatus], ['Internet', l.internetStatus],
+        ['CCTV', l.cctvStatus], ['Installed', l.rvmDeployed], ['Install Date', l.installDate],
+    ];
+    return '<div class="depmap-popup"><h4>' + depMapEsc(l.locationName || l.entityName) + '</h4>' +
+        '<div style="font-size:12px;font-weight:700;color:' + (isDone ? '#16a34a' : '#b45309') + ';margin-bottom:5px">' +
+        depMapEsc(st.label) + ': ' + (isDone ? 'DONE' : 'PENDING') + '</div><table>' +
+        rows.map(r => '<tr><td>' + r[0] + '</td><td>' + depMapEsc(r[1] || '-') + '</td></tr>').join('') +
+        '</table></div>';
+}
+
+function depMapRebuildPins() {
+    if (_depMapLayers.pins) { _depMap.removeLayer(_depMapLayers.pins); _depMapLayers.pins = null; }
+    const st = depMapStageObj();
+    const group = L.layerGroup();
+    let done = 0, pending = 0, noGps = 0;
+    depMapFiltered().forEach(l => {
+        if (!depMapApplicable(l, st)) return;
+        const isDone = depIsDone(l[st.field]);
+        if (isDone) done++; else pending++;
+        const pt = depMapCoord(l);
+        if (!pt) { noGps++; return; }
+        if (isDone && !_depMapState.showDone) return;
+        if (!isDone && !_depMapState.showPending) return;
+        const col = isDone ? '#16a34a' : '#f59e0b';
+        const icon = L.divIcon({ className: '', html: '<div class="depmap-dot" style="background:' + col + '"></div>',
+                                 iconSize: [15, 15], iconAnchor: [8, 8], popupAnchor: [0, -9] });
+        L.marker(pt, { icon: icon }).bindPopup(depMapPopup(l, st, isDone)).addTo(group);
+    });
+    _depMapLayers.pins = group.addTo(_depMap);
+    _depMapCounts = { done: done, pending: pending, noGps: noGps };
+}
+
+function depMapTalukaKey(name) {
+    let k = String(name || '').trim().toLowerCase();
+    if (k === 'cancona') k = 'canacona';
+    if (k === 'murmugao' || k === 'marmugao') k = 'mormugao';
+    if (k === 'satari') k = 'sattari';
+    return k;
+}
+
+function depMapRebuildTalukaOverlay() {
+    if (_depMapLayers.talukaFill) { _depMap.removeLayer(_depMapLayers.talukaFill); _depMapLayers.talukaFill = null; }
+    if (_depMapLayers.talukaLabels) { _depMap.removeLayer(_depMapLayers.talukaLabels); _depMapLayers.talukaLabels = null; }
+    if (!_depMapState.talukaOverlay) return;
+    const st = depMapStageObj();
+    const agg = {};
+    depMapFiltered().forEach(l => {
+        if (!depMapApplicable(l, st)) return;
+        const k = depMapTalukaKey(l.block);
+        if (!agg[k]) agg[k] = { done: 0, tot: 0 };
+        agg[k].tot++;
+        if (depIsDone(l[st.field])) agg[k].done++;
+    });
+    _depMapLayers.talukaFill = L.geoJSON(TALUKA_GEO, { style: f => {
+        const a = agg[depMapTalukaKey(f.properties && f.properties.name)];
+        const pct = a && a.tot ? a.done / a.tot : 0;
+        return { color: st.color, weight: 1, fillColor: st.color, fillOpacity: a ? Math.max(0.08, pct * 0.55) : 0.03 };
+    } }).addTo(_depMap);
+    _depMapLayers.talukaFill.bringToBack();
+    const labels = L.layerGroup();
+    ((TALUKA_GEO && TALUKA_GEO.features) || []).forEach(f => {
+        const p = f.properties || {};
+        const a = agg[depMapTalukaKey(p.name)];
+        if (!a || !p.lat || !p.lng) return;
+        const pct = a.tot ? Math.round(a.done / a.tot * 100) : 0;
+        L.marker([p.lat, p.lng], { interactive: false, icon: L.divIcon({ className: '',
+            html: '<div class="depmap-tal-label">' + depMapEsc(p.name) + ' ' + pct + '%</div>', iconSize: [0, 0] }) }).addTo(labels);
+    });
+    _depMapLayers.talukaLabels = labels.addTo(_depMap);
+}
+
+function depMapRebuildHeat() {
+    if (_depMapLayers.heat) { _depMap.removeLayer(_depMapLayers.heat); _depMapLayers.heat = null; }
+    const mode = _depMapState.heat;
+    if (mode === 'none') return;
+    let pts = [];
+    if (mode === 'horeca') {
+        if (!_depMapHoreca) {
+            depMapEnsureHoreca().then(() => { if (_depMapHoreca && _depMapState.heat === 'horeca') { depMapRebuildHeat(); depMapRenderSidebar(); } });
+            return;
+        }
+        pts = _depMapHoreca.heat.map(p => [p[0], p[1], 0.5]);
+        _depMapHoreca.pins.forEach(p => pts.push([p.lat, p.lng, 0.9]));
+    } else if (mode === 'pending') {
+        depMapFiltered().forEach(l => {
+            const pt = depMapCoord(l);
+            if (!pt) return;
+            let w = 0;
+            DEPMAP_STAGES.forEach(s => { if (depMapApplicable(l, s) && !depIsDone(l[s.field])) w++; });
+            if (w > 0) pts.push([pt[0], pt[1], Math.min(1, w / 5)]);
+        });
+    } else if (mode === 'installed') {
+        depMapFiltered().forEach(l => {
+            if (!depIsDone(l.rvmDeployed)) return;
+            const pt = depMapCoord(l);
+            if (pt) pts.push([pt[0], pt[1], 0.9]);
+        });
+    }
+    if (!pts.length || typeof L.heatLayer !== 'function') return;
+    _depMapLayers.heat = L.heatLayer(pts, { radius: 32, blur: 24, maxZoom: 14, minOpacity: 0.3 }).addTo(_depMap);
+}
+
+let _depMapHorecaPromise = null;
+
+function depMapEnsureHoreca() {
+    if (_depMapHoreca) return Promise.resolve();
+    if (!_depMapHorecaPromise) {
+        _depMapHorecaLoading = true;
+        _depMapHorecaPromise = fetch('/api/horeca/map')
+            .then(r => (r.ok ? r.json() : null))
+            .then(d => {
+                _depMapHoreca = d;
+                if (!d) _depMapHorecaPromise = null;   // failed: allow retry on next toggle
+            })
+            .catch(() => { _depMapHorecaPromise = null; })
+            .finally(() => { _depMapHorecaLoading = false; });
+    }
+    return _depMapHorecaPromise;
+}
+
+function depMapRebuildHoreca() {
+    if (_depMapLayers.horeca) { _depMap.removeLayer(_depMapLayers.horeca); _depMapLayers.horeca = null; }
+    if (!_depMapState.horecaPins) return;
+    if (!_depMapHoreca) {
+        depMapEnsureHoreca().then(() => { if (_depMapHoreca && _depMapState.horecaPins) { depMapRebuildHoreca(); depMapRenderSidebar(); } });
+        return;
+    }
+    const group = (typeof L.markerClusterGroup === 'function')
+        ? L.markerClusterGroup({ maxClusterRadius: 55, spiderfyOnMaxZoom: true, showCoverageOnHover: false, disableClusteringAtZoom: 15 })
+        : L.layerGroup();
+    _depMapHoreca.pins.forEach(p => {
+        const col = p.onboarded ? '#16a34a' : '#f59e0b';
+        const icon = L.divIcon({ className: '', html: '<div class="depmap-hpin" style="background:' + col + '"></div>',
+                                 iconSize: [10, 10], iconAnchor: [5, 5], popupAnchor: [0, -6] });
+        group.addLayer(L.marker([p.lat, p.lng], { icon: icon }).bindPopup(
+            '<div class="depmap-popup"><h4>' + depMapEsc(p.name) + '</h4><table>' +
+            '<tr><td>Type</td><td>' + depMapEsc(p.type || '-') + '</td></tr>' +
+            '<tr><td>City</td><td>' + depMapEsc(p.city || '-') + '</td></tr>' +
+            '<tr><td>Status</td><td>' + depMapEsc(p.status) + '</td></tr></table></div>'));
+    });
+    _depMapLayers.horeca = group.addTo(_depMap);
+}
+
+function depMapCheckRow(html, checked) {
+    return '<label class="depmap-row' + (checked ? '' : ' off') + '">' + html + '</label>';
+}
+
+function depMapRenderSidebar() {
+    const locs = depMapFiltered();
+    const all = depMapLocs();
+
+    // Stage layers (radio)
+    const stEl = document.getElementById('depmap-stages');
+    stEl.innerHTML = DEPMAP_STAGES.map(s => {
+        const appl = locs.filter(l => depMapApplicable(l, s));
+        const done = appl.filter(l => depIsDone(l[s.field])).length;
+        const on = s.key === _depMapState.stage;
+        return depMapCheckRow(
+            '<input type="radio" name="depmap-stage" value="' + s.key + '"' + (on ? ' checked' : '') + '>' +
+            '<span class="depmap-swatch" style="background:' + s.color + '"></span>' + s.label +
+            '<span class="depmap-count">' + done + '/' + appl.length + '</span>', on);
+    }).join('');
+    stEl.querySelectorAll('input').forEach(inp =>
+        inp.addEventListener('change', () => { _depMapState.stage = inp.value; depMapRefresh(); }));
+
+    // Show pins
+    const soEl = document.getElementById('depmap-showopts');
+    soEl.innerHTML =
+        depMapCheckRow('<input type="checkbox" data-k="showDone"' + (_depMapState.showDone ? ' checked' : '') + '>' +
+            '<span class="depmap-swatch" style="background:#16a34a"></span>Done (Actual)', _depMapState.showDone) +
+        depMapCheckRow('<input type="checkbox" data-k="showPending"' + (_depMapState.showPending ? ' checked' : '') + '>' +
+            '<span class="depmap-swatch" style="background:#f59e0b"></span>Pending (Plan)', _depMapState.showPending);
+    soEl.querySelectorAll('input').forEach(inp =>
+        inp.addEventListener('change', () => { _depMapState[inp.dataset.k] = inp.checked; depMapRefresh(); }));
+
+    // CP types
+    const ctEl = document.getElementById('depmap-cptypes');
+    ctEl.innerHTML = ['RVM', 'RC', 'CPC'].map(t => {
+        const n = all.filter(l => depMapCpTypeOf(l) === t).length;
+        if (!n && t === 'CPC') return '';
+        return depMapCheckRow('<input type="checkbox" data-k="' + t + '"' + (_depMapState.cpType[t] ? ' checked' : '') + '>' +
+            t + '<span class="depmap-count">' + n + '</span>', _depMapState.cpType[t]);
+    }).join('');
+    ctEl.querySelectorAll('input').forEach(inp =>
+        inp.addEventListener('change', () => { _depMapState.cpType[inp.dataset.k] = inp.checked; depMapRefresh(); }));
+
+    // Entity types
+    const enEl = document.getElementById('depmap-entities');
+    const entKeys = Object.keys(_depMapState.entity);
+    enEl.innerHTML = entKeys.map(t => {
+        const n = all.filter(l => depMapEntityOf(l) === t).length;
+        return depMapCheckRow('<input type="checkbox" data-k="' + t + '"' + (_depMapState.entity[t] ? ' checked' : '') + '>' +
+            t + '<span class="depmap-count">' + n + '</span>', _depMapState.entity[t]);
+    }).join('');
+    enEl.querySelectorAll('input').forEach(inp =>
+        inp.addEventListener('change', () => { _depMapState.entity[inp.dataset.k] = inp.checked; depMapRefresh(); }));
+
+    // Boundaries
+    const bdEl = document.getElementById('depmap-bounds');
+    bdEl.innerHTML = [['talukas', 'Talukas'], ['panchayats', 'Panchayats'], ['ulbs', 'ULBs'], ['districts', 'Districts']].map(b =>
+        depMapCheckRow('<input type="checkbox" data-k="' + b[0] + '"' + (_depMapState.bounds[b[0]] ? ' checked' : '') + '>' + b[1],
+            _depMapState.bounds[b[0]])).join('');
+    bdEl.querySelectorAll('input').forEach(inp =>
+        inp.addEventListener('change', () => { _depMapState.bounds[inp.dataset.k] = inp.checked; depMapRefresh(); }));
+
+    // Taluka overlay
+    const ovEl = document.getElementById('depmap-overlays');
+    ovEl.innerHTML = depMapCheckRow('<input type="checkbox"' + (_depMapState.talukaOverlay ? ' checked' : '') + '>% complete by taluka',
+        _depMapState.talukaOverlay);
+    ovEl.querySelector('input').addEventListener('change', e => { _depMapState.talukaOverlay = e.target.checked; depMapRefresh(); });
+
+    // Heatmap modes (radio)
+    const htEl = document.getElementById('depmap-heat');
+    htEl.innerHTML = [['none', 'Off'], ['horeca', 'HoReCa density'], ['pending', 'Pending work'], ['installed', 'Installed coverage']].map(m =>
+        depMapCheckRow('<input type="radio" name="depmap-heat" value="' + m[0] + '"' + (_depMapState.heat === m[0] ? ' checked' : '') + '>' + m[1],
+            _depMapState.heat === m[0])).join('');
+    htEl.querySelectorAll('input').forEach(inp =>
+        inp.addEventListener('change', () => { _depMapState.heat = inp.value; depMapRefresh(); }));
+
+    // HoReCa pins
+    const hoEl = document.getElementById('depmap-horeca');
+    const hc = _depMapHoreca && _depMapHoreca.counts;
+    hoEl.innerHTML =
+        depMapCheckRow('<input type="checkbox"' + (_depMapState.horecaPins ? ' checked' : '') + '>HoReCa outlets' +
+            (_depMapHorecaLoading ? '<span class="depmap-count">loading...</span>' : ''), _depMapState.horecaPins) +
+        (hc ? '<div style="font-size:11.5px;color:#6b7683;padding:2px 7px 0">' +
+              '<span style="color:#16a34a;font-weight:700">' + hc.onboarded + '</span> onboarded &middot; ' +
+              '<span style="color:#b45309;font-weight:700">' + hc.pipeline + '</span> in pipeline &middot; ' +
+              hc.unreached.toLocaleString() + ' unreached (heatmap) &middot; geocoded only</div>' : '');
+    hoEl.querySelector('input').addEventListener('change', e => { _depMapState.horecaPins = e.target.checked; depMapRefresh(); });
+}
+
+function depMapRenderLegend() {
+    const el = document.getElementById('depmap-legend');
+    const st = depMapStageObj();
+    const c = _depMapCounts || { done: 0, pending: 0, noGps: 0 };
+    el.innerHTML =
+        '<span class="depmap-legend-stat">' + depMapEsc(st.label) + ' &mdash; Actual ' + c.done + ' / Plan ' + (c.done + c.pending) + '</span>' +
+        '<span class="depmap-legend-item"><span class="depmap-swatch" style="background:#16a34a"></span>Done ' + c.done + '</span>' +
+        '<span class="depmap-legend-item"><span class="depmap-swatch" style="background:#f59e0b"></span>Pending ' + c.pending + '</span>' +
+        (c.noGps ? '<span class="depmap-legend-note">' + c.noGps + ' location(s) without GPS not shown</span>' : '');
+}
