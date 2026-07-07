@@ -6766,3 +6766,16 @@ tr.zero-r:hover { opacity: 1; }
   .depmap-layout { flex-direction: column; }
   .depmap-side { width: 100%; flex: none; max-height: 260px; border-right: 0; border-bottom: 1px solid #e5e9ee; }
 }
+
+/* Deployment Map v2 — prototype style */
+.depmap-pin { background: none !important; border: none !important; }
+.depmap-pinsvg { filter: drop-shadow(0 2px 2.5px rgba(11,18,32,0.45)); }
+.depmap-tal-label { transform: translate(-50%, -50%); text-align: center; line-height: 1.15; }
+.depmap-tal-sub { display: block; font-size: 12px; font-weight: 800; color: #14532d; }
+#depmap-legend { display: block; padding: 8px 14px; }
+.depmap-legend-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 6px; font-size: 13px; }
+.depmap-stat-row { display: flex; flex-wrap: wrap; gap: 8px 18px; padding-bottom: 6px; border-bottom: 1px dashed #e2e7ec; }
+.depmap-stat { display: inline-flex; flex-direction: column; min-width: 92px; }
+.depmap-stat-l { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a8794; }
+.depmap-stat-v { font-size: 17px; font-weight: 800; color: #16323f; font-variant-numeric: tabular-nums; }
+.depmap-stat-v small { font-size: 11px; font-weight: 600; color: #8794a1; }

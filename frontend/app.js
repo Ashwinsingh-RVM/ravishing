@@ -18465,7 +18465,7 @@ let _depMapState = {
     showPending: true,
     cpType: { RVM: true, RC: true, CPC: true },
     entity: {},
-    bounds: { talukas: true, panchayats: false, ulbs: false, districts: false },
+    bounds: { talukas: true, panchayats: true, ulbs: false, districts: false },
     talukaOverlay: false,
     heat: 'none',            // none | horeca | pending | installed
     horecaPins: false,
@@ -18618,10 +18618,16 @@ function depMapBuildEntityFilter() {
 }
 
 function depMapBuildBoundaries() {
-    _depMapLayers.districts = L.geoJSON(GOA_GEO, { style: { color: '#334155', weight: 2, fill: false, dashArray: '4 3' } });
-    _depMapLayers.talukas = L.geoJSON(TALUKA_GEO, { style: { color: '#64748b', weight: 1.4, fillColor: '#94a3b8', fillOpacity: 0.05 } });
-    _depMapLayers.panchayats = L.geoJSON(PANCHAYAT_GEO, { style: { color: '#9aa7b4', weight: 0.7, fill: false } });
-    _depMapLayers.ulbs = L.geoJSON(MUNI_GEO, { style: { color: '#6366f1', weight: 1.1, fillColor: '#6366f1', fillOpacity: 0.05 } });
+    // Prototype look: colorful taluka blocks (TAL_COLORS), dark borders, visible panchayat boundaries
+    const talColors = (typeof TAL_COLORS === 'object' && TAL_COLORS) || {};
+    _depMapLayers.districts = L.geoJSON(GOA_GEO, { style: { color: '#0f172a', weight: 2.5, fill: false } });
+    _depMapLayers.talukas = L.geoJSON(TALUKA_GEO, { style: f => ({
+        color: '#1e293b', weight: 1.6,
+        fillColor: talColors[f.properties && f.properties.name] || '#cbd5e1',
+        fillOpacity: 0.5,
+    }) });
+    _depMapLayers.panchayats = L.geoJSON(PANCHAYAT_GEO, { style: { color: '#334155', weight: 0.8, fill: false, opacity: 0.75 } });
+    _depMapLayers.ulbs = L.geoJSON(MUNI_GEO, { style: { color: '#334155', weight: 1, fillColor: '#6366f1', fillOpacity: 0.08 } });
 }
 
 function depMapApplyBounds() {
@@ -18636,6 +18642,7 @@ function depMapApplyBounds() {
 function depMapRefresh() {
     if (!_depMap) return;
     depMapApplyBounds();
+    depMapRebuildCoverage();
     depMapRebuildPins();
     depMapRebuildTalukaOverlay();
     depMapRebuildHeat();
@@ -18660,6 +18667,103 @@ function depMapPopup(l, st, isDone) {
         '</table></div>';
 }
 
+// Teardrop pin with a mini RVM illustration (prototype style)
+function depMapPinIcon(col) {
+    const svg = '<svg class="depmap-pinsvg" width="26" height="34" viewBox="0 0 36 48">' +
+        '<path d="M18 1C8.6 1 1 8.6 1 18c0 12.8 17 29 17 29s17-16.2 17-29C35 8.6 27.4 1 18 1z" fill="' + col + '" stroke="#fff" stroke-width="2"/>' +
+        '<circle cx="18" cy="17" r="8.5" fill="#fff"/>' +
+        '<rect x="14" y="12" width="8" height="10" rx="1.5" fill="' + col + '"/>' +
+        '<rect x="15.5" y="14" width="5" height="3" rx="0.8" fill="#fff" opacity="0.85"/>' +
+        '</svg>';
+    return L.divIcon({ className: 'depmap-pin', html: svg, iconSize: [26, 34], iconAnchor: [13, 32], popupAnchor: [0, -30] });
+}
+
+// ── Panchayat/ULB coverage shading for NOC & Agreement ─────────────────
+
+function depMapEntKey(s) {
+    return String(s || '').toLowerCase()
+        .replace(/municipal council|municipality|\bmc\b|village panchayat|panchayat/g, '')
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+// entity -> 'done' | 'pending' for a stage field
+function depMapEntityStatus(field) {
+    const m = {};
+    depMapLocs().forEach(l => {
+        const k = depMapEntKey(l.entityName || l.locationName);
+        if (!k) return;
+        if (depIsDone(l[field])) m[k] = 'done';
+        else if (!(k in m)) m[k] = 'pending';
+    });
+    return m;
+}
+
+function depMapRingArea(coords) {   // outer ring [[lng,lat],...] -> km²
+    let a = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+        const x1 = coords[i][0], y1 = coords[i][1];
+        const x2 = coords[i + 1][0], y2 = coords[i + 1][1];
+        a += (x2 - x1) * (2 + Math.sin(y1 * Math.PI / 180) + Math.sin(y2 * Math.PI / 180));
+    }
+    return Math.abs(a * 6378137 * 6378137 * (Math.PI / 180) / 2) / 1e6;
+}
+
+let _depMapAreaCache = null;
+
+function depMapAreas() {            // {areas: {entKey: km²}, total: km²}
+    if (_depMapAreaCache) return _depMapAreaCache;
+    const areas = {};
+    let total = 0;
+    function polyArea(geom) {
+        if (!geom) return 0;
+        if (geom.type === 'Polygon') return depMapRingArea(geom.coordinates[0]);
+        if (geom.type === 'MultiPolygon') {
+            let a = 0;
+            geom.coordinates.forEach(p => { a += depMapRingArea(p[0]); });
+            return a;
+        }
+        return 0;
+    }
+    function addFeats(geo, nameProp) {
+        ((geo && geo.features) || []).forEach(f => {
+            const p = f.properties || {};
+            const k = depMapEntKey(p[nameProp] || p.name || p.authority);
+            const a = polyArea(f.geometry);
+            if (k) { areas[k] = (areas[k] || 0) + a; total += a; }
+        });
+    }
+    addFeats(typeof PANCHAYAT_GEO !== 'undefined' ? PANCHAYAT_GEO : null, 'name');
+    addFeats(typeof MUNI_GEO !== 'undefined' ? MUNI_GEO : null, 'authority');
+    _depMapAreaCache = { areas: areas, total: total };
+    return _depMapAreaCache;
+}
+
+function depMapAreaPct(field) {
+    const A = depMapAreas();
+    const m = depMapEntityStatus(field);
+    let cov = 0;
+    Object.keys(m).forEach(k => { if (m[k] === 'done' && A.areas[k]) cov += A.areas[k]; });
+    return A.total ? Math.round(cov / A.total * 100) : 0;
+}
+
+function depMapRebuildCoverage() {
+    if (_depMapLayers.coverage) { _depMap.removeLayer(_depMapLayers.coverage); _depMapLayers.coverage = null; }
+    const st = depMapStageObj();
+    if (st.key !== 'noc' && st.key !== 'agreement') return;
+    const m = depMapEntityStatus(st.field);
+    function style(f) {
+        const p = f.properties || {};
+        const s = m[depMapEntKey(p.name || p.authority)];
+        if (s === 'done')    return { color: '#14532d', weight: 1,   fillColor: '#16a34a', fillOpacity: 0.55 };
+        if (s === 'pending') return { color: '#7c2d12', weight: 1,   fillColor: '#f59e0b', fillOpacity: 0.45 };
+        return                      { color: '#475569', weight: 0.5, fillColor: '#94a3b8', fillOpacity: 0.05 };
+    }
+    _depMapLayers.coverage = L.layerGroup([
+        L.geoJSON(PANCHAYAT_GEO, { style: style }),
+        L.geoJSON(MUNI_GEO, { style: style }),
+    ]).addTo(_depMap);
+}
+
 function depMapRebuildPins() {
     if (_depMapLayers.pins) { _depMap.removeLayer(_depMapLayers.pins); _depMapLayers.pins = null; }
     const st = depMapStageObj();
@@ -18674,9 +18778,7 @@ function depMapRebuildPins() {
         if (isDone && !_depMapState.showDone) return;
         if (!isDone && !_depMapState.showPending) return;
         const col = isDone ? '#16a34a' : '#f59e0b';
-        const icon = L.divIcon({ className: '', html: '<div class="depmap-dot" style="background:' + col + '"></div>',
-                                 iconSize: [15, 15], iconAnchor: [8, 8], popupAnchor: [0, -9] });
-        L.marker(pt, { icon: icon }).bindPopup(depMapPopup(l, st, isDone)).addTo(group);
+        L.marker(pt, { icon: depMapPinIcon(col) }).bindPopup(depMapPopup(l, st, isDone)).addTo(group);
     });
     _depMapLayers.pins = group.addTo(_depMap);
     _depMapCounts = { done: done, pending: pending, noGps: noGps };
@@ -18716,7 +18818,9 @@ function depMapRebuildTalukaOverlay() {
         if (!a || !p.lat || !p.lng) return;
         const pct = a.tot ? Math.round(a.done / a.tot * 100) : 0;
         L.marker([p.lat, p.lng], { interactive: false, icon: L.divIcon({ className: '',
-            html: '<div class="depmap-tal-label">' + depMapEsc(p.name) + ' ' + pct + '%</div>', iconSize: [0, 0] }) }).addTo(labels);
+            html: '<div class="depmap-tal-label">' + depMapEsc(p.name) +
+                  '<span class="depmap-tal-sub">' + a.done + '/' + a.tot + ' &middot; ' + pct + '%</span></div>',
+            iconSize: [0, 0] }) }).addTo(labels);
     });
     _depMapLayers.talukaLabels = labels.addTo(_depMap);
 }
@@ -18886,9 +18990,30 @@ function depMapRenderLegend() {
     const el = document.getElementById('depmap-legend');
     const st = depMapStageObj();
     const c = _depMapCounts || { done: 0, pending: 0, noGps: 0 };
+    const locs = depMapLocs();
+    const planTotal = (depData && (depData.planTotal || depData.plan_total)) || 0;
+    const identified = locs.length;
+    const nocDone = locs.filter(l => depIsDone(l.nocReceived)).length;
+    const agrDone = locs.filter(l => depIsDone(l.agreementSigned)).length;
+
+    function chip(label, val) {
+        return '<span class="depmap-stat"><span class="depmap-stat-l">' + label + '</span><span class="depmap-stat-v">' + val + '</span></span>';
+    }
+    const stats =
+        chip('Location Identified', identified) +
+        (planTotal ? chip('Pending from Plan', Math.max(0, planTotal - identified) + ' <small>of ' + planTotal + '</small>') : '') +
+        chip('NOC', nocDone + (planTotal ? ' <small>/ plan ' + planTotal + '</small>' : '')) +
+        chip('Agreement', agrDone + (planTotal ? ' <small>/ plan ' + planTotal + '</small>' : '')) +
+        chip('NOC Area Covered', depMapAreaPct('nocReceived') + '%') +
+        chip('Agreement Area Covered', depMapAreaPct('agreementSigned') + '%');
+
     el.innerHTML =
+        '<div class="depmap-stat-row">' + stats + '</div>' +
+        '<div class="depmap-legend-row">' +
         '<span class="depmap-legend-stat">' + depMapEsc(st.label) + ' &mdash; Actual ' + c.done + ' / Plan ' + (c.done + c.pending) + '</span>' +
         '<span class="depmap-legend-item"><span class="depmap-swatch" style="background:#16a34a"></span>Done ' + c.done + '</span>' +
         '<span class="depmap-legend-item"><span class="depmap-swatch" style="background:#f59e0b"></span>Pending ' + c.pending + '</span>' +
-        (c.noGps ? '<span class="depmap-legend-note">' + c.noGps + ' location(s) without GPS not shown</span>' : '');
+        ((st.key === 'noc' || st.key === 'agreement') ? '<span class="depmap-legend-item">Panchayats shaded: green = ' + depMapEsc(st.label) + ' done, amber = pending</span>' : '') +
+        (c.noGps ? '<span class="depmap-legend-note">' + c.noGps + ' location(s) without GPS not shown</span>' : '') +
+        '</div>';
 }
