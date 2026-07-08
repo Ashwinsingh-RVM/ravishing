@@ -1,4 +1,4 @@
-/* ==================== Login Screen ==================== */
+﻿/* ==================== Login Screen ==================== */
 .login-screen {
     position: fixed;
     inset: 0;
@@ -6757,7 +6757,7 @@ tr.zero-r:hover { opacity: 1; }
 .depmap-legend-note { color: #8794a1; font-size: 12px; margin-left: auto; }
 .depmap-dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
 .depmap-hpin { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-.depmap-tal-label { font-family: "DM Sans", sans-serif; font-weight: 800; font-size: 15px; color: #0b3b2e; text-shadow: 0 1px 2px rgba(255,255,255,0.85); white-space: nowrap; pointer-events: none; }
+.depmap-tal-label { font-family: "DM Sans", sans-serif; font-weight: 800; font-size: 19px; color: #0b3b2e; text-shadow: 0 1px 2px rgba(255,255,255,0.85); white-space: nowrap; pointer-events: none; }
 .depmap-popup h4 { margin: 0 0 5px; font-size: 14px; }
 .depmap-popup table { font-size: 12px; border-collapse: collapse; }
 .depmap-popup td { padding: 1.5px 8px 1.5px 0; color: #37424e; }
@@ -6771,7 +6771,7 @@ tr.zero-r:hover { opacity: 1; }
 .depmap-pin { background: none !important; border: none !important; }
 .depmap-pinsvg { filter: drop-shadow(0 2px 2.5px rgba(11,18,32,0.45)); }
 .depmap-tal-label { transform: translate(-50%, -50%); text-align: center; line-height: 1.15; }
-.depmap-tal-sub { display: block; font-size: 12px; font-weight: 800; color: #14532d; }
+.depmap-tal-sub { display: block; font-size: 15px; font-weight: 800; color: #14532d; }
 #depmap-legend { display: block; padding: 8px 14px; }
 .depmap-legend-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 6px; font-size: 13px; }
 .depmap-stat-row { display: flex; flex-wrap: wrap; gap: 8px 18px; padding-bottom: 6px; border-bottom: 1px dashed #e2e7ec; }

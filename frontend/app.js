@@ -18541,6 +18541,13 @@ async function depInitMap() {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             depData = await res.json();
         }
+        // NOC/Agreement layers read DRS-Tracker data
+        if (!vpData.length) {
+            try {
+                const rv = await fetch('/api/vps/all');
+                if (rv.ok) vpData = await rv.json();
+            } catch (e) { /* KPI fallbacks handle empty vpData */ }
+        }
         loading.style.display = 'none';
         layout.style.display = 'flex';
         _depMap = L.map('dep-map', { zoomSnap: 0.25, zoomDelta: 0.5, minZoom: 8.5, maxZoom: 18 })
@@ -18626,7 +18633,7 @@ function depMapBuildBoundaries() {
         fillColor: talColors[f.properties && f.properties.name] || '#cbd5e1',
         fillOpacity: 0.5,
     }) });
-    _depMapLayers.panchayats = L.geoJSON(PANCHAYAT_GEO, { style: { color: '#334155', weight: 0.8, fill: false, opacity: 0.75 } });
+    _depMapLayers.panchayats = L.geoJSON(PANCHAYAT_GEO, { style: { color: '#0f172a', weight: 1.3, fill: false, opacity: 0.95 } });
     _depMapLayers.ulbs = L.geoJSON(MUNI_GEO, { style: { color: '#334155', weight: 1, fillColor: '#6366f1', fillOpacity: 0.08 } });
 }
 
@@ -18681,9 +18688,12 @@ function depMapPinIcon(col) {
 // ── Panchayat/ULB coverage shading for NOC & Agreement ─────────────────
 
 function depMapEntKey(s) {
-    return String(s || '').toLowerCase()
-        .replace(/municipal council|municipality|\bmc\b|village panchayat|panchayat/g, '')
+    let k = String(s || '').toLowerCase()
+        .replace(/corporation of the city of|municipal corporation|municipal council|municipality|corporation|\bccp\b|\bmc\b|village panchayat|panchayat/g, '')
         .replace(/[^a-z0-9]+/g, '');
+    // known name variants: sheet/tracker vs boundary file
+    const alias = { cancona: 'canacona', curchoremcacora: 'curchorem', mormugao: 'vasco', murmugao: 'vasco' };
+    return alias[k] || k;
 }
 
 // entity -> 'done' | 'pending' for a stage field
@@ -18696,6 +18706,30 @@ function depMapEntityStatus(field) {
         else if (!(k in m)) m[k] = 'pending';
     });
     return m;
+}
+
+// NOC/Agreement come from DRS-Tracker (191 panchayats + 14 ULBs), same rule as KPI cards
+function depMapTrackerStatus(minStage) {
+    const m = {};
+    ((typeof vpData !== 'undefined' && vpData) || []).forEach(vp => {
+        const k = depMapEntKey(vp.vpName);
+        if (!k) return;
+        if (resolveStageNumber(vp) >= minStage) m[k] = 'done';
+        else if (!(k in m)) m[k] = 'pending';
+    });
+    return m;
+}
+
+function depMapStageStatusMap(st) {
+    if (st.key === 'noc') return depMapTrackerStatus(9);
+    if (st.key === 'agreement') return depMapTrackerStatus(11);
+    return depMapEntityStatus(st.field);
+}
+
+function depMapTrackerCounts(minStage) {
+    const vps = (typeof vpData !== 'undefined' && vpData) || [];
+    const done = vps.filter(vp => resolveStageNumber(vp) >= minStage).length;
+    return { done: done, total: vps.length };
 }
 
 function depMapRingArea(coords) {   // outer ring [[lng,lat],...] -> km²
@@ -18738,9 +18772,9 @@ function depMapAreas() {            // {areas: {entKey: km²}, total: km²}
     return _depMapAreaCache;
 }
 
-function depMapAreaPct(field) {
+function depMapAreaPct(minStage) {
     const A = depMapAreas();
-    const m = depMapEntityStatus(field);
+    const m = depMapTrackerStatus(minStage);
     let cov = 0;
     Object.keys(m).forEach(k => { if (m[k] === 'done' && A.areas[k]) cov += A.areas[k]; });
     return A.total ? Math.round(cov / A.total * 100) : 0;
@@ -18750,7 +18784,7 @@ function depMapRebuildCoverage() {
     if (_depMapLayers.coverage) { _depMap.removeLayer(_depMapLayers.coverage); _depMapLayers.coverage = null; }
     const st = depMapStageObj();
     if (st.key !== 'noc' && st.key !== 'agreement') return;
-    const m = depMapEntityStatus(st.field);
+    const m = depMapStageStatusMap(st);
     function style(f) {
         const p = f.properties || {};
         const s = m[depMapEntKey(p.name || p.authority)];
@@ -18767,6 +18801,12 @@ function depMapRebuildCoverage() {
 function depMapRebuildPins() {
     if (_depMapLayers.pins) { _depMap.removeLayer(_depMapLayers.pins); _depMapLayers.pins = null; }
     const st = depMapStageObj();
+    // NOC/Agreement are panchayat-level (DRS-Tracker): coverage shading instead of pins
+    if (st.key === 'noc' || st.key === 'agreement') {
+        const t = depMapTrackerCounts(st.key === 'noc' ? 9 : 11);
+        _depMapCounts = { done: t.done, pending: t.total - t.done, noGps: 0 };
+        return;
+    }
     const group = L.layerGroup();
     let done = 0, pending = 0, noGps = 0;
     depMapFiltered().forEach(l => {
@@ -18798,13 +18838,24 @@ function depMapRebuildTalukaOverlay() {
     if (!_depMapState.talukaOverlay) return;
     const st = depMapStageObj();
     const agg = {};
-    depMapFiltered().forEach(l => {
-        if (!depMapApplicable(l, st)) return;
-        const k = depMapTalukaKey(l.block);
-        if (!agg[k]) agg[k] = { done: 0, tot: 0 };
-        agg[k].tot++;
-        if (depIsDone(l[st.field])) agg[k].done++;
-    });
+    if (st.key === 'noc' || st.key === 'agreement') {
+        // taluka rollup from DRS-Tracker (VPs + ULBs)
+        const min = st.key === 'noc' ? 9 : 11;
+        ((typeof vpData !== 'undefined' && vpData) || []).forEach(vp => {
+            const k = depMapTalukaKey(vp.block);
+            if (!agg[k]) agg[k] = { done: 0, tot: 0 };
+            agg[k].tot++;
+            if (resolveStageNumber(vp) >= min) agg[k].done++;
+        });
+    } else {
+        depMapFiltered().forEach(l => {
+            if (!depMapApplicable(l, st)) return;
+            const k = depMapTalukaKey(l.block);
+            if (!agg[k]) agg[k] = { done: 0, tot: 0 };
+            agg[k].tot++;
+            if (depIsDone(l[st.field])) agg[k].done++;
+        });
+    }
     _depMapLayers.talukaFill = L.geoJSON(TALUKA_GEO, { style: f => {
         const a = agg[depMapTalukaKey(f.properties && f.properties.name)];
         const pct = a && a.tot ? a.done / a.tot : 0;
@@ -18908,13 +18959,20 @@ function depMapRenderSidebar() {
     // Stage layers (radio)
     const stEl = document.getElementById('depmap-stages');
     stEl.innerHTML = DEPMAP_STAGES.map(s => {
-        const appl = locs.filter(l => depMapApplicable(l, s));
-        const done = appl.filter(l => depIsDone(l[s.field])).length;
+        let done, tot;
+        if (s.key === 'noc' || s.key === 'agreement') {
+            const t = depMapTrackerCounts(s.key === 'noc' ? 9 : 11);   // DRS-Tracker: 191 VPs + 14 ULBs
+            done = t.done; tot = t.total;
+        } else {
+            const appl = locs.filter(l => depMapApplicable(l, s));
+            done = appl.filter(l => depIsDone(l[s.field])).length;
+            tot = appl.length;
+        }
         const on = s.key === _depMapState.stage;
         return depMapCheckRow(
             '<input type="radio" name="depmap-stage" value="' + s.key + '"' + (on ? ' checked' : '') + '>' +
             '<span class="depmap-swatch" style="background:' + s.color + '"></span>' + s.label +
-            '<span class="depmap-count">' + done + '/' + appl.length + '</span>', on);
+            '<span class="depmap-count">' + done + '/' + tot + '</span>', on);
     }).join('');
     stEl.querySelectorAll('input').forEach(inp =>
         inp.addEventListener('change', () => { _depMapState.stage = inp.value; depMapRefresh(); }));
@@ -18993,8 +19051,8 @@ function depMapRenderLegend() {
     const locs = depMapLocs();
     const planTotal = (depData && (depData.planTotal || depData.plan_total)) || 0;
     const identified = locs.length;
-    const nocDone = locs.filter(l => depIsDone(l.nocReceived)).length;
-    const agrDone = locs.filter(l => depIsDone(l.agreementSigned)).length;
+    const noc = depMapTrackerCounts(9);
+    const agr = depMapTrackerCounts(11);
 
     function chip(label, val) {
         return '<span class="depmap-stat"><span class="depmap-stat-l">' + label + '</span><span class="depmap-stat-v">' + val + '</span></span>';
@@ -19002,10 +19060,10 @@ function depMapRenderLegend() {
     const stats =
         chip('Location Identified', identified) +
         (planTotal ? chip('Pending from Plan', Math.max(0, planTotal - identified) + ' <small>of ' + planTotal + '</small>') : '') +
-        chip('NOC', nocDone + (planTotal ? ' <small>/ plan ' + planTotal + '</small>' : '')) +
-        chip('Agreement', agrDone + (planTotal ? ' <small>/ plan ' + planTotal + '</small>' : '')) +
-        chip('NOC Area Covered', depMapAreaPct('nocReceived') + '%') +
-        chip('Agreement Area Covered', depMapAreaPct('agreementSigned') + '%');
+        chip('NOC', noc.done + ' <small>of ' + noc.total + (planTotal ? ' &middot; plan ' + planTotal : '') + '</small>') +
+        chip('Agreement', agr.done + ' <small>of ' + agr.total + (planTotal ? ' &middot; plan ' + planTotal : '') + '</small>') +
+        chip('NOC Area Covered', depMapAreaPct(9) + '%') +
+        chip('Agreement Area Covered', depMapAreaPct(11) + '%');
 
     el.innerHTML =
         '<div class="depmap-stat-row">' + stats + '</div>' +
