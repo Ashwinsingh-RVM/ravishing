@@ -424,14 +424,14 @@ class GoogleSheetsService:
     # ==================== RVM Deployment Methods ====================
 
     def get_planned_rvms_total(self) -> int:
-        """Sum of the 'Planned_RVMs' column in the DRS-Tracker sheet.
+        """Sum of the 'Plan' column in the 'Plan RVM' sheet tab.
 
         Non-numeric cells (e.g. formula errors like #REF!) are treated as 0.
         Falls back to 301 only if the column/tab can't be read.
         """
         try:
             spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
-            worksheet = spreadsheet.worksheet("DRS-Tracker")
+            worksheet = spreadsheet.worksheet("Plan RVM")
             all_values = worksheet.get_all_values()
             if not all_values:
                 return 301
@@ -440,8 +440,7 @@ class GoogleSheetsService:
                 return " ".join(str(s).split()).strip().lower()
 
             headers = [_nk(h) for h in all_values[0]]
-            ci = next((i for i, h in enumerate(headers)
-                       if h in ('planned_rvms', 'planned rvms', 'planned_rvm', 'planned rvm')), None)
+            ci = next((i for i, h in enumerate(headers) if h == 'plan'), None)
             if ci is None:
                 return 301
             total = 0

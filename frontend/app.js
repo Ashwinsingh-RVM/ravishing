@@ -15433,6 +15433,11 @@ function depRenderProjectMetrics(s, locs) {
             'NOC Plan (RVMs)':     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
             'Agreement Signed':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
             'Agr. Plan (RVMs)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'Agr Signed (Govt)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'Agr Signed (Private)': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'NOC Received for Location':                '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/>',
+            'Agr Signed for Location (Govt Entity)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'Agr Signed for Location (Private Entity)': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
         };
         const p = paths[lbl] || '<circle cx="12" cy="12" r="9"/>';
         return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
@@ -15443,11 +15448,17 @@ function depRenderProjectMetrics(s, locs) {
         let f = null;
         if (lbl === 'RVM Installed') f = RVM_TARGET ? installed / RVM_TARGET : 0;
         else if (lbl === 'RC Installed') f = (typeof rcInstalled === 'number' && rcMainCount > 0) ? rcInstalled / rcMainCount : null;
-        else if (lbl === 'Location Identified') f = RVM_TARGET ? identified / RVM_TARGET : 0;
-        else if (lbl === 'NOC Received') f = s.totalEntities ? s.noc / s.totalEntities : 0;
+        else if (lbl === 'Location Identified') f = identified ? identPending / identified : 0;
+        else if (lbl === 'NOC Received') f = identPending ? nocLocDone / identPending : 0;
         else if (lbl === 'Agreement Signed') f = s.totalEntities ? s.agreement / s.totalEntities : 0;
         else if (lbl === 'NOC Plan (RVMs)') f = (typeof s.nocPlan === 'number' && RVM_TARGET) ? s.nocPlan / RVM_TARGET : null;
         else if (lbl === 'Agr. Plan (RVMs)') f = (typeof s.agrPlan === 'number' && RVM_TARGET) ? s.agrPlan / RVM_TARGET : null;
+        else if (lbl === 'Gap to Target') f = RVM_TARGET ? gap / RVM_TARGET : 0;
+        else if (lbl === 'Agr Signed (Govt)') f = identPending ? agrGovtDone / identPending : 0;
+        else if (lbl === 'Agr Signed (Private)') f = identPending ? agrPrivDone / identPending : 0;
+        else if (lbl === 'NOC Received for Location') f = identPending ? nocLocDone / identPending : 0;
+        else if (lbl === 'Agr Signed for Location (Govt Entity)') f = identPending ? agrGovtDone / identPending : 0;
+        else if (lbl === 'Agr Signed for Location (Private Entity)') f = identPending ? agrPrivDone / identPending : 0;
         if (f === null || !isFinite(f)) return null;
         return Math.max(0, Math.min(1, f));
     }
@@ -15460,7 +15471,7 @@ function depRenderProjectMetrics(s, locs) {
 
     // Project Metrics card (redesigned). Args/values unchanged; render only.
     function mkCard(lbl, val, sub, color, minW) {
-        const pipelineLbls = ['Location Identified', 'NOC Received', 'NOC Plan (RVMs)', 'Agreement Signed', 'Agr. Plan (RVMs)'];
+        const pipelineLbls = ['Gap to Target', 'Location Identified', 'NOC Received', 'NOC Plan (RVMs)', 'Agreement Signed', 'Agr. Plan (RVMs)', 'Agr Signed (Govt)', 'Agr Signed (Private)', 'NOC Received for Location', 'Agr Signed for Location (Govt Entity)', 'Agr Signed for Location (Private Entity)'];
         const isPipeline = pipelineLbls.indexOf(lbl) !== -1;
         const cls = 'dep-metric-card' + (isPipeline ? ' dep-metric-card--pipeline' : '');
         const numColor = isPipeline ? 'color:var(--dep-accent)' : '';
@@ -15525,14 +15536,21 @@ function depRenderProjectMetrics(s, locs) {
 
     const row1 = row1a; // used below for display
 
-    // Row 2: Pipeline Metrics (5 cards)
+    // Row 2: Pipeline - Gap to Target (5 cards)
+    // Pending = identified locations not yet machine-installed (the actual open pipeline).
     const totalE  = s.totalEntities || RVM_TARGET;
+    const isPrivateEntity = l => (l.entityType || '').trim().toLowerCase().indexOf('pri') === 0;
+    const pendingLocs  = locs.filter(l => !depIsDone(l.rvmDeployed));
+    const identPending = pendingLocs.length;
+    const nocLocDone   = pendingLocs.filter(l => depIsDone(l.nocReceived)).length;
+    const agrGovtDone  = pendingLocs.filter(l => depIsDone(l.agreementSigned) && !isPrivateEntity(l)).length;
+    const agrPrivDone  = pendingLocs.filter(l => depIsDone(l.agreementSigned) && isPrivateEntity(l)).length;
     const row2 = [
-        mkCard('Location Identified', identified,  `${Math.max(0,RVM_TARGET-identified)} RVM · ${rcData.length} RC locations`, identified >= RVM_TARGET ? '#0b6b4f' : '#d1453b', '110px'),
-        mkCard('NOC Received',     s.noc,               `${s.totalEntities} VPs · ${s.totalEntities - s.noc} pending`,           '#2f6fb0', '110px'),
-        mkCard('NOC Plan (RVMs)',  s.nocPlan || '—',   `planned RVMs covered by NOC`,                                            '#2f6fb0', '110px'),
-        mkCard('Agreement Signed', s.agreement,         `${s.totalEntities} VPs · ${s.totalEntities - s.agreement} pending`,     '#5b8fd4', '110px'),
-        mkCard('Agr. Plan (RVMs)', s.agrPlan || '—',   `planned RVMs covered by agreement`,                                      '#5b8fd4', '110px'),
+        mkCard('Gap to Target',        gap,          `${installed} of ${RVM_TARGET} installed`,   gapColor,  '110px'),
+        mkCard('Location Identified',  identPending, `${identified} identified − ${installed} installed`, identPending > 0 ? '#d1453b' : '#0b6b4f', '110px'),
+        mkCard('NOC Received for Location',                    nocLocDone,   `of ${identPending} pending locations`, '#2f6fb0', '110px'),
+        mkCard('Agr Signed for Location (Govt Entity)',        agrGovtDone,  `of ${identPending} pending locations`, '#5b8fd4', '110px'),
+        mkCard('Agr Signed for Location (Private Entity)',     agrPrivDone,  `of ${identPending} pending locations`, '#8b5cf6', '110px'),
     ].join('');
 
     // Row 3: Work KPI (6 cards) — dep-kpi style with icons
@@ -15586,7 +15604,7 @@ function depRenderProjectMetrics(s, locs) {
             `<div class="dep-metric-row dep-metric-row--dual">${row1b}</div>` +
         `</div>` +
         `<div class="dep-metric-section">` +
-            `<div class="dep-metric-heading">Pipeline Metrics</div>` +
+            `<div class="dep-metric-heading">Pipeline - Gap to Target</div>` +
             `<div class="dep-metric-row">${row2}</div>` +
         `</div>` +
         `<div class="card" style="margin-bottom:16px">` +
