@@ -6739,10 +6739,10 @@ tr.zero-r:hover { opacity: 1; }
 
 /* ── Deployment Map sub-tab ─────────────────────────────────────────── */
 .depmap-card { padding: 0; overflow: hidden; }
-.depmap-layout { display: flex; align-items: stretch; min-height: 74vh; }
-.depmap-side { width: 248px; flex: 0 0 248px; overflow-y: auto; max-height: 78vh; padding: 14px 14px 20px; border-right: 1px solid #e5e9ee; background: #fafbfc; }
+.depmap-layout { display: flex; align-items: stretch; min-height: 84vh; }
+.depmap-side { width: 248px; flex: 0 0 248px; overflow-y: auto; max-height: 88vh; padding: 14px 14px 20px; border-right: 1px solid #e5e9ee; background: #fafbfc; }
 .depmap-main { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
-#dep-map { flex: 1 1 auto; min-height: 62vh; z-index: 1; }
+#dep-map { flex: 1 1 auto; min-height: 72vh; z-index: 1; }
 .depmap-sec { margin-bottom: 16px; }
 .depmap-sec-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7683; margin-bottom: 7px; }
 .depmap-row { display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 8px; cursor: pointer; font-size: 13px; color: #24313f; user-select: none; }

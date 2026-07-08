@@ -18784,6 +18784,7 @@ function depMapRebuildCoverage() {
     if (_depMapLayers.coverage) { _depMap.removeLayer(_depMapLayers.coverage); _depMapLayers.coverage = null; }
     const st = depMapStageObj();
     if (st.key !== 'noc' && st.key !== 'agreement') return;
+    if (_depMapState.talukaOverlay) return;   // overlay on = block-level view only, no panchayat shading
     const m = depMapStageStatusMap(st);
     function style(f) {
         const p = f.properties || {};
@@ -19053,6 +19054,14 @@ function depMapRenderLegend() {
     const identified = locs.length;
     const noc = depMapTrackerCounts(9);
     const agr = depMapTrackerCounts(11);
+    // Planned RVMs (DRS-Tracker Planned_RVMs column) rolled up by stage
+    const vps = (typeof vpData !== 'undefined' && vpData) || [];
+    function plannedSum(minStage) {
+        return vps.filter(vp => resolveStageNumber(vp) >= minStage)
+                  .reduce((s, vp) => s + (parseInt(vp.plannedRvms) || 0), 0);
+    }
+    const nocPlanRvm = plannedSum(9);
+    const agrPlanRvm = plannedSum(11);
 
     function chip(label, val) {
         return '<span class="depmap-stat"><span class="depmap-stat-l">' + label + '</span><span class="depmap-stat-v">' + val + '</span></span>';
@@ -19060,8 +19069,11 @@ function depMapRenderLegend() {
     const stats =
         chip('Location Identified', identified) +
         (planTotal ? chip('Pending from Plan', Math.max(0, planTotal - identified) + ' <small>of ' + planTotal + '</small>') : '') +
-        chip('NOC', noc.done + ' <small>of ' + noc.total + (planTotal ? ' &middot; plan ' + planTotal : '') + '</small>') +
-        chip('Agreement', agr.done + ' <small>of ' + agr.total + (planTotal ? ' &middot; plan ' + planTotal : '') + '</small>') +
+        chip('NOC', noc.done + ' <small>of ' + noc.total + '</small>') +
+        chip('NOC Plan RVM', nocPlanRvm + (planTotal ? ' <small>of ' + planTotal + '</small>' : '')) +
+        chip('Agreement', agr.done + ' <small>of ' + agr.total + '</small>') +
+        chip('Agreement Plan RVM', agrPlanRvm + (planTotal ? ' <small>of ' + planTotal + '</small>' : '')) +
+        (planTotal ? chip('RVM Plan Pending', (planTotal - agrPlanRvm) + ' <small>= ' + planTotal + ' &minus; ' + agrPlanRvm + '</small>') : '') +
         chip('NOC Area Covered', depMapAreaPct(9) + '%') +
         chip('Agreement Area Covered', depMapAreaPct(11) + '%');
 
