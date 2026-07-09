@@ -452,21 +452,26 @@ class GoogleSheetsService:
             return 301
 
     def get_deployment_data(self) -> List[Dict]:
-        """Fetch all rows from the 'RVM Deployment' sheet tab."""
+        """Fetch all rows from the 'RVM_Deploy' sheet tab. Headers are on row 2
+        (row 1 holds merged section titles), fed via an IMPORTRANGE from a
+        separate 'Master Base' spreadsheet spanning columns A:AK — any columns
+        added later (e.g. Electrical Done, Machine Date) live beyond AK and are
+        picked up automatically since we read the whole sheet, not a fixed range.
+        """
         try:
             spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
             try:
-                worksheet = spreadsheet.worksheet("RVM Deployment")
+                worksheet = spreadsheet.worksheet("RVM_Deploy")
             except Exception:
                 return []
             # Use get_all_values() instead of get_all_records() to tolerate
             # duplicate or blank column headers that break get_all_records()
             all_values = worksheet.get_all_values()
-            if not all_values:
+            if len(all_values) < 2:
                 return []
-            headers = [str(h).strip() for h in all_values[0]]
+            headers = [str(h).strip() for h in all_values[1]]
             records = []
-            for row_vals in all_values[1:]:
+            for row_vals in all_values[2:]:
                 row = {}
                 for i, header in enumerate(headers):
                     row[header] = row_vals[i].strip() if i < len(row_vals) else ''
@@ -507,6 +512,14 @@ class GoogleSheetsService:
                 if not loc_name and not entity_name:
                     continue
                 current_stage = self._compute_deployment_stage(row)
+                # Shed done = Delivery Status OR Installation Status is Yes (two separate
+                # sub-steps in RVM_Deploy; the old tab had one combined status column).
+                shed_delivery = g('Delivery Status')
+                shed_install = g('Installation Status')
+                shed_status = 'Yes' if (shed_delivery == 'Yes' or shed_install == 'Yes') else 'Pending'
+                # Final Check uses Ready/Not Ready tokens (not Yes/Done like other columns).
+                final_check = g('Final Check')
+                machine_live = 'Yes' if final_check in ('Ready', 'Yes', 'Done') else final_check
                 locations.append({
                     'locationName':    loc_name,
                     'block':           g('Block'),
@@ -516,24 +529,29 @@ class GoogleSheetsService:
                     'collectionPoint': g('Collection Point', 'Collection_Point'),
                     'nocReceived':     g('NOC Received', 'NOC_Received'),
                     'agreementSigned': g('Service Agreement Signed', 'Service_Agreement_Signed'),
-                    'siteClearanceReq':    g('Site Clearance Requirement'),
+                    'siteClearanceReq':    g('Site Clearance requirement'),
                     'siteClearanceStatus': g('Site Clearance Status'),
                     'civilWorkReq':    g('Civil Work Requirement'),
                     'civilWorkStatus': g('Civil Work Status'),
-                    'electricalStatus': g('Electrical Work status', 'Electrical Connection for Installation'),
+                    'electricalStatus': g('Electrical Connection for Installation'),
+                    'electricalDone':   g('Plug Point Installation Status', 'Electrical Done'),
                     'shedRequired': g('Shed Required'),
                     'shedType':     g('Shed Type'),
-                    'shedStatus':   g('Shed Installation Status', 'Shed Status'),
+                    'shedDeliveryStatus': shed_delivery,
+                    'shedInstallStatus':  shed_install,
+                    'shedStatus':   shed_status,
                     'internetRequired': g('Internet Required'),
                     'internetStatus':   g('Internet Status'),
                     'cctvStatus': g('CCTV Installation Status'),
                     'rvmDelivery': g('RVM Delivery'),
-                    'rvmDeployed': g('Machine install', 'RVM install', 'RVM Deployed with Base Fixing'),
-                    'finalCheck':  g('Final Check'),
-                    'machineLive': g('RVM Working Condition Check'),
-                    'installDate': g('Machine install date', 'Machine Install Date'),
+                    'rvmDeployed': g('RVM Deployed with base fixing', 'RVM Deployed with Base Fixing', 'Machine install', 'RVM install'),
+                    'finalCheck':  final_check,
+                    'machineLive': machine_live,
+                    'rvmWorkingCondition': g('RVM Working Condition Check'),
+                    'installDate': g('Machine Date', 'Machine Install Date', 'Deployement Date', 'Deployment Date'),
                     'lat': g('Lat', 'Latitude'),
                     'lng': g('Long', 'Longitude', 'Lng'),
+                    'blockPOC': g('Block POC'),
                     'currentStage': current_stage,
                 })
             return locations

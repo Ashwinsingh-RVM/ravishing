@@ -13720,6 +13720,28 @@ let depDeadline = '2026-07-15';
 
 let depPlanTotal = 301;
 
+let depRvmCpCount = 0;
+
+let depRvmTargetOverride = null;
+
+let depRcTargetOverride = null;
+
+function depGetRvmTarget() { return depRvmTargetOverride != null ? depRvmTargetOverride : Math.max(depPlanTotal, depRvmCpCount); }
+
+function depGetRcTarget() { return depRcTargetOverride != null ? depRcTargetOverride : 25; }
+
+function depSetRvmTarget(v) {
+    const n = parseInt(v, 10);
+    depRvmTargetOverride = (n > 0) ? n : null;
+    depApplyFilters();
+}
+
+function depSetRcTarget(v) {
+    const n = parseInt(v, 10);
+    depRcTargetOverride = (n > 0) ? n : null;
+    depApplyFilters();
+}
+
 let depFilteredLocs = null;
 
 
@@ -14496,12 +14518,13 @@ function depComputeSummary(locs) {
 
     }
 
-    // Gated stats for Civil/Shed: denominator = rows where the requirement is
-    // 'Yes' or blank (blank treated as required); "done" = status is Yes or Done.
+    // Gated stats for Civil/Shed: only rows where the requirement column is
+    // strictly 'Yes' are considered at all — both numerator (done) and
+    // denominator (total/pct) are scoped to that required subset.
     function psGated(reqKey, statusKey) {
-        const req = locs.filter(l => l[reqKey] === 'Yes' || !l[reqKey]);
+        const req = locs.filter(l => l[reqKey] === 'Yes');
         const done = req.filter(l => depIsDone(l[statusKey])).length;
-        const not_required = locs.filter(l => l[reqKey] === 'No').length;
+        const not_required = locs.filter(l => l[reqKey] !== 'Yes').length;
         return { done, pending: Math.max(0, req.length - done), not_required, required: req.length, total: req.length, pct: req.length ? Math.round(done / req.length * 100) : 0 };
     }
 
@@ -14571,7 +14594,7 @@ function depComputeSummary(locs) {
 
         civil: psGated('civilWorkReq', 'civilWorkStatus'),
 
-        shed: psGated('shedRequired', 'shedStatus'), electrical: psTotal('electricalStatus'),
+        shed: psGated('shedRequired', 'shedStatus'), electrical: psTotal('electricalDone'),
 
         internet: psTotal('internetStatus'), cctv: psTotal('cctvStatus'),
 
@@ -14904,7 +14927,7 @@ function depRenderKPIs(s) {
 
 function depRenderFunnel(s) {
 
-    const T = depPlanTotal;
+    const identified = s.total;
 
     const funnelStages = [
 
@@ -14916,21 +14939,23 @@ function depRenderFunnel(s) {
 
         { label: 'Shed Ready',       val: s.shed.done,                                    color: '#8b6914', denom: s.shed.required },
 
-        { label: 'Electrical Ready', val: s.electrical.done, color: '#c27a10', denom: T },
+        { label: 'Electrical Ready', val: s.electrical.done, color: '#c27a10', denom: identified },
 
-        { label: 'Internet Ready',   val: s.internet.done,                                color: '#9b7b2e', denom: T },
+        { label: 'Internet Ready',   val: s.internet.done,                                color: '#9b7b2e', denom: identified },
 
-        { label: 'CCTV Done',        val: s.cctv.done,                                    color: '#6b4e9e', denom: T },
+        { label: 'CCTV Done',        val: s.cctv.done,                                    color: '#6b4e9e', denom: identified },
 
-        { label: 'Machine Installed', val: s.installed.done,                              color: '#0b6b4f', denom: T },
+        { label: 'Machine Delivery',  val: s.delivered,                                   color: '#2563eb', denom: identified },
 
-        { label: 'Machine Live',      val: s.live,                                        color: '#085f40', denom: T },
+        { label: 'Machine Installed', val: s.installed.done,                              color: '#0b6b4f', denom: identified },
+
+        { label: 'Machine Live',      val: s.live,                                        color: '#085f40', denom: identified },
 
     ];
 
     document.getElementById('dep-funnel').innerHTML = funnelStages.map((st, i) => {
 
-        const denom = st.denom || T;
+        const denom = st.denom || identified;
 
         const p     = Math.round(st.val / denom * 100);
 
@@ -15303,43 +15328,55 @@ function depRenderBlockers(locs) {
 
     // Site gap from deployment sheet
 
-    const siteGap = Math.max(0, depPlanTotal - locs.length);
+    const combinedTarget = depGetRvmTarget() + depGetRcTarget();
+    const siteGap = Math.max(0, combinedTarget - locs.length);
 
 
 
     // NOC/Agreement from vpData (same source as KPI cards and Progress tab)
 
-    let nocPending, agrPending;
+    let nocPending;
 
     if (vpData.length > 0) {
 
         const nocReceived = vpData.filter(vp => resolveStageNumber(vp) >= 9).length;
 
-        const agrSigned   = vpData.filter(vp => resolveStageNumber(vp) >= 11).length;
-
         nocPending = vpData.length - nocReceived;
-
-        agrPending = nocReceived - agrSigned;
 
     } else {
 
         nocPending = locs.filter(l => l.nocReceived !== 'Yes').length;
 
-        agrPending = locs.filter(l => l.nocReceived === 'Yes' && l.agreementSigned !== 'Yes').length;
-
     }
 
+    const agrPending = locs.filter(l => !depIsDone(l.agreementSigned)).length;
 
 
 
+
+
+    // Locations where Shed Required / Civil Work Requirement hasn't even been filled
+    // in yet — the team doesn't know if there's a plan for these locations.
+    const noPlanYet = locs.filter(l => !l.shedRequired || !l.civilWorkReq).length;
+
+    // Machine/Shed delivered but not yet installed — work is in transit/on-site
+    // but hasn't been fitted/finished.
+    const machineDeliveredNotInstalled = locs.filter(l => depIsDone(l.rvmDelivery) && !depIsDone(l.rvmDeployed)).length;
+    const shedDeliveredNotInstalled = locs.filter(l => l.shedRequired === 'Yes' && depIsDone(l.shedDeliveryStatus) && !depIsDone(l.shedInstallStatus)).length;
 
     const blockers = [
 
-        siteGap > 0      && { count: siteGap,      label: 'Sites still needed',       color: '#d1453b', bg: '#fff5f5', detail: `${locs.length} of ${depPlanTotal} locations identified` },
+        siteGap > 0      && { count: siteGap,      label: 'Sites still needed',       color: '#d1453b', bg: '#fff5f5', detail: `${locs.length} of ${combinedTarget} locations identified` },
 
         nocPending > 0   && { count: nocPending,   label: 'NOC not received',          color: '#e08a1e', bg: '#fffbf0', detail: 'Panchayat/municipality sign-off pending' },
 
-        agrPending > 0   && { count: agrPending,   label: 'Agreement pending',         color: '#c27a10', bg: '#fef9f0', detail: `${agrPending} NOC done, agreement not signed yet` },
+        agrPending > 0   && { count: agrPending,   label: 'Agreement pending',         color: '#c27a10', bg: '#fef9f0', detail: `of ${locs.length} locations identified` },
+
+        noPlanYet > 0    && { count: noPlanYet,     label: 'No plan yet (Shed/Civil)', color: '#6b4e9e', bg: '#f5f3fb', detail: 'Shed Required or Civil Work Requirement not filled in yet' },
+
+        machineDeliveredNotInstalled > 0 && { count: machineDeliveredNotInstalled, label: 'Machine delivered, not installed', color: '#2563eb', bg: '#eff6ff', detail: 'RVM Delivery done, base fixing pending' },
+
+        shedDeliveredNotInstalled > 0    && { count: shedDeliveredNotInstalled,    label: 'Shed delivered, not installed',    color: '#92400e', bg: '#fef8f0', detail: 'Shed Delivery Status done, Installation Status pending' },
 
     ].filter(Boolean);
 
@@ -15387,15 +15424,24 @@ function depRenderProjectMetrics(s, locs) {
 
     if (!el) return;
 
-    const RVM_TARGET  = depPlanTotal;
+    const isRC = l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') !== -1;
+    const isPrivateEntity = l => (l.entityType || '').trim().toLowerCase().indexOf('pri') === 0;
+    // Installed = RVM Deployed with base fixing only. Delivery is a separate, earlier stage.
+    const isInstalled = l => depIsDone(l.rvmDeployed);
+    const rvmLocs = locs.filter(l => !isRC(l));
+    const rcLocs  = locs.filter(l => isRC(l));
 
-    const identified  = locs.length;
+    const RVM_TARGET = depGetRvmTarget();
+    const RC_TARGET  = depGetRcTarget();
 
-    const installed   = s.installed.done;
+    const identified   = locs.length;
+    const rvmInstalled = rvmLocs.filter(isInstalled).length;
+    const rcInstalled  = rcLocs.filter(isInstalled).length;
+    const installed    = rvmInstalled + rcInstalled;
+    const live         = locs.filter(l => depIsDone(l.machineLive)).length;
 
-    const live        = s.live ? (s.live.done !== undefined ? s.live.done : s.live) : 0;
-
-    const gap         = Math.max(0, RVM_TARGET - installed);
+    const gap    = Math.max(0, RVM_TARGET - rvmInstalled);
+    const rcGap  = Math.max(0, RC_TARGET - rcInstalled);
 
     const deadlineStr = depGetDeadline();
 
@@ -15405,16 +15451,17 @@ function depRenderProjectMetrics(s, locs) {
 
     const daysLeft    = Math.max(1, Math.ceil((deadline - today) / 86400000));
 
-    const rrr         = (gap / daysLeft).toFixed(1);
+    const rrr   = (gap / daysLeft).toFixed(1);
+    const rcRrr = (rcGap / daysLeft).toFixed(1);
 
     const deadlineFmt = deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
 
     const dColor      = daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f';
 
-    // Shed: only count rows where Shed Required = Yes
-    const shedRequired = locs.filter(l => l.shedRequired === 'Yes' || !l.shedRequired).length;
+    // Shed: only rows where Shed Required is strictly 'Yes' count, for both done and total.
+    const shedRequired = locs.filter(l => l.shedRequired === 'Yes').length;
 
-    const shedDone     = locs.filter(l => (l.shedRequired === 'Yes' || !l.shedRequired) && depIsDone(l.shedStatus)).length;
+    const shedDone     = locs.filter(l => l.shedRequired === 'Yes' && depIsDone(l.shedStatus)).length;
 
     // Icon helper for redesigned Project/Pipeline metric cards (separate from mkWkIcon).
     // Icon is derived from the card label — call-site arguments are never touched.
@@ -15429,12 +15476,6 @@ function depRenderProjectMetrics(s, locs) {
             'Gap to Target':       '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
             'Run Rate Needed':     '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
             'Location Identified': '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
-            'NOC Received':        '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/>',
-            'NOC Plan (RVMs)':     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
-            'Agreement Signed':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-            'Agr. Plan (RVMs)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-            'Agr Signed (Govt)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-            'Agr Signed (Private)': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
             'NOC Received for Location':                '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/>',
             'Agr Signed for Location (Govt Entity)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
             'Agr Signed for Location (Private Entity)': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
@@ -15446,19 +15487,8 @@ function depRenderProjectMetrics(s, locs) {
     // Progress-bar fill (0..1) derived from closure vars, keyed by label. Visual only.
     function depMetricFill(lbl) {
         let f = null;
-        if (lbl === 'RVM Installed') f = RVM_TARGET ? installed / RVM_TARGET : 0;
-        else if (lbl === 'RC Installed') f = (typeof rcInstalled === 'number' && rcMainCount > 0) ? rcInstalled / rcMainCount : null;
-        else if (lbl === 'Location Identified') f = identified ? identPending / identified : 0;
-        else if (lbl === 'NOC Received') f = identPending ? nocLocDone / identPending : 0;
-        else if (lbl === 'Agreement Signed') f = s.totalEntities ? s.agreement / s.totalEntities : 0;
-        else if (lbl === 'NOC Plan (RVMs)') f = (typeof s.nocPlan === 'number' && RVM_TARGET) ? s.nocPlan / RVM_TARGET : null;
-        else if (lbl === 'Agr. Plan (RVMs)') f = (typeof s.agrPlan === 'number' && RVM_TARGET) ? s.agrPlan / RVM_TARGET : null;
-        else if (lbl === 'Gap to Target') f = RVM_TARGET ? gap / RVM_TARGET : 0;
-        else if (lbl === 'Agr Signed (Govt)') f = identPending ? agrGovtDone / identPending : 0;
-        else if (lbl === 'Agr Signed (Private)') f = identPending ? agrPrivDone / identPending : 0;
-        else if (lbl === 'NOC Received for Location') f = identPending ? nocLocDone / identPending : 0;
-        else if (lbl === 'Agr Signed for Location (Govt Entity)') f = identPending ? agrGovtDone / identPending : 0;
-        else if (lbl === 'Agr Signed for Location (Private Entity)') f = identPending ? agrPrivDone / identPending : 0;
+        if (lbl === 'RVM Installed') f = RVM_TARGET ? rvmInstalled / RVM_TARGET : 0;
+        else if (lbl === 'RC Installed') f = RC_TARGET ? rcInstalled / RC_TARGET : 0;
         if (f === null || !isFinite(f)) return null;
         return Math.max(0, Math.min(1, f));
     }
@@ -15470,11 +15500,11 @@ function depRenderProjectMetrics(s, locs) {
     }
 
     // Project Metrics card (redesigned). Args/values unchanged; render only.
+    const pipelineLbls = ['Gap to Target', 'Location Identified', 'NOC Received for Location', 'Agr Signed for Location (Govt Entity)', 'Agr Signed for Location (Private Entity)'];
     function mkCard(lbl, val, sub, color, minW) {
-        const pipelineLbls = ['Gap to Target', 'Location Identified', 'NOC Received', 'NOC Plan (RVMs)', 'Agreement Signed', 'Agr. Plan (RVMs)', 'Agr Signed (Govt)', 'Agr Signed (Private)', 'NOC Received for Location', 'Agr Signed for Location (Govt Entity)', 'Agr Signed for Location (Private Entity)'];
         const isPipeline = pipelineLbls.indexOf(lbl) !== -1;
         const cls = 'dep-metric-card' + (isPipeline ? ' dep-metric-card--pipeline' : '');
-        const numColor = isPipeline ? 'color:var(--dep-accent)' : '';
+        const numColor = isPipeline ? 'color:' + color : '';
         return '<div class="' + cls + '" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '95px') + '">' +
             '<div class="dep-metric-top">' +
                 '<div class="dep-metric-label">' + lbl + '</div>' +
@@ -15486,9 +15516,10 @@ function depRenderProjectMetrics(s, locs) {
         '</div>';
     }
 
-    // Wide dual card (Gap to Target / Run Rate Needed). Args/values unchanged; render only.
-    function mkDualCard(lbl, valRvm, valRc, color, minW) {
-        return '<div class="dep-metric-card dep-metric-card--dual" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '160px') + '">' +
+    // Wide dual card (RVM | RC side by side). Used for Gap to Target / Run Rate Needed
+    // and for every Pipeline - Gap to Target card.
+    function mkDualCard(lbl, valRvm, valRc, color, minW, subRvm, subRc) {
+        return '<div class="dep-metric-card dep-metric-card--dual dep-metric-card--pipeline" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '160px') + '">' +
             '<div class="dep-metric-top">' +
                 '<div class="dep-metric-label">' + lbl + '</div>' +
                 '<div class="dep-metric-icon">' + depMetricIcon(lbl, color) + '</div>' +
@@ -15496,66 +15527,64 @@ function depRenderProjectMetrics(s, locs) {
             '<div class="dep-dual-cols">' +
                 '<div class="dep-dual-col">' +
                     '<div class="dep-dual-key">RVM</div>' +
-                    '<div class="dep-dual-val">' + valRvm + '</div>' +
+                    '<div class="dep-dual-val" style="color:' + color + '">' + valRvm + '</div>' +
+                    (subRvm ? '<div class="dep-metric-sub">' + subRvm + '</div>' : '') +
                 '</div>' +
                 '<div class="dep-dual-div"></div>' +
                 '<div class="dep-dual-col">' +
                     '<div class="dep-dual-key">RC</div>' +
-                    '<div class="dep-dual-val dep-dual-val--rc">' + valRc + '</div>' +
+                    '<div class="dep-dual-val dep-dual-val--rc" style="color:' + color + '">' + valRc + '</div>' +
+                    (subRc ? '<div class="dep-metric-sub">' + subRc + '</div>' : '') +
                 '</div>' +
             '</div>' +
         '</div>';
     }
 
-    // RC metrics — target from RC Deployment tab, installed from main RVM Deployment (CP type = RC)
-    const rcTarget    = rcData.reduce((s, l) => s + (parseInt(l.rcTarget) || 0), 0) || (rcData.length ? 0 : '—');
-    const rcMainCount = s.rcMainCount || 0;
-    const rcInstalled = typeof s.rcInstalledFromMain === 'number' ? s.rcInstalledFromMain :
-                        rcData.filter(l => l.rcDeployed === 'Done').length;
-    const rcGap       = typeof rcTarget === 'number' && typeof rcInstalled === 'number'
-                        ? Math.max(0, rcTarget - rcInstalled) : '—';
-    const rcRrr       = typeof rcGap === 'number' && daysLeft > 0
-                        ? (rcGap / daysLeft).toFixed(1) : '—';
-
-    // Row 1a: Targets + Installed
+    // Row 1a: Targets + Installed. RVM/RC Target are editable — default 302 / 25,
+    // overridable via the input (session-scoped, same pattern as the deadline picker).
     const gapColor = gap > 50 ? '#d1453b' : '#e08a1e';
+    const canEditTarget = currentUser && currentUser.role === 'admin';
+    const targetInput = (id, value, onchange) => canEditTarget
+        ? `<input type="number" min="0" id="${id}" value="${value}" onchange="${onchange}" class="dep-target-input" style="width:92px;font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;line-height:1.05;color:var(--gray-900);border:1px solid #d8dee5;border-radius:6px;padding:3px 6px;background:#fff;box-sizing:border-box">`
+        : String(value);
     const row1a = [
-        mkCard('RVM Target',    RVM_TARGET,    'Go-live ' + deadlineFmt,                              '#1e6b5c'),
-        mkCard('RC Target',     typeof rcTarget === 'number' ? rcTarget : '—', rcData.length ? 'from ' + rcData.length + ' RC locations' : 'Not in data source', '#6366f1'),
+        mkCard('RVM Target',    targetInput('dep-rvm-target-input', RVM_TARGET, 'depSetRvmTarget(this.value)'), 'Go-live ' + deadlineFmt, '#1e6b5c'),
+        mkCard('RC Target',     targetInput('dep-rc-target-input', RC_TARGET, 'depSetRcTarget(this.value)'),     'Go-live ' + deadlineFmt, '#6366f1'),
         mkCard('Target Date',   deadlineFmt,   'Go-live target date',                                 dColor),
         mkCard('Days Left',     daysLeft,      'until ' + deadlineStr,                                dColor),
-        mkCard('RVM Installed', installed,     Math.round(installed/RVM_TARGET*100) + '% of ' + RVM_TARGET, '#0b6b4f'),
-        mkCard('RC Installed',  rcInstalled,   rcMainCount > 0 ? Math.round(rcInstalled/(rcMainCount||1)*100) + '% of ' + rcMainCount + ' RC CPs' : 'No RC Collection Points', '#6366f1'),
+        mkCard('RVM Installed', rvmInstalled,  Math.round(rvmInstalled/(RVM_TARGET||1)*100) + '% of ' + RVM_TARGET, '#0b6b4f'),
+        mkCard('RC Installed',  rcInstalled,   Math.round(rcInstalled/(RC_TARGET||1)*100) + '% of ' + RC_TARGET, '#6366f1'),
     ].join('');
 
     // Row 1b: GAP + RRR dual cards (larger, prominent)
     const row1b = [
-        mkDualCard('Gap to Target',   gap,  rcGap,   gapColor,  '200px'),
-        mkDualCard('Run Rate Needed', rrr + '/day', typeof rcRrr === 'number' ? rcRrr + '/day' : '—', '#2f6fb0', '200px'),
+        mkDualCard('Gap to Target',   gap,          rcGap,          gapColor,  '200px'),
+        mkDualCard('Run Rate Needed', rrr + '/day', rcRrr + '/day', '#2f6fb0', '200px'),
     ].join('');
 
     const row1 = row1a; // used below for display
 
-    // Row 2: Pipeline - Gap to Target (5 cards)
-    // Pending = identified locations not yet machine-installed (the actual open pipeline).
-    const totalE  = s.totalEntities || RVM_TARGET;
-    const isPrivateEntity = l => (l.entityType || '').trim().toLowerCase().indexOf('pri') === 0;
-    const pendingLocs  = locs.filter(l => !depIsDone(l.rvmDeployed));
-    const identPending = pendingLocs.length;
+    // Row 2: Pipeline - Gap to Target — combined RVM+RC single numbers.
+    // Pending = identified locations not yet installed (the actual open pipeline).
+    const gapTotal = gap + rcGap;
+    const pendingLocs     = locs.filter(l => !isInstalled(l));
+    const identPending    = pendingLocs.length;
+    const pendingGovt     = pendingLocs.filter(l => !isPrivateEntity(l));
+    const pendingPriv     = pendingLocs.filter(l => isPrivateEntity(l));
     const nocLocDone   = pendingLocs.filter(l => depIsDone(l.nocReceived)).length;
-    const agrGovtDone  = pendingLocs.filter(l => depIsDone(l.agreementSigned) && !isPrivateEntity(l)).length;
-    const agrPrivDone  = pendingLocs.filter(l => depIsDone(l.agreementSigned) && isPrivateEntity(l)).length;
+    const agrGovtDone  = pendingGovt.filter(l => depIsDone(l.agreementSigned)).length;
+    const agrPrivDone  = pendingPriv.filter(l => depIsDone(l.agreementSigned)).length;
     const row2 = [
-        mkCard('Gap to Target',        gap,          `${installed} of ${RVM_TARGET} installed`,   gapColor,  '110px'),
-        mkCard('Location Identified',  identPending, `${identified} identified − ${installed} installed`, identPending > 0 ? '#d1453b' : '#0b6b4f', '110px'),
-        mkCard('NOC Received for Location',                    nocLocDone,   `of ${identPending} pending locations`, '#2f6fb0', '110px'),
-        mkCard('Agr Signed for Location (Govt Entity)',        agrGovtDone,  `of ${identPending} pending locations`, '#5b8fd4', '110px'),
-        mkCard('Agr Signed for Location (Private Entity)',     agrPrivDone,  `of ${identPending} pending locations`, '#8b5cf6', '110px'),
+        mkCard('Gap to Target', gapTotal, `${installed} of ${RVM_TARGET + RC_TARGET} installed`, gapColor, '150px'),
+        mkCard('Location Identified', identPending, `${identified} identified − ${installed} installed`, '#d1453b', '150px'),
+        mkCard('NOC Received for Location', nocLocDone, `of ${identPending} pending locations`, '#2f6fb0', '150px'),
+        mkCard('Agr Signed for Location (Govt Entity)', agrGovtDone, `of ${pendingGovt.length} pending (govt entity)`, '#5b8fd4', '150px'),
+        mkCard('Agr Signed for Location (Private Entity)', agrPrivDone, `of ${pendingPriv.length} pending (private entity)`, '#8b5cf6', '150px'),
     ].join('');
 
     // Row 3: Work KPI (6 cards) — dep-kpi style with icons
-    const civilReq  = locs.filter(l => l.civilWorkReq === 'Yes' || !l.civilWorkReq).length;
-    const civilDone = locs.filter(l => (l.civilWorkReq === 'Yes' || !l.civilWorkReq) && depIsDone(l.civilWorkStatus)).length;
+    const civilReq  = locs.filter(l => l.civilWorkReq === 'Yes').length;
+    const civilDone = locs.filter(l => l.civilWorkReq === 'Yes' && depIsDone(l.civilWorkStatus)).length;
     const elecDone  = s.electrical ? s.electrical.done  : 0;
     const elecReq   = s.electrical ? (s.electrical.done + s.electrical.pending) : 0;
     const inetDone  = s.internet ? s.internet.done  : 0;
@@ -15634,19 +15663,23 @@ function depRenderBlockSummary(locs) {
 
 
 
-    const T = depPlanTotal;
+    const T = depGetRvmTarget();
 
-    const totalInstalled = locs.filter(l => depIsDone(l.rvmDeployed)).length;
+    // Installed = RVM Deployed with base fixing only. Delivery is a separate, earlier stage.
+    const isInstalled = l => depIsDone(l.rvmDeployed);
+
+    const totalInstalled = locs.filter(isInstalled).length;
 
     const instPct = Math.round(totalInstalled / T * 100);
 
 
 
-    function bv(b, key, val) { return locs.filter(l => l.block === b && (val === 'Done' ? depIsDone(l[key]) : l[key] === val)).length; }
+    // b === null means "all blocks" — used to compute the totals row.
+    function bv(b, key, val) { return locs.filter(l => (b == null || l.block === b) && (val === 'Done' ? depIsDone(l[key]) : l[key] === val)).length; }
 
-    function btotal(b) { return locs.filter(l => l.block === b).length; }
+    function btotal(b) { return locs.filter(l => b == null || l.block === b).length; }
 
-    function breq(b, key) { return locs.filter(l => l.block === b && l[key] !== 'Not Required').length; }
+    function breq(b, key) { return locs.filter(l => (b == null || l.block === b) && l[key] !== 'Not Required').length; }
 
     function bEntityTotal(b) {
 
@@ -15684,11 +15717,11 @@ function depRenderBlockSummary(locs) {
 
     const cols = [
 
-        { label:'Civil Work', fn: b => { const req = locs.filter(l => l.block === b && (l.civilWorkReq === 'Yes' || !l.civilWorkReq)).length; const done = locs.filter(l => l.block === b && (l.civilWorkReq === 'Yes' || !l.civilWorkReq) && depIsDone(l.civilWorkStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
+        { label:'Civil Work', fn: b => { const req = locs.filter(l => (b == null || l.block === b) && l.civilWorkReq === 'Yes').length; const done = locs.filter(l => (b == null || l.block === b) && l.civilWorkReq === 'Yes' && depIsDone(l.civilWorkStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
 
-        { label:'Shed',      fn: b => { const req = locs.filter(l => l.block === b && (l.shedRequired === 'Yes' || !l.shedRequired)).length; const done = locs.filter(l => l.block === b && (l.shedRequired === 'Yes' || !l.shedRequired) && depIsDone(l.shedStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
+        { label:'Shed',      fn: b => { const req = locs.filter(l => (b == null || l.block === b) && l.shedRequired === 'Yes').length; const done = locs.filter(l => (b == null || l.block === b) && l.shedRequired === 'Yes' && depIsDone(l.shedStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
 
-        { label:'Electrical',fn: b => `${bv(b,'electricalStatus','Done')}/${breq(b,'electricalStatus')}` },
+        { label:'Electrical',fn: b => `${bv(b,'electricalDone','Done')}/${btotal(b)}` },
 
         { label:'Internet',  fn: b => `${bv(b,'internetStatus','Done')}/${breq(b,'internetStatus')}` },
 
@@ -15696,7 +15729,7 @@ function depRenderBlockSummary(locs) {
 
         { label:'Delivered', fn: b => `${bv(b,'rvmDelivery','Done')}/${btotal(b)}` },
 
-        { label:'Installed', fn: b => `${bv(b,'rvmDeployed','Done')}/${btotal(b)}` },
+        { label:'Installed', fn: b => `${locs.filter(l => (b == null || l.block === b) && isInstalled(l)).length}/${btotal(b)}` },
 
         { label:'Live',      fn: b => `${bv(b,'machineLive','Done')}/${btotal(b)}` },
 
@@ -15716,7 +15749,7 @@ function depRenderBlockSummary(locs) {
 
         <div class="ct-table-wrap">
 
-            <table class="ct-table" style="font-size:12px">
+            <table class="ct-table ct-table--center" style="font-size:12px">
 
                 <thead><tr>
 
@@ -15733,8 +15766,6 @@ function depRenderBlockSummary(locs) {
                     ${blocks.map(b => {
 
                         const tot = btotal(b);
-
-                        const inst = bv(b,'rvmDeployed','Done');
 
                         return `<tr>
 
@@ -15759,6 +15790,16 @@ function depRenderBlockSummary(locs) {
                         </tr>`;
 
                     }).join('')}
+
+                    <tr style="border-top:2px solid var(--gray-200)">
+
+                        <td><b>Total</b></td>
+
+                        <td style="font-weight:700">${btotal(null)}</td>
+
+                        ${cols.map(c => `<td style="font-weight:700">${c.fn(null)}</td>`).join('')}
+
+                    </tr>
 
                 </tbody>
 
@@ -15820,11 +15861,11 @@ function depFlag(val) {
 
 function depHighestMilestone(l) {
 
-    if (l.machineLive === 'Done')    return { label: 'Machine Live',      color: '#085f40' };
+    if (depIsDone(l.machineLive))    return { label: 'Machine Live',      color: '#085f40' };
 
     if (depIsDone(l.rvmDeployed))    return { label: 'Machine Installed', color: '#0b6b4f' };
 
-    if (l.rvmDelivery === 'Done')    return { label: 'Machine Delivered', color: '#2f6fb0' };
+    if (depIsDone(l.rvmDelivery))    return { label: 'Machine Delivered', color: '#2f6fb0' };
 
     if (l.agreementSigned === 'Yes') return { label: 'Agreement Signed',  color: '#5b8fd4' };
 
@@ -15844,21 +15885,21 @@ function depPendingItems(l) {
 
     if (l.agreementSigned !== 'Yes')      items.push('Agreement');
 
-    if (l.civilWorkStatus === 'Pending')  items.push('Civil Work');
+    if (!depIsDone(l.civilWorkStatus))    items.push('Civil Work');
 
-    if (l.shedStatus === 'Pending')       items.push('Shed');
+    if (!depIsDone(l.shedStatus))         items.push('Shed');
 
-    if (l.electricalStatus === 'Pending') items.push('Electrical');
+    if (!depIsDone(l.electricalDone))     items.push('Electrical');
 
-    if (l.internetStatus === 'Pending')   items.push('Internet');
+    if (!depIsDone(l.internetStatus))     items.push('Internet');
 
-    if (l.cctvStatus === 'Pending')       items.push('CCTV');
+    if (!depIsDone(l.cctvStatus))         items.push('CCTV');
 
-    if (l.rvmDelivery !== 'Done')         items.push('Delivery');
+    if (!depIsDone(l.rvmDelivery))        items.push('Delivery');
 
-    if (l.rvmDeployed !== 'Done')         items.push('Installation');
+    if (!depIsDone(l.rvmDeployed))        items.push('Installation');
 
-    if (l.machineLive !== 'Done')         items.push('Go-Live');
+    if (!depIsDone(l.machineLive))        items.push('Go-Live');
 
     if (items.length === 0) return '<span style="color:#0b6b4f;font-size:11px">Complete ✓</span>';
 
@@ -15904,11 +15945,13 @@ function depRenderLocTable(locs) {
 
                 <td>${depFlag(l.shedStatus)}</td>
 
-                <td>${depFlag(l.electricalStatus)}</td>
+                <td>${depFlag(l.electricalDone)}</td>
 
                 <td>${depFlag(l.internetStatus)}</td>
 
                 <td>${depFlag(l.cctvStatus)}</td>
+
+                <td>${depFlag(l.rvmDelivery)}</td>
 
                 <td>${depFlag(l.rvmDeployed)}</td>
 
@@ -15922,7 +15965,7 @@ function depRenderLocTable(locs) {
 
         }).join('')
 
-        : '<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--muted)">No locations match current filters.</td></tr>';
+        : '<tr><td colspan="16" style="text-align:center;padding:20px;color:var(--muted)">No locations match current filters.</td></tr>';
 
 }
 
@@ -15990,11 +16033,12 @@ function renderRvmDeployment(data) {
 
     if (data.planTotal) depPlanTotal = data.planTotal;
 
+    depRvmCpCount = (data.locations || []).filter(l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') === -1).length;
+
     const subtitleEl = document.getElementById('dep-header-subtitle');
 
     if (subtitleEl) {
-        const _rcPlanTotal = (data.rcLocations || []).reduce((s, l) => s + (parseInt(l.rcTarget) || 0), 0);
-        const _totalCP = depPlanTotal + (_rcPlanTotal || 0);
+        const _totalCP = depGetRvmTarget() + depGetRcTarget();
         subtitleEl.textContent = `${_totalCP} Collection Points · Goa DRS 2026`;
     }
 
@@ -16038,7 +16082,7 @@ function renderRvmDeployment(data) {
 
         () => depRenderDeadlineCard(s),
 
-        () => depRenderCPSection(data.cpData || [], depPlanTotal),
+        () => depRenderCPSection(data.cpData || [], depGetRvmTarget()),
 
         () => depRenderKPIs(s),
 
@@ -16737,7 +16781,7 @@ const PVA_CATS = [
 
     { key:'shed',     label:'Shed',            short:'Shed',    color:'#92400e', field:'shedStatus',       pace:true  },
 
-    { key:'elec',     label:'Electrical',      short:'Elec',    color:'#d97706', field:'electricalStatus', pace:true  },
+    { key:'elec',     label:'Electrical',      short:'Elec',    color:'#d97706', field:'electricalDone',   pace:true  },
 
     { key:'install',  label:'Machine Install', short:'Install', color:'#7c3aed', field:'rvmDeployed',      pace:true  },
 
@@ -16970,7 +17014,17 @@ function depRenderPvA(locs) {
 
     const actuals = {};
 
-    PVA_CATS.forEach(c => { actuals[c.key] = locs.filter(l => l[c.field] === 'Done').length; });
+    // Actuals mirror the Overview KPIs exactly: depIsDone (Yes/Done) for every
+    // category. Civil/Shed are additionally gated on their requirement column.
+    PVA_CATS.forEach(c => {
+        if (c.key === 'civil') {
+            actuals[c.key] = locs.filter(l => l.civilWorkReq === 'Yes' && depIsDone(l.civilWorkStatus)).length;
+        } else if (c.key === 'shed') {
+            actuals[c.key] = locs.filter(l => l.shedRequired === 'Yes' && depIsDone(l.shedStatus)).length;
+        } else {
+            actuals[c.key] = locs.filter(l => depIsDone(l[c.field])).length;
+        }
+    });
 
 
 
@@ -18464,7 +18518,7 @@ const DEPMAP_STAGES = [
     { key: 'agreement',  label: 'Agreement Signed',  field: 'agreementSigned',  color: '#0d9488' },
     { key: 'civil',      label: 'Civil Work',        field: 'civilWorkStatus',  color: '#0ea5e9', gate: 'civilWorkReq' },
     { key: 'shed',       label: 'Shed',              field: 'shedStatus',       color: '#b45309', gate: 'shedRequired' },
-    { key: 'electrical', label: 'Electrical',        field: 'electricalStatus', color: '#eab308' },
+    { key: 'electrical', label: 'Electrical',        field: 'electricalDone',   color: '#eab308' },
     { key: 'internet',   label: 'Internet',          field: 'internetStatus',   color: '#8b5cf6' },
     { key: 'cctv',       label: 'CCTV',              field: 'cctvStatus',       color: '#db2777' },
     { key: 'machine',    label: 'Machine Installed', field: 'rvmDeployed',      color: '#16a34a' },
@@ -18575,6 +18629,7 @@ async function depInitMap() {
         }).addTo(_depMap);
         depMapBuildBoundaries();
         depMapBuildEntityFilter();
+        depMapBuildLocateControls();
         depMapRefresh();
         setTimeout(() => _depMap.invalidateSize(), 80);
     } catch (e) {
@@ -18596,13 +18651,16 @@ function depMapCpTypeOf(l) {
 }
 
 function depMapEntityOf(l) {
-    const v = (l.entityType || '').trim().toLowerCase();
+    const raw = (l.entityType || '').trim();
+    const v = raw.toLowerCase();
     if (!v) return 'Unspecified';
     if (v.indexOf('panch') === 0) return 'Panchayat';
     if (v.indexOf('pub') === 0) return 'Public';
     if (v.indexOf('pri') === 0) return 'Private';
     if (v.indexOf('ulb') !== -1 || v.indexOf('munic') !== -1) return 'ULB';
-    return 'Unspecified';
+    // RVM_Deploy has richer categories (Govt Entity, GTDC, KTC, Sports Authority, MPA) —
+    // keep each as its own bucket rather than collapsing them into "Unspecified".
+    return raw;
 }
 
 function depMapStageObj() {
@@ -18612,8 +18670,8 @@ function depMapStageObj() {
 // Civil/Shed only where required (gate = 'Yes' or blank) - exact same rule as KPI cards (psGated)
 function depMapApplicable(l, st) {
     if (st.gate) {
-        const g = l[st.gate];
-        if (!(g === 'Yes' || !g)) return false;
+        // Civil/Shed: only rows where the requirement column is strictly 'Yes' apply.
+        if (l[st.gate] !== 'Yes') return false;
     }
     if (l[st.field] === 'Not Required') return false;
     return true;
@@ -18637,9 +18695,55 @@ function depMapCoord(l) {
 function depMapBuildEntityFilter() {
     const found = {};
     depMapLocs().forEach(l => { found[depMapEntityOf(l)] = true; });
-    ['Panchayat', 'Public', 'Private', 'ULB', 'Unspecified'].forEach(k => {
-        if (found[k] && !(k in _depMapState.entity)) _depMapState.entity[k] = true;
+    Object.keys(found).forEach(k => {
+        if (!(k in _depMapState.entity)) _depMapState.entity[k] = true;
     });
+}
+
+// "Locate" controls — Block / Panchayat dropdowns that pan the map to the
+// selected area, purely a navigation aid (doesn't touch any display filters).
+function depMapBuildLocateControls() {
+    const all = depMapLocs();
+    const blockSel = document.getElementById('depmap-locate-block');
+    if (!blockSel) return;
+    const blocks = [...new Set(all.map(l => l.block).filter(Boolean))].sort();
+    blockSel.innerHTML = '<option value="">All Blocks</option>' +
+        blocks.map(b => '<option value="' + depMapEsc(b) + '">' + depMapEsc(b) + '</option>').join('');
+    blockSel.onchange = () => {
+        const b = blockSel.value;
+        depMapPopulateLocateLoc(b);
+        if (!b) return;
+        const pts = all.filter(l => l.block === b).map(depMapCoord).filter(Boolean);
+        if (pts.length) _depMap.flyToBounds(pts, { padding: [40, 40], maxZoom: 13 });
+    };
+    depMapPopulateLocateLoc('');
+}
+
+function depMapPopulateLocateLoc(block) {
+    const all = depMapLocs();
+    const locSel = document.getElementById('depmap-locate-loc');
+    if (!locSel) return;
+    const scoped = block ? all.filter(l => l.block === block) : all;
+    const seen = new Set();
+    const opts = [];
+    scoped.forEach(l => {
+        const name = (l.entityName || l.locationName || '').trim();
+        if (!name) return;
+        const key = name + '|' + l.block;
+        if (seen.has(key)) return;
+        seen.add(key);
+        opts.push({ idx: all.indexOf(l), name, block: l.block });
+    });
+    opts.sort((a, b) => a.name.localeCompare(b.name));
+    locSel.innerHTML = '<option value="">Jump to collection point / panchayat…</option>' +
+        opts.map(o => '<option value="' + o.idx + '">' + depMapEsc(o.name) + ' (' + depMapEsc(o.block) + ')</option>').join('');
+    locSel.onchange = () => {
+        const idx = parseInt(locSel.value, 10);
+        if (isNaN(idx)) return;
+        const l = all[idx];
+        const pt = l && depMapCoord(l);
+        if (pt) _depMap.flyTo(pt, 15);
+    };
 }
 
 function depMapBuildBoundaries() {
@@ -18671,9 +18775,38 @@ function depMapRefresh() {
     depMapRebuildPins();
     depMapRebuildTalukaOverlay();
     depMapRebuildHeat();
-    depMapRebuildHoreca();
     depMapRenderSidebar();
     depMapRenderLegend();
+    depMapRenderTopKPI();
+}
+
+function depMapRenderTopKPI() {
+    const el = document.getElementById('depmap-top-kpi');
+    if (!el) return;
+    const locs = depMapLocs();
+    el.innerHTML = `<button type="button" class="depmap-cp-kpi" onclick="depMapShowCPModal()">
+        <span class="depmap-cp-kpi-val">${locs.length}</span>
+        <span class="depmap-cp-kpi-label">Collection Points<br><span style="font-weight:400;opacity:.75">click to view list</span></span>
+    </button>`;
+}
+
+function depMapShowCPModal() {
+    const locs = depMapLocs();
+    const withGps = locs.filter(l => l.lat && l.lng && !isNaN(parseFloat(l.lat)) && !isNaN(parseFloat(l.lng)));
+    const noGps = locs.length - withGps.length;
+    document.getElementById('depmap-cp-modal-count').textContent =
+        `(${withGps.length} with coordinates${noGps ? ', ' + noGps + ' without — not shown' : ''})`;
+    document.getElementById('depmap-cp-modal-list').innerHTML = withGps.length
+        ? withGps.map(l => `<div class="vp-modal-item" style="display:block">
+              <div style="font-weight:600;font-size:13.5px">${depMapEsc(l.entityName || l.locationName || '—')}${l.entityName && l.locationName ? ' - ' + depMapEsc(l.locationName) : ''}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${depMapEsc(l.block || '—')} &middot; ${depMapEsc(depMapCpTypeOf(l))} &middot; ${l.lat}, ${l.lng}</div>
+          </div>`).join('')
+        : '<div style="padding:12px;color:var(--muted)">No collection points with coordinates yet.</div>';
+    document.getElementById('depmap-cp-modal').classList.remove('hidden');
+}
+
+function depMapCloseCPModal() {
+    document.getElementById('depmap-cp-modal').classList.add('hidden');
 }
 
 function depMapPopup(l, st, isDone) {
@@ -18900,13 +19033,12 @@ function depMapRebuildHeat() {
     const mode = _depMapState.heat;
     if (mode === 'none') return;
     let pts = [];
-    if (mode === 'horeca') {
-        if (!_depMapHoreca) {
-            depMapEnsureHoreca().then(() => { if (_depMapHoreca && _depMapState.heat === 'horeca') { depMapRebuildHeat(); depMapRenderSidebar(); } });
-            return;
-        }
-        pts = _depMapHoreca.heat.map(p => [p[0], p[1], 0.5]);
-        _depMapHoreca.pins.forEach(p => pts.push([p.lat, p.lng, 0.9]));
+    if (mode === 'density') {
+        // RVM/RC location density — every filtered collection point, regardless of status.
+        depMapFiltered().forEach(l => {
+            const pt = depMapCoord(l);
+            if (pt) pts.push([pt[0], pt[1], 0.7]);
+        });
     } else if (mode === 'pending') {
         depMapFiltered().forEach(l => {
             const pt = depMapCoord(l);
@@ -19020,13 +19152,24 @@ function depMapRenderSidebar() {
     // Entity types
     const enEl = document.getElementById('depmap-entities');
     const entKeys = Object.keys(_depMapState.entity);
-    enEl.innerHTML = entKeys.map(t => {
-        const n = all.filter(l => depMapEntityOf(l) === t).length;
-        return depMapCheckRow('<input type="checkbox" data-k="' + t + '"' + (_depMapState.entity[t] ? ' checked' : '') + '>' +
-            t + '<span class="depmap-count">' + n + '</span>', _depMapState.entity[t]);
-    }).join('');
+    const allEntitiesOn = entKeys.every(t => _depMapState.entity[t]);
+    enEl.innerHTML =
+        '<div class="depmap-select-all"><a href="#" data-act="' + (allEntitiesOn ? 'clear' : 'all') + '">' +
+            (allEntitiesOn ? 'Clear all' : 'Select all') + '</a></div>' +
+        entKeys.map(t => {
+            const n = all.filter(l => depMapEntityOf(l) === t).length;
+            return depMapCheckRow('<input type="checkbox" data-k="' + t + '"' + (_depMapState.entity[t] ? ' checked' : '') + '>' +
+                t + '<span class="depmap-count">' + n + '</span>', _depMapState.entity[t]);
+        }).join('');
     enEl.querySelectorAll('input').forEach(inp =>
         inp.addEventListener('change', () => { _depMapState.entity[inp.dataset.k] = inp.checked; depMapRefresh(); }));
+    const enSelAll = enEl.querySelector('[data-act]');
+    if (enSelAll) enSelAll.addEventListener('click', e => {
+        e.preventDefault();
+        const turnOn = e.target.dataset.act === 'all';
+        entKeys.forEach(t => { _depMapState.entity[t] = turnOn; });
+        depMapRefresh();
+    });
 
     // Boundaries
     const bdEl = document.getElementById('depmap-bounds');
@@ -19042,25 +19185,19 @@ function depMapRenderSidebar() {
         _depMapState.talukaOverlay);
     ovEl.querySelector('input').addEventListener('change', e => { _depMapState.talukaOverlay = e.target.checked; depMapRefresh(); });
 
-    // Heatmap modes (radio)
+    // Heatmap modes (radio) — RVM/RC density; selecting any mode other than Off
+    // auto-hides pins so the heat layer and pins don't visually clash.
     const htEl = document.getElementById('depmap-heat');
-    htEl.innerHTML = [['none', 'Off'], ['horeca', 'HoReCa density'], ['pending', 'Pending work'], ['installed', 'Installed coverage']].map(m =>
+    htEl.innerHTML = [['none', 'Off'], ['density', 'RVM/RC density'], ['pending', 'Pending work'], ['installed', 'Installed coverage']].map(m =>
         depMapCheckRow('<input type="radio" name="depmap-heat" value="' + m[0] + '"' + (_depMapState.heat === m[0] ? ' checked' : '') + '>' + m[1],
             _depMapState.heat === m[0])).join('');
     htEl.querySelectorAll('input').forEach(inp =>
-        inp.addEventListener('change', () => { _depMapState.heat = inp.value; depMapRefresh(); }));
+        inp.addEventListener('change', () => {
+            _depMapState.heat = inp.value;
+            if (inp.value !== 'none') { _depMapState.showDone = false; _depMapState.showPending = false; }
+            depMapRefresh();
+        }));
 
-    // HoReCa pins
-    const hoEl = document.getElementById('depmap-horeca');
-    const hc = _depMapHoreca && _depMapHoreca.counts;
-    hoEl.innerHTML =
-        depMapCheckRow('<input type="checkbox"' + (_depMapState.horecaPins ? ' checked' : '') + '>HoReCa outlets' +
-            (_depMapHorecaLoading ? '<span class="depmap-count">loading...</span>' : ''), _depMapState.horecaPins) +
-        (hc ? '<div style="font-size:11.5px;color:#6b7683;padding:2px 7px 0">' +
-              '<span style="color:#16a34a;font-weight:700">' + hc.onboarded + '</span> onboarded &middot; ' +
-              '<span style="color:#b45309;font-weight:700">' + hc.pipeline + '</span> in pipeline &middot; ' +
-              hc.unreached.toLocaleString() + ' unreached (heatmap) &middot; geocoded only</div>' : '');
-    hoEl.querySelector('input').addEventListener('change', e => { _depMapState.horecaPins = e.target.checked; depMapRefresh(); });
 }
 
 function depMapRenderLegend() {
@@ -19068,30 +19205,13 @@ function depMapRenderLegend() {
     const st = depMapStageObj();
     const c = _depMapCounts || { done: 0, pending: 0, noGps: 0 };
     const locs = depMapLocs();
-    const planTotal = (depData && (depData.planTotal || depData.plan_total)) || 0;
     const identified = locs.length;
-    const noc = depMapTrackerCounts(9);
-    const agr = depMapTrackerCounts(11);
-    // Planned RVMs (DRS-Tracker Planned_RVMs column) rolled up by stage
-    const vps = (typeof vpData !== 'undefined' && vpData) || [];
-    function plannedSum(minStage) {
-        return vps.filter(vp => resolveStageNumber(vp) >= minStage)
-                  .reduce((s, vp) => s + (parseInt(vp.plannedRvms) || 0), 0);
-    }
-    const nocPlanRvm = plannedSum(9);
-    const agrPlanRvm = plannedSum(11);
 
     function chip(label, val) {
         return '<span class="depmap-stat"><span class="depmap-stat-l">' + label + '</span><span class="depmap-stat-v">' + val + '</span></span>';
     }
     const stats =
         chip('Location Identified', identified) +
-        (planTotal ? chip('Pending from Plan', Math.max(0, planTotal - identified) + ' <small>of ' + planTotal + '</small>') : '') +
-        chip('NOC', noc.done + ' <small>of ' + noc.total + '</small>') +
-        chip('NOC Plan RVM', nocPlanRvm + (planTotal ? ' <small>of ' + planTotal + '</small>' : '')) +
-        chip('Agreement', agr.done + ' <small>of ' + agr.total + '</small>') +
-        chip('Agreement Plan RVM', agrPlanRvm + (planTotal ? ' <small>of ' + planTotal + '</small>' : '')) +
-        (planTotal ? chip('RVM Plan Pending', (planTotal - agrPlanRvm) + ' <small>= ' + planTotal + ' &minus; ' + agrPlanRvm + '</small>') : '') +
         chip('NOC Area Covered', depMapAreaPct(9) + '%') +
         chip('Agreement Area Covered', depMapAreaPct(11) + '%');
 

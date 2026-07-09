@@ -492,7 +492,7 @@
                     <button class="dash-tab" data-dash="rvm">RVM</button>
                     <button class="dash-tab" data-dash="cost">Cost</button>
                     <button class="dash-tab dash-tab-horeca" data-dash="horeca">HoReCa</button>
-                    <button class="dash-tab dash-tab-ct" data-dash="ct">RVM Deployment</button>
+                    <button class="dash-tab dash-tab-ct" data-dash="ct">RVM Deploy</button>
                     <button class="dash-tab dash-tab-activity" data-dash="activity" style="display:none">🔐 Activity</button>
                 </div>
 
@@ -671,7 +671,7 @@
                                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
                                         </div>
                                         <div style="min-width:0">
-                                            <h2 class="dep-hero-title">RVM Deployment Dashboard</h2>
+                                            <h2 class="dep-hero-title">RVM Deploy Dashboard</h2>
                                             <span id="dep-header-subtitle" class="dep-hero-sub">301 Collection Points &middot; Goa DRS 2026</span>
                                         </div>
                                     </div>
@@ -768,6 +768,7 @@
                                                 <th>Electrical</th>
                                                 <th>Internet</th>
                                                 <th>CCTV</th>
+                                                <th>Delivered</th>
                                                 <th>Installed</th>
                                                 <th>Install Date</th>
                                                 <th>Live</th>
@@ -788,6 +789,11 @@
                                     <div id="depmap-loading" class="hcrm-dash-loading">Loading map...</div>
                                     <div class="depmap-layout" style="display:none">
                                         <aside class="depmap-side">
+                                            <div class="depmap-sec">
+                                                <div class="depmap-sec-title">Locate</div>
+                                                <select id="depmap-locate-block" class="depmap-locate-select"><option value="">All Blocks</option></select>
+                                                <select id="depmap-locate-loc" class="depmap-locate-select" style="margin-top:6px"><option value="">Jump to collection point / panchayat…</option></select>
+                                            </div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Stage Layer</div><div id="depmap-stages"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Show Pins</div><div id="depmap-showopts"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">CP Type</div><div id="depmap-cptypes"></div></div>
@@ -795,9 +801,9 @@
                                             <div class="depmap-sec"><div class="depmap-sec-title">Boundaries</div><div id="depmap-bounds"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Taluka Overlay</div><div id="depmap-overlays"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Heatmap</div><div id="depmap-heat"></div></div>
-                                            <div class="depmap-sec"><div class="depmap-sec-title">HoReCa</div><div id="depmap-horeca"></div></div>
                                         </aside>
                                         <div class="depmap-main">
+                                            <div id="depmap-top-kpi"></div>
                                             <div id="depmap-legend"></div>
                                             <div id="dep-map"></div>
                                         </div>
@@ -1590,6 +1596,18 @@
             </div>
         </div>
 
+        <div id="depmap-cp-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Collection Points <span id="depmap-cp-modal-count"></span></h3>
+                    <button class="modal-close" onclick="depMapCloseCPModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="depmap-cp-modal-list" class="vp-modal-list"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast Notification -->
         <div id="toast" class="toast hidden">
             <span id="toast-message"></span>
@@ -1601,6 +1619,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=114"></script>
+    <script src="/static/app.js?v=115"></script>
 </body>
 </html>

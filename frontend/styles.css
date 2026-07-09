@@ -5163,6 +5163,7 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
 .ct-table td { padding: 7px 8px; border-bottom: 1px solid var(--gray-50); vertical-align: middle; }
 .ct-table tr:hover td { background: #fafcfd; }
 .ct-table tr.ct-row-active td { background: #edf7f3; }
+.ct-table--center th, .ct-table--center td { text-align: center; }
 
 .ct-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .ct-s0 { background: #f0f2f4; color: #6b7c8c; }
@@ -5403,7 +5404,6 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
     color: var(--dep-accent);
 }
 .dep-dual-val--rc {
-    font-size: 18px;
     color: var(--gray-500);
 }
 
@@ -6779,3 +6779,24 @@ tr.zero-r:hover { opacity: 1; }
 .depmap-stat-l { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a8794; }
 .depmap-stat-v { font-size: 17px; font-weight: 800; color: #16323f; font-variant-numeric: tabular-nums; }
 .depmap-stat-v small { font-size: 11px; font-weight: 600; color: #8794a1; }
+
+#depmap-top-kpi { padding: 10px 14px 0; }
+.depmap-cp-kpi {
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, #1e6b5c0f, #1e6b5c05);
+    border: 1px solid #1e6b5c33; border-radius: 10px;
+    padding: 10px 16px; cursor: pointer; font-family: inherit;
+    transition: all .15s ease;
+}
+.depmap-cp-kpi:hover { border-color: #1e6b5c66; background: #1e6b5c14; }
+.depmap-cp-kpi:active { transform: scale(0.98); }
+.depmap-cp-kpi-val { font-size: 26px; font-weight: 800; color: #1e6b5c; font-variant-numeric: tabular-nums; }
+.depmap-cp-kpi-label { font-size: 12px; font-weight: 600; color: #16323f; text-align: left; line-height: 1.35; }
+
+.depmap-select-all { margin-bottom: 4px; }
+.depmap-select-all a { font-size: 11px; font-weight: 600; color: #1e6b5c; text-decoration: none; }
+.depmap-select-all a:hover { text-decoration: underline; }
+.depmap-locate-select {
+    width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #d8dee5;
+    border-radius: 6px; background: #fff; color: #16323f; font-family: inherit;
+}
