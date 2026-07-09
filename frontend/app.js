@@ -14600,7 +14600,11 @@ function depComputeSummary(locs) {
 
         delivered: locs.filter(l => depIsDone(l.rvmDelivery)).length,
 
-        installed: ps('rvmDeployed'),
+        // Installed = RVM Delivery OR RVM Deployed with base fixing (either counts).
+        installed: (() => {
+            const done = locs.filter(l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery)).length;
+            return { done, pending: Math.max(0, locs.length - done), not_required: 0, pct: locs.length ? Math.round(done / locs.length * 100) : 0 };
+        })(),
 
         live: locs.filter(l => depIsDone(l.machineLive)).length,
 
@@ -14973,9 +14977,15 @@ function depRenderFunnel(s) {
 
             </div>
 
-            <div class="dep-funnel-bar">
+            <div style="display:flex;align-items:center;gap:8px">
 
-                <div class="dep-funnel-fill" style="width:${Math.max(p,2)}%;background:${st.color}">${st.val}</div>
+                <div class="dep-funnel-bar" style="flex:1">
+
+                    <div class="dep-funnel-fill" style="width:${Math.max(p,2)}%;background:${st.color}">${st.val}</div>
+
+                </div>
+
+                <span style="font-size:11px;font-weight:700;color:${st.color};min-width:34px;text-align:right;flex-shrink:0">${p}%</span>
 
             </div>
 
@@ -15427,7 +15437,7 @@ function depRenderProjectMetrics(s, locs) {
     const isRC = l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') !== -1;
     const isPrivateEntity = l => (l.entityType || '').trim().toLowerCase().indexOf('pri') === 0;
     // Installed = RVM Deployed with base fixing only. Delivery is a separate, earlier stage.
-    const isInstalled = l => depIsDone(l.rvmDeployed);
+    const isInstalled = l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery);
     const rvmLocs = locs.filter(l => !isRC(l));
     const rcLocs  = locs.filter(l => isRC(l));
 
@@ -15540,16 +15550,12 @@ function depRenderProjectMetrics(s, locs) {
         '</div>';
     }
 
-    // Row 1a: Targets + Installed. RVM/RC Target are editable — default 302 / 25,
-    // overridable via the input (session-scoped, same pattern as the deadline picker).
+    // Row 1a: Targets + Installed. RVM/RC Target are fixed, read-only values —
+    // Plan/Collection-Point-derived, no manual override.
     const gapColor = gap > 50 ? '#d1453b' : '#e08a1e';
-    const canEditTarget = currentUser && currentUser.role === 'admin';
-    const targetInput = (id, value, onchange) => canEditTarget
-        ? `<input type="number" min="0" id="${id}" value="${value}" onchange="${onchange}" class="dep-target-input" style="width:92px;font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;line-height:1.05;color:var(--gray-900);border:1px solid #d8dee5;border-radius:6px;padding:3px 6px;background:#fff;box-sizing:border-box">`
-        : String(value);
     const row1a = [
-        mkCard('RVM Target',    targetInput('dep-rvm-target-input', RVM_TARGET, 'depSetRvmTarget(this.value)'), 'Go-live ' + deadlineFmt, '#1e6b5c'),
-        mkCard('RC Target',     targetInput('dep-rc-target-input', RC_TARGET, 'depSetRcTarget(this.value)'),     'Go-live ' + deadlineFmt, '#6366f1'),
+        mkCard('RVM Target',    RVM_TARGET, 'Go-live ' + deadlineFmt, '#1e6b5c'),
+        mkCard('RC Target',     RC_TARGET,  'Go-live ' + deadlineFmt, '#6366f1'),
         mkCard('Target Date',   deadlineFmt,   'Go-live target date',                                 dColor),
         mkCard('Days Left',     daysLeft,      'until ' + deadlineStr,                                dColor),
         mkCard('RVM Installed', rvmInstalled,  Math.round(rvmInstalled/(RVM_TARGET||1)*100) + '% of ' + RVM_TARGET, '#0b6b4f'),
@@ -15666,7 +15672,7 @@ function depRenderBlockSummary(locs) {
     const T = depGetRvmTarget();
 
     // Installed = RVM Deployed with base fixing only. Delivery is a separate, earlier stage.
-    const isInstalled = l => depIsDone(l.rvmDeployed);
+    const isInstalled = l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery);
 
     const totalInstalled = locs.filter(isInstalled).length;
 
@@ -16034,6 +16040,8 @@ function renderRvmDeployment(data) {
     if (data.planTotal) depPlanTotal = data.planTotal;
 
     depRvmCpCount = (data.locations || []).filter(l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') === -1).length;
+
+    depRcCpCount = (data.locations || []).filter(l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') !== -1).length;
 
     const subtitleEl = document.getElementById('dep-header-subtitle');
 
@@ -17015,9 +17023,12 @@ function depRenderPvA(locs) {
     const actuals = {};
 
     // Actuals mirror the Overview KPIs exactly: depIsDone (Yes/Done) for every
-    // category. Civil/Shed are additionally gated on their requirement column.
+    // category. Civil/Shed are additionally gated on their requirement column,
+    // and Machine Install counts RVM Delivery OR Deployed-with-base-fixing.
     PVA_CATS.forEach(c => {
-        if (c.key === 'civil') {
+        if (c.key === 'install') {
+            actuals[c.key] = locs.filter(l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery)).length;
+        } else if (c.key === 'civil') {
             actuals[c.key] = locs.filter(l => l.civilWorkReq === 'Yes' && depIsDone(l.civilWorkStatus)).length;
         } else if (c.key === 'shed') {
             actuals[c.key] = locs.filter(l => l.shedRequired === 'Yes' && depIsDone(l.shedStatus)).length;
