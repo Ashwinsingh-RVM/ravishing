@@ -14525,7 +14525,9 @@ function depComputeSummary(locs) {
         const req = locs.filter(l => l[reqKey] === 'Yes');
         const done = req.filter(l => depIsDone(l[statusKey])).length;
         const not_required = locs.filter(l => l[reqKey] !== 'Yes').length;
-        return { done, pending: Math.max(0, req.length - done), not_required, required: req.length, total: req.length, pct: req.length ? Math.round(done / req.length * 100) : 0 };
+        // "pending" mirrors the KPI card's denominator (required count), not the
+        // done/required gap, so the donut's two badges match the KPI card exactly.
+        return { done, pending: req.length, not_required, required: req.length, total: req.length, pct: req.length ? Math.round(done / req.length * 100) : 0 };
     }
 
     // Stats over ALL identified locations (denominator = total locations),
@@ -14600,11 +14602,9 @@ function depComputeSummary(locs) {
 
         delivered: locs.filter(l => depIsDone(l.rvmDelivery)).length,
 
-        // Installed = RVM Delivery OR RVM Deployed with base fixing (either counts).
-        installed: (() => {
-            const done = locs.filter(l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery)).length;
-            return { done, pending: Math.max(0, locs.length - done), not_required: 0, pct: locs.length ? Math.round(done / locs.length * 100) : 0 };
-        })(),
+        // Installed = RVM Deployed with base fixing (actual only — Funnel/Block-wise/
+        // Location Tracker read the sheet's actual install status, no OR with Delivery).
+        installed: ps('rvmDeployed'),
 
         live: locs.filter(l => depIsDone(l.machineLive)).length,
 
@@ -15669,10 +15669,10 @@ function depRenderBlockSummary(locs) {
 
 
 
-    const T = depGetRvmTarget();
+    // Machines Installed (RVM+RC combined target, actual RVM Deployed count only — no OR with Delivery).
+    const T = depGetRvmTarget() + depGetRcTarget();
 
-    // Installed = RVM Deployed with base fixing only. Delivery is a separate, earlier stage.
-    const isInstalled = l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery);
+    const isInstalled = l => depIsDone(l.rvmDeployed);
 
     const totalInstalled = locs.filter(isInstalled).length;
 
@@ -17023,8 +17023,9 @@ function depRenderPvA(locs) {
     const actuals = {};
 
     // Actuals mirror the Overview KPIs exactly: depIsDone (Yes/Done) for every
-    // category. Civil/Shed are additionally gated on their requirement column,
-    // and Machine Install counts RVM Delivery OR Deployed-with-base-fixing.
+    // category. Civil/Shed are additionally gated on their requirement column.
+    // Machine Install = Project Metrics' RVM Installed + RC Installed combined
+    // (RVM Delivery OR RVM Deployed with base fixing, across all locations).
     PVA_CATS.forEach(c => {
         if (c.key === 'install') {
             actuals[c.key] = locs.filter(l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery)).length;
