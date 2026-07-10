@@ -3554,15 +3554,13 @@ function applyDashboardRBAC() {
 
     const role = currentUser.role;
 
-    const horecaTab = document.querySelector('.dash-tab-horeca');
+    const showHoreca = role === 'admin' || role === 'horeca';
 
-    if (horecaTab) {
+    document.querySelectorAll('.dash-tab-horeca').forEach(tab => {
 
-        const showHoreca = role === 'admin' || role === 'horeca';
+        tab.classList.toggle('rbac-hidden', !showHoreca);
 
-        horecaTab.classList.toggle('rbac-hidden', !showHoreca);
-
-    }
+    });
 
     // Hide VP-specific sub-tabs (Progress, RVM, Cost) for horeca-only users
 
@@ -3580,13 +3578,46 @@ function applyDashboardRBAC() {
 
     }
 
-    // Activity tab: superadmin only
+    // Activity tab: superadmin only, and hidden even for them until revealed —
+    // triple-click the "Goa DRS Tracker" header title to toggle it.
 
     const activityTab = document.querySelector('.dash-tab-activity');
 
     if (activityTab) {
 
-        activityTab.style.display = currentUser.email === 'ashwin.singh@recykal.com' ? '' : 'none';
+        activityTab.style.display = 'none';
+
+        if (currentUser.email === 'ashwin.singh@recykal.com' && !window._actRevealWired) {
+
+            window._actRevealWired = true;
+
+            const title = document.querySelector('.header h1, .header-title, header h1');
+
+            let clicks = 0, timer = null;
+
+            (title || document).addEventListener('click', (e) => {
+
+                if (!title && !(e.target.closest && e.target.closest('.header'))) return;
+
+                clicks++;
+
+                clearTimeout(timer);
+
+                timer = setTimeout(() => { clicks = 0; }, 600);
+
+                if (clicks >= 3) {
+
+                    clicks = 0;
+
+                    const showing = activityTab.style.display !== 'none';
+
+                    activityTab.style.display = showing ? 'none' : '';
+
+                }
+
+            });
+
+        }
 
     }
 
@@ -13778,6 +13809,10 @@ async function loadActivityLog() {
 
     document.getElementById('act-profiles-tab').addEventListener('click', () => actSwitchTab('profiles'));
 
+    document.getElementById('act-flow-tab').addEventListener('click', () => actSwitchTab('flow'));
+
+    document.getElementById('act-trends-tab').addEventListener('click', () => actSwitchTab('trends'));
+
 
 
     // Load feed
@@ -13824,7 +13859,7 @@ async function loadActivityLog() {
 
 function actSwitchTab(tab) {
 
-    ['feed','profiles'].forEach(t => {
+    ['feed','profiles','flow','trends'].forEach(t => {
 
         document.getElementById(`act-${t}-tab`).classList.toggle('act-tab-active', t === tab);
 
@@ -13834,6 +13869,513 @@ function actSwitchTab(tab) {
 
     });
 
+    if (tab === 'flow' && !_actFlowLoaded) {
+
+        _actFlowLoaded = true;
+
+        loadActFlow();
+
+    }
+
+    if (tab === 'trends' && !_actTrendsLoaded) {
+
+        _actTrendsLoaded = true;
+
+        loadActTrends();
+
+    }
+
+}
+
+
+
+// ── Activity Flow (Mixpanel-style path diagram) ──────────────────────────────
+
+let _actFlowLoaded = false;
+
+let _actTrendsLoaded = false;
+
+let _actRawEvents = null;
+
+let _actSessions = [];
+
+// Fetch the raw event log once and share it between Flow and Trends.
+async function _actFetchEvents() {
+    if (_actRawEvents) return _actRawEvents;
+    const res = await fetch(`${API_BASE}/analytics/log?limit=5000`);
+    if (!res.ok) throw new Error('Failed');
+    const { events } = await res.json();
+    _actRawEvents = events || [];
+    return _actRawEvents;
+}
+
+let _actFlowColors = {};
+
+const _ACT_FLOW_PALETTE = ['#2563EB','#059669','#D97706','#7C3AED','#DB2777','#0EA5E9','#DC2626','#65A30D'];
+
+function _actEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function _actFlowColor(label) {
+    if (label === 'Other') return '#9CA3AF';
+    if (label === 'Dropped') return '#D1D5DB';
+    if (!_actFlowColors[label]) {
+        const used = Object.keys(_actFlowColors).length;
+        _actFlowColors[label] = _ACT_FLOW_PALETTE[used % _ACT_FLOW_PALETTE.length];
+    }
+    return _actFlowColors[label];
+}
+
+// IST-formatted "HH:MM:SS" from a "YYYY-MM-DD HH:MM:SS" (UTC-naive) timestamp string.
+function _actFlowTimeIST(ts) {
+    if (!ts) return '—';
+    const d = new Date((ts || '').replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return ts;
+    const ist = new Date(d.getTime() + 19800000);
+    return `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+}
+
+async function loadActFlow() {
+    const wrap = document.getElementById('act-flow-svg-wrap');
+    try {
+        const events = await _actFetchEvents();
+        _actBuildSessions(events);
+        _actPopulateFlowStart();
+        document.getElementById('act-flow-start').onchange = renderActFlow;
+        document.getElementById('act-flow-steps').onchange = renderActFlow;
+        renderActFlow();
+    } catch (e) {
+        wrap.innerHTML = `<div style="padding:24px;color:#f85149;font-size:13px">Failed to load flow data: ${_actEsc(e.message)}</div>`;
+    }
+}
+
+function _actBuildSessions(events) {
+    const bySession = {};
+    events.forEach(e => {
+        if (e.Event_Type !== 'page_view') return;
+        const sid = e.Session_ID || ('_noSession_' + e.User_Email);
+        (bySession[sid] = bySession[sid] || []).push(e);
+    });
+    _actSessions = Object.entries(bySession).map(([sid, evs]) => {
+        evs.sort((a, b) => String(a.Timestamp||'').localeCompare(String(b.Timestamp||'')));
+        const steps = [];
+        evs.forEach(e => {
+            const page = e.Page || '(unknown)';
+            if (steps.length && steps[steps.length - 1].page === page) return; // collapse consecutive dupes
+            steps.push({ page, timestamp: e.Timestamp, userName: e.User_Name, userEmail: e.User_Email });
+        });
+        return { sessionId: sid, steps };
+    }).filter(s => s.steps.length > 0);
+}
+
+function _actPopulateFlowStart() {
+    const counts = {};
+    _actSessions.forEach(s => { const p = s.steps[0].page; counts[p] = (counts[p] || 0) + 1; });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const sel = document.getElementById('act-flow-start');
+    sel.innerHTML = sorted.map(([p, c]) => `<option value="${_actEsc(p)}">${_actEsc(p)} (${c})</option>`).join('');
+}
+
+// Build one column per step. Column 0 is always the chosen start page (100% of
+// matching sessions). Later columns bucket sessions into their top-5 destination
+// pages + "Other" + "Dropped" (session had no further recorded page view).
+function _actComputeFlow(startPage, steps) {
+    const matching = _actSessions.filter(s => s.steps[0] && s.steps[0].page === startPage);
+    const columns = [{ buckets: [{ key: startPage, label: startPage, sessions: matching }] }];
+    for (let i = 1; i < steps; i++) {
+        const pageOf = {};
+        const counts = {};
+        matching.forEach(s => {
+            const raw = s.steps[i] ? s.steps[i].page : 'Dropped';
+            pageOf[s.sessionId] = raw;
+            counts[raw] = (counts[raw] || 0) + 1;
+        });
+        // Top pages by weight; anything under 3% of total merges into "Other"
+        // so the diagram doesn't fill with sliver nodes.
+        const minCount = Math.max(1, Math.ceil(matching.length * 0.03));
+        const top = Object.entries(counts).filter(([k, c]) => k !== 'Dropped' && c >= minCount)
+            .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k);
+        const buckets = top.map(k => ({ key: k, label: k, sessions: matching.filter(s => pageOf[s.sessionId] === k) }));
+        const other = matching.filter(s => pageOf[s.sessionId] !== 'Dropped' && !top.includes(pageOf[s.sessionId]));
+        if (other.length) buckets.push({ key: '__other__', label: 'Other', sessions: other });
+        const dropped = matching.filter(s => pageOf[s.sessionId] === 'Dropped');
+        if (dropped.length) buckets.push({ key: '__dropped__', label: 'Dropped', sessions: dropped });
+        columns.push({ buckets });
+    }
+    return { columns, total: matching.length };
+}
+
+function renderActFlow() {
+    const wrap = document.getElementById('act-flow-svg-wrap');
+    const drill = document.getElementById('act-flow-drill');
+    drill.style.display = 'none'; drill.innerHTML = '';
+    const startPage = document.getElementById('act-flow-start').value;
+    const steps = parseInt(document.getElementById('act-flow-steps').value, 10) || 4;
+    if (!startPage) { wrap.innerHTML = '<div style="padding:24px;color:#6B7280;font-size:13px">No session data yet.</div>'; return; }
+
+    const { columns, total } = _actComputeFlow(startPage, steps);
+    document.getElementById('act-flow-summary').textContent = `${total} session${total === 1 ? '' : 's'} started here`;
+    if (!total) { wrap.innerHTML = '<div style="padding:24px;color:#6B7280;font-size:13px">No sessions start on this page.</div>'; return; }
+
+    const colW = 190, nodeW = 140, gap = 96, H = 440, padTop = 10, nodeGap = 6;
+    const W = columns.length * (colW + gap) - gap + 40;
+
+    // sessionId -> {colIndex -> bucketKey} for quick lookup when building links
+    const sessBucket = columns.map(col => {
+        const m = {};
+        col.buckets.forEach(b => b.sessions.forEach(s => { m[s.sessionId] = b.key; }));
+        return m;
+    });
+
+    // Sessions still "active" at each column (not yet Dropped) — used for % of previous step.
+    const activeAt = columns.map(col =>
+        col.buckets.reduce((sum, b) => sum + (b.key === '__dropped__' ? 0 : b.sessions.length), 0));
+
+    // y-layout per column: stack buckets top-to-bottom, height ∝ count
+    const layout = columns.map(col => {
+        let y = padTop;
+        return col.buckets.map(b => {
+            const h = Math.max(4, (b.sessions.length / total) * (H - padTop * 2 - (col.buckets.length - 1) * nodeGap));
+            const node = { ...b, y, h };
+            y += h + nodeGap;
+            return node;
+        });
+    });
+
+    // Median seconds from step i to step i+1 for a session set.
+    function medianGapSecs(sessions, i) {
+        const gaps = [];
+        sessions.forEach(s => {
+            const a = s.steps[i], b = s.steps[i + 1];
+            if (!a || !b || !a.timestamp || !b.timestamp) return;
+            const t0 = new Date(String(a.timestamp).replace(' ', 'T') + 'Z').getTime();
+            const t1 = new Date(String(b.timestamp).replace(' ', 'T') + 'Z').getTime();
+            if (isFinite(t0) && isFinite(t1) && t1 >= t0) gaps.push((t1 - t0) / 1000);
+        });
+        if (!gaps.length) return null;
+        gaps.sort((a, b) => a - b);
+        return gaps[Math.floor(gaps.length / 2)];
+    }
+
+    function fmtDur(s) {
+        if (s == null) return '';
+        if (s < 60) return Math.round(s) + 's';
+        if (s < 3600) return Math.round(s / 60) + 'm ' + Math.round(s % 60) + 's';
+        return (s / 3600).toFixed(1) + 'h';
+    }
+
+    let svg = `<svg width="${W}" height="${H + 30}" style="font-family:inherit" id="act-flow-svg">`;
+
+    // Links first (so nodes paint on top)
+    for (let i = 0; i < columns.length - 1; i++) {
+        const x0 = 20 + i * (colW + gap) + nodeW;
+        const x1 = 20 + (i + 1) * (colW + gap);
+        const srcCursor = {}, dstCursor = {};
+        layout[i].forEach(n => srcCursor[n.key] = n.y);
+        layout[i + 1].forEach(n => dstCursor[n.key] = n.y);
+        // aggregate (src,dst) pair counts + sessions, ordered by src then dst position
+        const pairs = {};
+        layout[i].forEach(srcNode => {
+            srcNode.sessions.forEach(s => {
+                const dstKey = sessBucket[i + 1][s.sessionId];
+                if (dstKey === undefined) return;
+                const pk = srcNode.key + '||' + dstKey;
+                (pairs[pk] = pairs[pk] || { src: srcNode.key, dst: dstKey, count: 0, sessions: [] });
+                pairs[pk].count++;
+                pairs[pk].sessions.push(s);
+            });
+        });
+        const dstOrder = {}; layout[i + 1].forEach((n, idx) => dstOrder[n.key] = idx);
+        const srcOrder = {}; layout[i].forEach((n, idx) => srcOrder[n.key] = idx);
+        Object.values(pairs).sort((a, b) => (srcOrder[a.src] - srcOrder[b.src]) || (dstOrder[a.dst] - dstOrder[b.dst]))
+            .forEach(p => {
+                const thick = Math.max(1.5, (p.count / total) * (H - padTop * 2));
+                const y0 = srcCursor[p.src] + thick / 2; srcCursor[p.src] += thick;
+                const y1 = dstCursor[p.dst] + thick / 2; dstCursor[p.dst] += thick;
+                const mx = (x0 + x1) / 2;
+                const srcNode = layout[i].find(n => n.key === p.src);
+                const dstNode = layout[i + 1].find(n => n.key === p.dst);
+                const color = _actFlowColor(srcNode.label);
+                const med = p.dst === '__dropped__' ? null : medianGapSecs(p.sessions, i);
+                const tip = `${srcNode.label} → ${dstNode.label}: ${p.count} session${p.count === 1 ? '' : 's'}` + (med != null ? ` · median ${fmtDur(med)}` : '');
+                svg += `<path class="act-flow-link" data-scol="${i}" data-src="${_actEsc(p.src)}" data-dst="${_actEsc(p.dst)}" d="M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1}" stroke="${color}" stroke-opacity="0.25" stroke-width="${thick}" fill="none"><title>${_actEsc(tip)}</title></path>`;
+            });
+    }
+
+    // Nodes
+    columns.forEach((col, i) => {
+        const x = 20 + i * (colW + gap);
+        layout[i].forEach(n => {
+            const color = _actFlowColor(n.label);
+            const pctTotal = Math.round(n.sessions.length / total * 100);
+            const prevActive = i > 0 ? (activeAt[i - 1] || total) : total;
+            // "% of prev" is meaningless for the cumulative Session-ended bucket.
+            const showPrev = i > 0 && n.key !== '__dropped__';
+            const pctPrev = Math.round(n.sessions.length / prevActive * 100);
+            const displayLabel = n.label === 'Dropped' ? 'Session ended' : n.label;
+            const safeLabel = _actEsc(displayLabel.length > 20 ? displayLabel.slice(0, 19) + '…' : displayLabel);
+            const tip = `${displayLabel}: ${n.sessions.length} of ${total} (${pctTotal}%)` + (showPrev ? ` · ${pctPrev}% of previous step` : '');
+            svg += `<g class="act-flow-node" data-col="${i}" data-key="${_actEsc(n.key)}" data-label="${_actEsc(n.label)}">` +
+                `<title>${_actEsc(tip)}</title>` +
+                `<rect x="${x}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="7" fill="${color}" fill-opacity="${n.label==='Dropped'?0.45:0.15}" stroke="${color}" stroke-width="1.3"/>` +
+                (n.h >= 34
+                    ? `<text x="${x+9}" y="${n.y+16}" font-size="11" font-weight="700" fill="${n.label==='Dropped'?'#6B7280':color}">${safeLabel}</text>` +
+                      `<text x="${x+9}" y="${n.y+30}" font-size="10" fill="#6B7280">${n.sessions.length} · ${pctTotal}%${showPrev?` · ${pctPrev}% of prev`:''}</text>`
+                    : (n.h >= 15
+                        ? `<text x="${x+9}" y="${n.y + n.h/2 + 4}" font-size="10" font-weight="700" fill="${n.label==='Dropped'?'#6B7280':color}">${safeLabel} · ${n.sessions.length}</text>`
+                        : '')) +
+                `</g>`;
+        });
+        // column header
+        svg += `<text x="${x}" y="${H+22}" font-size="10" font-weight="700" fill="#9CA3AF" style="text-transform:uppercase;letter-spacing:.05em">Step ${i+1}</text>`;
+    });
+
+    svg += '</svg>';
+    wrap.innerHTML = svg;
+
+    // Interactions: click → drill-down; hover → isolate the paths touching this node.
+    const links = [...wrap.querySelectorAll('.act-flow-link')];
+    wrap.querySelectorAll('.act-flow-node').forEach(g => {
+        const col = parseInt(g.dataset.col, 10), key = g.dataset.key;
+        g.addEventListener('click', () => _actShowDrilldown(col, key, g.dataset.label, columns));
+        g.addEventListener('mouseenter', () => {
+            links.forEach(l => {
+                const scol = parseInt(l.dataset.scol, 10);
+                const touches = (scol === col && l.dataset.src === key) || (scol === col - 1 && l.dataset.dst === key);
+                l.setAttribute('stroke-opacity', touches ? '0.55' : '0.05');
+            });
+        });
+        g.addEventListener('mouseleave', () => {
+            links.forEach(l => l.setAttribute('stroke-opacity', '0.25'));
+        });
+    });
+}
+
+function _actShowDrilldown(colIdx, key, label, columns) {
+    const bucket = columns[colIdx].buckets.find(b => b.key === key);
+    if (!bucket) return;
+    const drill = document.getElementById('act-flow-drill');
+    const rows = bucket.sessions.slice(0, 40).map(s => {
+        const stepsHtml = s.steps.slice(0, 8).map((st, idx) =>
+            `${idx > 0 ? '<span style="color:#D1D5DB;margin:0 4px">→</span>' : ''}<span style="color:#6B7280">${_actFlowTimeIST(st.timestamp)}</span> <b style="color:#111827">${_actEsc(st.page)}</b>`
+        ).join('');
+        return `<div style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+            <span style="font-weight:700;color:#374151;min-width:120px">${_actEsc(s.steps[0].userName || s.steps[0].userEmail || 'Unknown')}</span>
+            <span>${stepsHtml}</span>
+        </div>`;
+    }).join('');
+    drill.innerHTML = `<div style="border:1px solid #E2E8F0;border-radius:10px;overflow:hidden">
+        <div style="padding:10px 12px;background:#FAFBFC;border-bottom:1px solid #E2E8F0;font-size:12px;font-weight:700;color:#111827;display:flex;justify-content:space-between">
+            <span>Step ${colIdx+1}: ${_actEsc(label)} — ${bucket.sessions.length} session${bucket.sessions.length===1?'':'s'}</span>
+            <span style="cursor:pointer;color:#9CA3AF;font-weight:400" onclick="document.getElementById('act-flow-drill').style.display='none'">✕ close</span>
+        </div>
+        <div style="max-height:320px;overflow-y:auto">${rows || '<div style=\"padding:16px;color:#9CA3AF;font-size:12px\">No sessions.</div>'}</div>
+    </div>`;
+    drill.style.display = '';
+    drill.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+
+
+// ── Activity Trends (Mixpanel Insights-style line chart) ─────────────────────
+
+async function loadActTrends() {
+    const chart = document.getElementById('act-tr-chart');
+    try {
+        await _actFetchEvents();
+        document.getElementById('act-tr-metric').onchange = renderActTrends;
+        document.getElementById('act-tr-group').onchange = renderActTrends;
+        ['act-tr-interval', 'act-tr-range'].forEach(id => {
+            document.getElementById(id).querySelectorAll('.act-tr-seg').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    btn.parentElement.querySelectorAll('.act-tr-seg').forEach(b => {
+                        const on = b === btn;
+                        b.classList.toggle('act-tr-seg-on', on);
+                        b.style.background = on ? '#1e6b5c' : '#FFF';
+                        b.style.color = on ? '#fff' : '#374151';
+                    });
+                    renderActTrends();
+                });
+            });
+        });
+        renderActTrends();
+    } catch (e) {
+        chart.innerHTML = `<div style="padding:24px;color:#f85149;font-size:13px">Failed to load trends: ${_actEsc(e.message)}</div>`;
+    }
+}
+
+const _actTrendsHidden = new Set();  // legend-toggled-off series
+
+function renderActTrends() {
+    const chart = document.getElementById('act-tr-chart');
+    const legendEl = document.getElementById('act-tr-legend');
+    const metric = document.getElementById('act-tr-metric').value;
+    const group = document.getElementById('act-tr-group').value;
+    const interval = document.querySelector('#act-tr-interval .act-tr-seg-on').dataset.v;
+    const rangeDays = parseInt(document.querySelector('#act-tr-range .act-tr-seg-on').dataset.v, 10);
+
+    // Filter events by metric
+    let evs = _actRawEvents || [];
+    if (metric === 'logins') evs = evs.filter(e => e.Event_Type === 'login');
+    else if (metric === 'pageviews') evs = evs.filter(e => e.Event_Type === 'page_view');
+
+    // Date window (IST calendar days)
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - rangeDays * 86400000);
+
+    // Bucket key: IST date string; for week, Monday of that IST week
+    function bucketKey(ts) {
+        const d = new Date(String(ts).replace(' ', 'T') + 'Z');
+        if (isNaN(d.getTime())) return null;
+        if (d < cutoff) return null;
+        const ist = new Date(d.getTime() + 19800000);
+        if (interval === 'week') {
+            const dow = (ist.getUTCDay() + 6) % 7; // Monday = 0
+            ist.setUTCDate(ist.getUTCDate() - dow);
+        }
+        return ist.toISOString().slice(0, 10);
+    }
+
+    // Ordered list of all bucket keys in range (zero-fill)
+    const buckets = [];
+    {
+        const start = new Date(cutoff.getTime() + 19800000);
+        const end = new Date(now.getTime() + 19800000);
+        if (interval === 'week') {
+            const dow = (start.getUTCDay() + 6) % 7;
+            start.setUTCDate(start.getUTCDate() - dow);
+        }
+        const cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+        while (cur <= end) {
+            buckets.push(cur.toISOString().slice(0, 10));
+            cur.setUTCDate(cur.getUTCDate() + (interval === 'week' ? 7 : 1));
+        }
+    }
+    const bucketIdx = {};
+    buckets.forEach((b, i) => bucketIdx[b] = i);
+
+    // Series key per event
+    function seriesOf(e) {
+        if (group === 'event') return e.Event_Type || '(unknown)';
+        if (group === 'page') return e.Page || '(unknown)';
+        if (group === 'user') return e.User_Name || e.User_Email || '(unknown)';
+        return metric === 'users' ? 'Unique users' : metric === 'logins' ? 'Logins' : metric === 'pageviews' ? 'Page views' : 'Total events';
+    }
+
+    // Count: value per (series, bucket); for unique-users metric count distinct emails
+    const seriesData = {};   // name -> array[buckets] of count or Set
+    evs.forEach(e => {
+        const bk = bucketKey(e.Timestamp);
+        if (bk == null || bucketIdx[bk] === undefined) return;
+        const sk = seriesOf(e);
+        if (!seriesData[sk]) seriesData[sk] = buckets.map(() => (metric === 'users' ? new Set() : 0));
+        if (metric === 'users') seriesData[sk][bucketIdx[bk]].add(e.User_Email || '?');
+        else seriesData[sk][bucketIdx[bk]]++;
+    });
+    let series = Object.entries(seriesData).map(([name, arr]) => ({
+        name,
+        values: arr.map(v => (metric === 'users' ? v.size : v)),
+    }));
+    series.forEach(s => s.total = s.values.reduce((a, b) => a + b, 0));
+    series.sort((a, b) => b.total - a.total);
+    // cap at 8 series, merge rest into "Other"
+    if (series.length > 8) {
+        const rest = series.slice(7);
+        const other = { name: 'Other', values: buckets.map((_, i) => rest.reduce((a, s) => a + s.values[i], 0)) };
+        other.total = rest.reduce((a, s) => a + s.total, 0);
+        series = series.slice(0, 7).concat([other]);
+    }
+
+    if (!series.length) {
+        chart.innerHTML = '<div style="padding:24px;color:#6B7280;font-size:13px">No events in this range.</div>';
+        legendEl.innerHTML = '';
+        return;
+    }
+
+    const visible = series.filter(s => !_actTrendsHidden.has(s.name));
+    const maxY = Math.max(1, ...visible.flatMap(s => s.values));
+    // rounded Y ticks
+    const yTickStep = Math.max(1, Math.ceil(maxY / 4));
+    const yMax = yTickStep * 4;
+
+    const padL = 44, padR = 16, padT = 14, padB = 34, plotH = 260;
+    const stepX = Math.max(34, Math.min(90, Math.floor(1000 / Math.max(1, buckets.length - 1))));
+    const plotW = stepX * Math.max(1, buckets.length - 1);
+    const W = padL + plotW + padR, H = padT + plotH + padB;
+
+    const xOf = i => padL + (buckets.length === 1 ? plotW / 2 : i * stepX);
+    const yOf = v => padT + plotH - (v / yMax) * plotH;
+
+    function fmtBucket(b) {
+        const d = new Date(b + 'T00:00:00Z');
+        return `${d.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]}`;
+    }
+
+    let svg = `<svg width="${W}" height="${H}" style="font-family:inherit" id="act-tr-svg">`;
+    // gridlines + y labels
+    for (let t = 0; t <= 4; t++) {
+        const v = yTickStep * t, y = yOf(v);
+        svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="#F3F4F6" stroke-width="1"/>`;
+        svg += `<text x="${padL - 8}" y="${y + 3}" font-size="10" fill="#9CA3AF" text-anchor="end">${v}</text>`;
+    }
+    // x labels (skip when crowded)
+    const skip = Math.ceil(buckets.length / 14);
+    buckets.forEach((b, i) => {
+        if (i % skip !== 0 && i !== buckets.length - 1) return;
+        svg += `<text x="${xOf(i)}" y="${padT + plotH + 18}" font-size="10" fill="#9CA3AF" text-anchor="middle">${fmtBucket(b)}</text>`;
+    });
+    // series lines + dots
+    visible.forEach(s => {
+        const color = _actFlowColor(s.name);
+        const pts = s.values.map((v, i) => `${xOf(i)},${yOf(v)}`).join(' ');
+        svg += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+        s.values.forEach((v, i) => {
+            svg += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="${color}" data-series="${_actEsc(s.name)}"/>`;
+        });
+    });
+    // invisible hover columns + crosshair handled via JS below
+    buckets.forEach((b, i) => {
+        svg += `<rect class="act-tr-hover" data-i="${i}" x="${xOf(i) - stepX / 2}" y="${padT}" width="${stepX}" height="${plotH}" fill="transparent"/>`;
+    });
+    svg += `<line id="act-tr-cross" x1="0" y1="${padT}" x2="0" y2="${padT + plotH}" stroke="#9CA3AF" stroke-dasharray="3,3" style="display:none"/>`;
+    svg += '</svg>';
+    svg += `<div id="act-tr-tip" style="display:none;position:absolute;background:#111827;color:#F9FAFB;border-radius:8px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:5;box-shadow:0 4px 12px rgba(0,0,0,.25);max-width:260px"></div>`;
+    chart.innerHTML = svg;
+
+    // hover tooltip
+    const tip = document.getElementById('act-tr-tip');
+    const cross = document.getElementById('act-tr-cross');
+    chart.querySelectorAll('.act-tr-hover').forEach(r => {
+        r.addEventListener('mouseenter', (ev) => {
+            const i = parseInt(r.dataset.i, 10);
+            const rows = visible.map(s =>
+                `<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:${_actFlowColor(s.name)}">●</span><span style="flex:1">${_actEsc(s.name)}</span><b>${s.values[i]}</b></div>`).join('');
+            tip.innerHTML = `<div style="font-weight:700;margin-bottom:4px">${fmtBucket(buckets[i])}${interval==='week'?' (week)':''}</div>${rows}`;
+            tip.style.display = '';
+            const x = xOf(i);
+            cross.setAttribute('x1', x); cross.setAttribute('x2', x);
+            cross.style.display = '';
+            tip.style.left = Math.min(x + 34, W - 250) + 'px';
+            tip.style.top = (padT + 10) + 'px';
+        });
+    });
+    chart.addEventListener('mouseleave', () => { tip.style.display = 'none'; cross.style.display = 'none'; });
+
+    // legend with toggle
+    legendEl.innerHTML = series.map(s => {
+        const off = _actTrendsHidden.has(s.name);
+        const color = _actFlowColor(s.name);
+        return `<span class="act-tr-leg" data-name="${_actEsc(s.name)}" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;user-select:none;color:${off?'#C4CBD4':'#374151'}">
+            <span style="width:10px;height:10px;border-radius:3px;background:${off?'#E5E7EB':color}"></span>${_actEsc(s.name)} <span style="color:#9CA3AF">(${s.total})</span></span>`;
+    }).join('');
+    legendEl.querySelectorAll('.act-tr-leg').forEach(el => {
+        el.addEventListener('click', () => {
+            const n = el.dataset.name;
+            if (_actTrendsHidden.has(n)) _actTrendsHidden.delete(n); else _actTrendsHidden.add(n);
+            renderActTrends();
+        });
+    });
 }
 
 
@@ -13895,6 +14437,10 @@ function activityShell() {
     <button id="act-feed-tab" class="act-tab-active" style="background:none;border:none;border-bottom:2px solid #1e6b5c;color:#1e6b5c;font-size:13px;font-weight:700;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">Activity Feed</button>
 
     <button id="act-profiles-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">User Profiles</button>
+
+    <button id="act-flow-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">Flow</button>
+
+    <button id="act-trends-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">Trends</button>
 
   </div>
 
@@ -13962,6 +14508,84 @@ function activityShell() {
 
   </div>
 
+  <!-- Flow panel -->
+
+  <div id="act-flow-panel" style="display:none;background:#FFFFFF">
+
+    <div style="display:flex;gap:8px;padding:12px 24px;border-bottom:1px solid #F3F4F6;flex-wrap:wrap;align-items:center;background:#FAFBFC">
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em">Starting from</span>
+
+      <select id="act-flow-start" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none;max-width:260px"></select>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:8px">Steps</span>
+
+      <select id="act-flow-steps" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none">
+
+        <option value="3">3</option><option value="4" selected>4</option><option value="5">5</option>
+
+      </select>
+
+      <span id="act-flow-summary" style="margin-left:auto;font-size:12px;color:#6B7280"></span>
+
+    </div>
+
+    <div id="act-flow-svg-wrap" style="padding:20px 24px;overflow-x:auto">
+
+      <div style="color:#6B7280;font-size:13px;padding:16px">Loading flow...</div>
+
+    </div>
+
+    <div id="act-flow-drill" style="display:none;padding:0 24px 24px"></div>
+
+  </div>
+
+  <!-- Trends panel -->
+
+  <div id="act-trends-panel" style="display:none;background:#FFFFFF">
+
+    <div style="display:flex;gap:8px;padding:12px 24px;border-bottom:1px solid #F3F4F6;flex-wrap:wrap;align-items:center;background:#FAFBFC">
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em">Metric</span>
+
+      <select id="act-tr-metric" style="background:#FFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none">
+        <option value="events">Total events</option><option value="users">Unique users</option><option value="logins">Logins</option><option value="pageviews" selected>Page views</option>
+      </select>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:6px">Group by</span>
+
+      <select id="act-tr-group" style="background:#FFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none">
+        <option value="none">None</option><option value="event">Event type</option><option value="page" selected>Page</option><option value="user">User</option>
+      </select>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:6px">Interval</span>
+
+      <span id="act-tr-interval" style="display:inline-flex;border:1px solid #E2E8F0;border-radius:7px;overflow:hidden">
+        <button data-v="day" class="act-tr-seg act-tr-seg-on" style="border:none;background:#1e6b5c;color:#fff;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">Day</button>
+        <button data-v="week" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">Week</button>
+      </span>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:6px">Range</span>
+
+      <span id="act-tr-range" style="display:inline-flex;border:1px solid #E2E8F0;border-radius:7px;overflow:hidden">
+        <button data-v="7" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">7D</button>
+        <button data-v="14" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">14D</button>
+        <button data-v="30" class="act-tr-seg act-tr-seg-on" style="border:none;background:#1e6b5c;color:#fff;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">30D</button>
+        <button data-v="90" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">90D</button>
+      </span>
+
+    </div>
+
+    <div id="act-tr-chart" style="padding:20px 24px;overflow-x:auto;position:relative">
+
+      <div style="color:#6B7280;font-size:13px;padding:16px">Loading trends...</div>
+
+    </div>
+
+    <div id="act-tr-legend" style="padding:0 24px 20px;display:flex;gap:14px;flex-wrap:wrap"></div>
+
+  </div>
+
 </div>
 
 <style>
@@ -13969,6 +14593,10 @@ function activityShell() {
   @keyframes actPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
 
   .act-tab-active{color:#1e6b5c!important;border-bottom-color:#1e6b5c!important;font-weight:700!important}
+
+  .act-flow-node{cursor:pointer;transition:opacity .15s}
+
+  .act-flow-node:hover{opacity:.82}
 
 </style>`;
 
