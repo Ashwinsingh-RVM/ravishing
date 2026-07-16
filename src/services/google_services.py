@@ -2656,34 +2656,50 @@ class GoogleSheetsService:
             if status == 'OB Form Filled':
                 ob_filled += 1
 
+            # Enhanced contributes only the "reached" movement (field work
+            # dates); started/onboarded movement comes from Superset below.
             wd = parse_work_date(row[updated_date_idx]) if updated_date_idx is not None and updated_date_idx < len(row) else None
             if wd is None:
-                if status == 'OB Form Filled':
-                    undated_onboarded += 1
                 continue
-            if status == 'OB Form Filled' and (first_onboard_date is None or wd < first_onboard_date):
-                first_onboard_date = wd
-            day_key = wd.isoformat()
-            week_key = (wd - timedelta(days=wd.weekday())).isoformat()  # Monday of that week
-            month_key = wd.strftime('%Y-%m')
-            for store, key in ((dod, day_key), (wow, week_key), (mom, month_key)):
-                b = bucket(store, key)
-                if r >= reached_bar:
-                    b['reached'] += 1
-                if r >= started_bar:
-                    b['started'] += 1
-                if status == 'OB Form Filled':
-                    b['onboarded'] += 1
+            if r >= reached_bar:
+                day_key = wd.isoformat()
+                week_key = (wd - timedelta(days=wd.weekday())).isoformat()  # Monday of that week
+                month_key = wd.strftime('%Y-%m')
+                for store, key in ((dod, day_key), (wow, week_key), (mom, month_key)):
+                    bucket(store, key)['reached'] += 1
 
-        # Real onboarded from Superset (the backend system of record)
+        # Superset (the backend system of record) drives onboarding truth AND
+        # its dates: created_day = onboarding started, updated_day = the
+        # onboarding date (per the team: use updated date only).
         superset_active = 0
         try:
             sup_rows, sup_headers = self._get_superset_cache()
-            ssi = {hd: i for i, hd in enumerate(sup_headers)}.get('status')
-            if ssi is not None:
-                superset_active = sum(1 for r in sup_rows if ssi < len(r) and r[ssi].strip().upper() == 'ACTIVE')
+            shx = {hd: i for i, hd in enumerate(sup_headers)}
+
+            def sup(row, col):
+                i = shx.get(col)
+                return row[i].strip() if i is not None and i < len(row) else ''
+
+            for srow in sup_rows:
+                sstatus = sup(srow, 'status').upper()
+                created = parse_work_date(sup(srow, 'created_day'))
+                updated = parse_work_date(sup(srow, 'updated_day'))
+                if created:
+                    dk, wk, mk = created.isoformat(), (created - timedelta(days=created.weekday())).isoformat(), created.strftime('%Y-%m')
+                    for store, key in ((dod, dk), (wow, wk), (mom, mk)):
+                        bucket(store, key)['started'] += 1
+                if sstatus == 'ACTIVE':
+                    superset_active += 1
+                    if updated is None:
+                        undated_onboarded += 1
+                        continue
+                    if first_onboard_date is None or updated < first_onboard_date:
+                        first_onboard_date = updated
+                    dk, wk, mk = updated.isoformat(), (updated - timedelta(days=updated.weekday())).isoformat(), updated.strftime('%Y-%m')
+                    for store, key in ((dod, dk), (wow, wk), (mom, mk)):
+                        bucket(store, key)['onboarded'] += 1
         except Exception:
-            superset_active = 0
+            pass
 
         onboarded_real = superset_active or ob_filled
 
@@ -2977,7 +2993,12 @@ class GoogleSheetsService:
             _superset_cache['expiry'] = now + timedelta(minutes=2)
             return [], []
 
-        headers = all_values[0]
+        # Canonicalize header names — the export's schema has changed across
+        # versions (pan_number -> PAN, etc.); downstream code always sees the
+        # canonical names regardless of which export version is in the tab.
+        CANON = {'pan': 'pan_number', 'gst': 'gstin_number', 'fssai': 'fssai_number',
+                 'city': 'city', 'region_name': 'region_name'}
+        headers = [CANON.get(h.strip().lower(), h.strip()) for h in all_values[0]]
         name_idx = headers.index('business_name') if 'business_name' in headers else 1
         rows = [
             r for r in all_values[1:]

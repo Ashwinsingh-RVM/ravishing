@@ -3836,19 +3836,17 @@ function renderHovMovementTable(kind, rows, shown, filterBar) {
 
     }
 
-    // Reconciliation to the funnel's Onboarded figure: dated rows can't cover
+    // Onboarded rows are Superset-dated (updated_day); anything without a
 
-    // records with no work date or those only present in Superset.
+    // parseable date is called out so the table still ties to the funnel.
 
     const d = hovData;
 
     const datedTotal = d[kind === 'dod' ? 'dod' : 'mom'].reduce((a, r) => a + r.onboarded, 0);
 
-    const supersetOnly = Math.max(0, d.onboarded_real - d.ob_filled);
+    if (d.undated_onboarded > 0) {
 
-    if (datedTotal + d.undated_onboarded + supersetOnly === d.onboarded_real || d.onboarded_real) {
-
-        html += `<p class="hint" style="margin-top:8px;">Reconciliation: ${datedTotal.toLocaleString()} dated here + ${d.undated_onboarded.toLocaleString()} with no work date + ${supersetOnly.toLocaleString()} in Superset only = <strong>${d.onboarded_real.toLocaleString()} total onboarded</strong> (funnel figure).</p>`;
+        html += `<p class="hint" style="margin-top:8px;">${datedTotal.toLocaleString()} dated (Superset updated date) + ${d.undated_onboarded.toLocaleString()} without a date = <strong>${d.onboarded_real.toLocaleString()} total onboarded</strong>.</p>`;
 
     }
 
