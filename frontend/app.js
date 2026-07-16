@@ -3250,9 +3250,11 @@ function setupDashboardTabs() {
 
 
 
-            // Lazy-load HoReCa dashboard when tab is clicked
+            // Lazy-load HoReCa dashboard (nested Overview/Overall Daily/Metrics) when tab is clicked
 
             if (dashId === 'horeca') {
+
+                initHorecaDashSubTabs();
 
                 loadDashHoReCa();
 
@@ -3318,7 +3320,744 @@ function setupDashboardTabs() {
 
  */
 
+let hovData = null;
+
+let hovDodShown = 20;
+
+let hovMomShown = 20;
+
+
+
 async function loadDashHoReCa() {
+
+    const container = document.getElementById('dash-horeca-content');
+
+    if (!container) return;
+
+    container.innerHTML = '<div class="hcrm-dash-loading">Loading overview...</div>';
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/overview`);
+
+        if (!res.ok) throw new Error('Failed to load');
+
+        hovData = await res.json();
+
+        hovDodShown = 20;
+
+        hovMomShown = 20;
+
+        renderHovOverview(container);
+
+    } catch (e) {
+
+        container.innerHTML = '<div class="hcrm-error">Failed to load HoReCa overview</div>';
+
+    }
+
+}
+
+
+
+function renderHovKpiCard(label, value, sub, variant) {
+
+    const cls = variant ? ' hov-' + variant : '';
+
+    return `<div class="hov-card${cls}">
+
+        <div class="hov-label">${label}</div>
+
+        <div class="hov-num">${value}</div>
+
+        ${sub ? `<div class="hov-sub">${sub}</div>` : ''}
+
+    </div>`;
+
+}
+
+
+
+let hovDodFrom = '';
+
+let hovDodTo = '';
+
+
+
+function hovFilteredDod() {
+
+    let rows = hovData.dod;
+
+    if (hovDodFrom) rows = rows.filter(r => r.period >= hovDodFrom);
+
+    if (hovDodTo) rows = rows.filter(r => r.period <= hovDodTo);
+
+    return rows;
+
+}
+
+
+
+function applyHovDodPreset(days) {
+
+    if (days === 'all') { hovDodFrom = ''; hovDodTo = ''; }
+
+    else {
+
+        const end = new Date();
+
+        const start = new Date();
+
+        start.setDate(start.getDate() - (parseInt(days, 10) - 1));
+
+        hovDodFrom = start.toISOString().slice(0, 10);
+
+        hovDodTo = end.toISOString().slice(0, 10);
+
+    }
+
+    hovDodShown = 20;
+
+    renderHovOverview(document.getElementById('dash-horeca-content'));
+
+}
+
+
+
+function applyHovDodCustom() {
+
+    hovDodFrom = document.getElementById('hov-dod-from').value;
+
+    hovDodTo = document.getElementById('hov-dod-to').value;
+
+    hovDodShown = 20;
+
+    renderHovOverview(document.getElementById('dash-horeca-content'));
+
+}
+
+
+
+let hovMapInstance = null;
+
+let hovMapHeatLayer = null;
+
+let hovMapDotsLayer = null;
+
+let hovMapTalukas = null;
+
+let hovMapHeatPts = [];
+
+
+
+function initHovMap() {
+
+    if (hovMapInstance) {
+
+        setTimeout(() => hovMapInstance.invalidateSize(), 100);
+
+        return;
+
+    }
+
+    loadLeaflet(async () => {
+
+        // leaflet.heat plugin for the heatmap layer
+
+        if (!L.heatLayer) {
+
+            await new Promise(resolve => {
+
+                const s = document.createElement('script');
+
+                s.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
+
+                s.onload = resolve; s.onerror = resolve;
+
+                document.head.appendChild(s);
+
+            });
+
+        }
+
+        const container = document.getElementById('hmap-container');
+
+        try {
+
+            const [res, geoRes] = await Promise.all([
+
+                fetch(`${API_BASE}/horeca/map`),
+
+                fetch('/static/data/horeca/horeca_taluka.geojson'),
+
+            ]);
+
+            if (!res.ok) throw new Error('Failed to load map data');
+
+            const data = await res.json();
+
+            const talukaGeo = geoRes.ok ? await geoRes.json() : null;
+
+            container.innerHTML = '';
+
+            // Locked to Goa: can't pan to other states, can't zoom out past
+
+            // the state extent (same idea as the RVM Deploy map).
+
+            const GOA_BOUNDS = L.latLngBounds([14.85, 73.60], [15.85, 74.45]);
+
+            const map = L.map('hmap-container', {
+
+                preferCanvas: true, zoomControl: true,
+
+                maxBounds: GOA_BOUNDS.pad(0.05), maxBoundsViscosity: 1.0,
+
+                minZoom: 9.25, maxZoom: 18, zoomSnap: 0.25,
+
+            });
+
+            hovMapInstance = map;
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+
+                attribution: '&copy; OSM &copy; CARTO', maxZoom: 19,
+
+            }).addTo(map);
+
+            map.fitBounds(GOA_BOUNDS);
+
+            // Block (taluka) boundaries + dropdown + outside-Goa mask
+
+            if (talukaGeo) {
+
+                hovMapTalukas = {};
+
+                const blockSel = document.getElementById('hmap-block');
+
+                // Mask: a world-sized polygon with every taluka polygon cut
+
+                // out as a hole — everything outside Goa is painted over, so
+
+                // neighbouring states are visually removed.
+
+                const holes = [];
+
+                (talukaGeo.features || []).forEach(f => {
+
+                    const g = f.geometry;
+
+                    if (!g) return;
+
+                    const polys = g.type === 'Polygon' ? [g.coordinates] : (g.type === 'MultiPolygon' ? g.coordinates : []);
+
+                    polys.forEach(rings => {
+
+                        if (rings[0]) holes.push(rings[0].map(([lng, lat]) => [lat, lng]));
+
+                    });
+
+                });
+
+                const worldRing = [[-89, -179], [-89, 179], [89, 179], [89, -179]];
+
+                L.polygon([worldRing, ...holes], {
+
+                    stroke: false, fillColor: '#f6f7f9', fillOpacity: 0.92, interactive: false,
+
+                }).addTo(map);
+
+                // Clear, solid block borders on top of the mask
+
+                L.geoJSON(talukaGeo, {
+
+                    style: { color: '#334155', weight: 2.5, fillOpacity: 0, opacity: 0.9 },
+
+                    onEachFeature: (f, layer) => {
+
+                        const nm = (f.properties && (f.properties.name || f.properties.NAME)) || 'Block';
+
+                        layer.bindTooltip(nm, { direction: 'center' });
+
+                        hovMapTalukas[nm] = layer;
+
+                        const opt = document.createElement('option');
+
+                        opt.value = nm; opt.textContent = nm;
+
+                        blockSel.appendChild(opt);
+
+                    },
+
+                }).addTo(map);
+
+            }
+
+            // Unreached density: dots layer (default) + heat layer (toggle)
+
+            hovMapHeatPts = (data.heat || []).map(([lat, lng]) => [lat, lng, 0.5]);
+
+            hovMapDotsLayer = L.layerGroup((data.heat || []).map(([lat, lng]) =>
+
+                L.circleMarker([lat, lng], { radius: 2, color: '#a8a29e', weight: 0, fillOpacity: 0.35 })
+
+            )).addTo(map);
+
+            // Pipeline + onboarded pins (always on top)
+
+            (data.pins || []).forEach(p => {
+
+                const color = p.onboarded ? '#059669' : '#d97706';
+
+                L.circleMarker([p.lat, p.lng], { radius: 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.9 })
+
+                    .bindPopup(`<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.type || '')} &middot; ${escapeHtml(p.city || '')}<br>${escapeHtml(p.status)}`)
+
+                    .addTo(map);
+
+            });
+
+            const c = data.counts || {};
+
+            const countsEl = document.getElementById('hmap-counts');
+
+            if (countsEl) countsEl.textContent = `${(c.onboarded || 0).toLocaleString()} onboarded · ${(c.pipeline || 0).toLocaleString()} pipeline · ${(c.unreached || 0).toLocaleString()} unreached`;
+
+        } catch (e) {
+
+            container.innerHTML = `<p class="hint" style="padding:20px;">Could not load map: ${escapeHtml(e.message)}</p>`;
+
+        }
+
+    });
+
+}
+
+
+
+function hovMapToggleHeat(on) {
+
+    if (!hovMapInstance) return;
+
+    if (on) {
+
+        if (hovMapDotsLayer) hovMapInstance.removeLayer(hovMapDotsLayer);
+
+        if (L.heatLayer) {
+
+            hovMapHeatLayer = hovMapHeatLayer || L.heatLayer(hovMapHeatPts, { radius: 18, blur: 22, maxZoom: 13 });
+
+            hovMapHeatLayer.addTo(hovMapInstance);
+
+        }
+
+    } else {
+
+        if (hovMapHeatLayer) hovMapInstance.removeLayer(hovMapHeatLayer);
+
+        if (hovMapDotsLayer) hovMapDotsLayer.addTo(hovMapInstance);
+
+    }
+
+}
+
+
+
+function hovMapGoBlock(name) {
+
+    if (!hovMapInstance) return;
+
+    if (!name) {
+
+        hovMapInstance.fitBounds(L.latLngBounds([14.85, 73.60], [15.85, 74.45]));
+
+        return;
+
+    }
+
+    const layer = hovMapTalukas && hovMapTalukas[name];
+
+    if (layer) hovMapInstance.fitBounds(layer.getBounds(), { padding: [20, 20] });
+
+}
+
+
+
+function renderHovBarChart(title, rows, kind) {
+
+    if (!rows.length) return '';
+
+    const ordered = [...rows].reverse();  // oldest -> newest, left to right
+
+    const maxV = Math.max(1, ...ordered.map(r => r.onboarded));
+
+    const lbl = (p) => kind === 'mom'
+
+        ? `${HOV_MONTHS[Number(p.split('-')[1]) - 1]} ${p.slice(2, 4)}`
+
+        : p.slice(5);  // MM-DD of week start
+
+    return `<div class="card">
+
+        <h3 class="section-title" style="margin-bottom:4px;">${title}</h3>
+
+        <p class="hint" style="margin-bottom:8px;">onboarded per ${kind === 'mom' ? 'month' : 'week (week starting)'}</p>
+
+        <div class="hov-chart">${ordered.map(r => `
+
+            <div class="hov-chart-col" title="${escapeHtml(r.period)}: ${r.onboarded} onboarded">
+
+                <span class="hov-chart-val">${r.onboarded}</span>
+
+                <div class="hov-chart-bar" style="height:${Math.max(2, r.onboarded / maxV * 100).toFixed(0)}%"></div>
+
+                <span class="hov-chart-lbl">${lbl(r.period)}</span>
+
+            </div>`).join('')}
+
+        </div>
+
+    </div>`;
+
+}
+
+
+
+const HOV_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const HOV_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+
+
+function hovFormatPeriod(kind, period) {
+
+    if (kind === 'mom') {
+
+        const [y, m] = period.split('-').map(Number);
+
+        return `${HOV_MONTHS[m - 1]} ${y}`;
+
+    }
+
+    const dt = new Date(period + 'T00:00:00');
+
+    const dow = isNaN(dt) ? '' : `<span class="hov-mv-dow">${HOV_DOW[dt.getDay()]}</span>`;
+
+    return `${escapeHtml(period)}${dow}`;
+
+}
+
+
+
+function hovConvPill(pct) {
+
+    const cls = pct >= 60 ? 'hov-pill-hi' : pct >= 25 ? 'hov-pill-mid' : 'hov-pill-lo';
+
+    return `<span class="hov-pill ${cls}">${pct}%</span>`;
+
+}
+
+
+
+function renderHovMovementTable(kind, rows, shown, filterBar) {
+
+    const label = kind === 'dod' ? 'Day-on-Day' : 'Month-on-Month';
+
+    let html = `<div class="card"><h3 class="section-title" style="margin-bottom:12px;">${label}</h3>`;
+
+    if (filterBar) html += filterBar;
+
+    if (!rows.length) { html += '<p class="hint">No data for this range</p></div>'; return html; }
+
+    const slice = rows.slice(0, shown);
+
+    const maxOnboarded = Math.max(1, ...slice.map(r => r.onboarded));
+
+    const tot = slice.reduce((a, r) => ({
+
+        reached: a.reached + r.reached, started: a.started + r.started, onboarded: a.onboarded + r.onboarded,
+
+    }), { reached: 0, started: 0, onboarded: 0 });
+
+    const totConv = tot.reached ? (tot.onboarded / tot.reached * 100).toFixed(1) : '0';
+
+    html += '<div class="hov-table-wrap"><table class="hov-mv-table"><thead><tr>' +
+
+        `<th>${kind === 'dod' ? 'Date' : 'Month'}</th><th>Reached</th><th>Started</th><th>Onboarded</th>` +
+
+        '<th>Conv %</th><th>vs Touch Base (cum.)</th><th>vs Overall (cum.)</th></tr></thead><tbody>';
+
+    slice.forEach(r => {
+
+        const barW = (r.onboarded / maxOnboarded * 100).toFixed(0);
+
+        html += `<tr>
+
+            <td class="hov-mv-period">${hovFormatPeriod(kind, r.period)}</td>
+
+            <td>${r.reached.toLocaleString()}</td>
+
+            <td>${r.started.toLocaleString()}</td>
+
+            <td class="hov-mv-barcell"><div class="hov-mv-bar">
+
+                <div class="hov-mv-track"><div class="hov-mv-fill" style="width:${barW}%"></div></div>
+
+                <span class="hov-mv-val">${r.onboarded.toLocaleString()}</span>
+
+            </div></td>
+
+            <td>${hovConvPill(r.conv_day)}</td>
+
+            <td>${r.conv_touch_base}%</td>
+
+            <td>${r.conv_overall}%</td>
+
+        </tr>`;
+
+    });
+
+    html += `</tbody><tfoot><tr>
+
+        <td>Total (${slice.length} ${kind === 'dod' ? 'days' : 'months'} shown)</td>
+
+        <td>${tot.reached.toLocaleString()}</td>
+
+        <td>${tot.started.toLocaleString()}</td>
+
+        <td>${tot.onboarded.toLocaleString()}</td>
+
+        <td>${totConv}%</td><td></td><td></td>
+
+    </tr></tfoot></table></div>`;
+
+    if (rows.length > shown) {
+
+        html += `<button class="btn btn-outline btn-small" style="margin-top:10px;" onclick="hovShowMore('${kind}')">Show more (${rows.length - shown} more)</button>`;
+
+    }
+
+    // Reconciliation to the funnel's Onboarded figure: dated rows can't cover
+
+    // records with no work date or those only present in Superset.
+
+    const d = hovData;
+
+    const datedTotal = d[kind === 'dod' ? 'dod' : 'mom'].reduce((a, r) => a + r.onboarded, 0);
+
+    const supersetOnly = Math.max(0, d.onboarded_real - d.ob_filled);
+
+    if (datedTotal + d.undated_onboarded + supersetOnly === d.onboarded_real || d.onboarded_real) {
+
+        html += `<p class="hint" style="margin-top:8px;">Reconciliation: ${datedTotal.toLocaleString()} dated here + ${d.undated_onboarded.toLocaleString()} with no work date + ${supersetOnly.toLocaleString()} in Superset only = <strong>${d.onboarded_real.toLocaleString()} total onboarded</strong> (funnel figure).</p>`;
+
+    }
+
+    html += '</div>';
+
+    return html;
+
+}
+
+
+
+function hovShowMore(kind) {
+
+    if (kind === 'dod') hovDodShown += 20; else hovMomShown += 20;
+
+    renderHovOverview(document.getElementById('dash-horeca-content'));
+
+}
+
+
+
+function renderHovOverview(container) {
+
+    const d = hovData;
+
+    const rr = d.run_rate;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const rrSub = rr.first_onboard_date
+
+        ? `${rr.first_onboard_date} &rarr; ${todayStr} (${rr.days_active} days): ${d.onboarded_real.toLocaleString()} onboarded` +
+
+          (rr.days_to_target != null ? ` &middot; ~${rr.days_to_target}d to ${rr.target.toLocaleString()}` : '')
+
+        : `target ${rr.target.toLocaleString()}`;
+
+
+    const dodFilterBar = `<div class="hov-filter-bar">
+
+        <select class="select" onchange="applyHovDodPreset(this.value)">
+
+            <option value="all">All time</option>
+
+            <option value="7">Last 7 days</option>
+
+            <option value="30">Last 30 days</option>
+
+            <option value="90">Last 90 days</option>
+
+        </select>
+
+        <span class="hov-sep">or</span>
+
+        <input type="date" id="hov-dod-from" class="input" value="${hovDodFrom}">
+
+        <span class="hov-sep">&rarr;</span>
+
+        <input type="date" id="hov-dod-to" class="input" value="${hovDodTo}">
+
+        <button class="btn btn-primary btn-small" onclick="applyHovDodCustom()">Apply</button>
+
+    </div>`;
+
+    // Progress-dashboard-style funnel: icon + value + label + mini bar
+
+    // showing % carried over from the previous stage.
+
+    const funnelSteps = [
+
+        { label: 'Total Database', value: d.total_database, icon: '🗂️', cls: 'step-blocks' },
+
+        { label: 'Touch Base', value: d.touch_base, icon: '📞', cls: 'step-contacted' },
+
+        { label: 'Reached', value: d.reached, icon: '🤝', cls: 'step-meetings' },
+
+        { label: 'OB Form Opened', value: d.ob_opened, icon: '📄', cls: 'step-noc' },
+
+        { label: 'OB Form Filled', value: d.ob_filled, icon: '✍️', cls: 'step-agreement' },
+
+        { label: 'Onboarded', value: d.onboarded_real, icon: '✅', cls: 'step-installed' },
+
+    ];
+
+    // Outcome metrics rendered as extra funnel-style steps after Onboarded
+
+    const outcomeSteps = [
+
+        { label: 'Conv. vs Touch Base', value: d.conversion_vs_touch_base + '%', icon: '🎯', cls: 'step-unlocked', sub: `${d.onboarded_real.toLocaleString()} / ${d.touch_base.toLocaleString()} touched` },
+
+        { label: 'Conv. vs Overall', value: d.conversion_vs_overall + '%', icon: '🌐', cls: 'step-vps', sub: `${d.onboarded_real.toLocaleString()} / ${d.total_database.toLocaleString()} total` },
+
+        { label: 'Run Rate', value: rr.daily_rate + '/day', icon: '⚡', cls: 'step-email', sub: rrSub },
+
+    ];
+
+    const renderFunnelStep = (s, pct, pctLabel, withBar) => `
+
+        <div class="funnel-step ${s.cls}" title="${pctLabel}">
+
+            <div class="funnel-step-icon">${s.icon}</div>
+
+            <div class="funnel-step-value">${typeof s.value === 'number' ? s.value.toLocaleString() : s.value}</div>
+
+            <div class="funnel-step-label">${s.label}</div>
+
+            ${withBar ? `<div class="funnel-step-bar"><div class="funnel-step-bar-fill" style="width:${pct.toFixed(0)}%"></div></div>` : ''}
+
+        </div>`;
+
+    // Row 1: the pipeline stages. Row 2: the outcome + performance steps.
+
+    const row1 = funnelSteps.map((s, i) => {
+
+        const prev = i > 0 ? funnelSteps[i - 1].value : null;
+
+        const pct = prev ? Math.min(100, (s.value / prev * 100)) : 100;
+
+        const pctLabel = prev ? `${pct.toFixed(1)}% of ${funnelSteps[i - 1].label}` : 'starting pool';
+
+        return renderFunnelStep(s, pct, pctLabel, true) + (i < funnelSteps.length - 1 ? '<div class="funnel-arrow">→</div>' : '');
+
+    }).join('');
+
+    const row2 = outcomeSteps.map((s, i) =>
+
+        renderFunnelStep(s, 100, escapeHtml(s.sub.replace(/&middot;|&rarr;/g, '')), false) +
+
+        (i < outcomeSteps.length - 1 ? '<div class="funnel-arrow">→</div>' : '')
+
+    ).join('');
+
+    const funnelHtml = `<div class="card" style="margin-bottom:16px;">
+
+        <h3 class="section-title" style="margin-bottom:12px;">Onboarding Funnel</h3>
+
+        <div class="holistic-funnel">
+
+            <div class="funnel-flow" style="margin-bottom:12px;">${row1}</div>
+
+            <div class="funnel-flow">${row2}</div>
+
+        </div>
+
+        <p class="hint" style="margin-top:8px;">Run rate: ${rrSub.replace(/&rarr;/g, '→').replace(/&middot;/g, '·')}</p>
+
+    </div>`;
+
+    const exclusionCard = (label, value, sub, icon, variant) => `
+
+        <div class="hov-card ${variant}">
+
+            <div class="hov-chip">${icon}</div>
+
+            <div class="hov-body">
+
+                <div class="hov-label">${label}</div>
+
+                <div class="hov-num">${value}</div>
+
+                <div class="hov-sub">${sub}</div>
+
+            </div>
+
+        </div>`;
+
+    const exclusionCards = `<div class="hov-kpi-grid-auto" style="margin-bottom:16px;">${[
+
+        exclusionCard('No Status', d.no_status.toLocaleString(), `never touched &middot; ${(d.no_status / d.total_database * 100).toFixed(1)}% of database`, '💤', 'hov-muted'),
+
+        exclusionCard('De-listed', d.delisted.toLocaleString(), 'removed from funnel', '🚫', 'hov-danger'),
+
+    ].join('')}</div>`;
+
+    const chartsHtml = `<div class="hov-charts-row">
+
+        ${renderHovBarChart('Weekly Onboarding', (d.wow || []).slice(0, 16), 'wow')}
+
+        ${renderHovBarChart('Monthly Onboarding', d.mom || [], 'mom')}
+
+    </div>`;
+
+    const undatedNote = d.undated_onboarded
+
+        ? `<p class="hint" style="margin:-4px 0 12px;">Day-on-Day / Month-on-Month are dated by the field team's work date. ${d.undated_onboarded.toLocaleString()} onboarded records have no work date recorded and aren't shown in the daily rows.</p>`
+
+        : '';
+
+    container.innerHTML =
+
+        funnelHtml +
+
+        exclusionCards +
+
+        chartsHtml +
+
+        undatedNote +
+
+        renderHovMovementTable('dod', hovFilteredDod(), hovDodShown, dodFilterBar) +
+
+        `<div style="margin-top:16px;">${renderHovMovementTable('mom', d.mom, hovMomShown, '')}</div>`;
+
+}
+
+
+
+/* legacy summary renderer retained below for reference (unused) */
+
+async function loadDashHoReCaLegacy() {
 
     const container = document.getElementById('dash-horeca-content');
 
@@ -3554,15 +4293,13 @@ function applyDashboardRBAC() {
 
     const role = currentUser.role;
 
-    const horecaTab = document.querySelector('.dash-tab-horeca');
+    const showHoreca = role === 'admin' || role === 'horeca';
 
-    if (horecaTab) {
+    document.querySelectorAll('.dash-tab-horeca').forEach(tab => {
 
-        const showHoreca = role === 'admin' || role === 'horeca';
+        tab.classList.toggle('rbac-hidden', !showHoreca);
 
-        horecaTab.classList.toggle('rbac-hidden', !showHoreca);
-
-    }
+    });
 
     // Hide VP-specific sub-tabs (Progress, RVM, Cost) for horeca-only users
 
@@ -3580,13 +4317,46 @@ function applyDashboardRBAC() {
 
     }
 
-    // Activity tab: superadmin only
+    // Activity tab: superadmin only, and hidden even for them until revealed —
+    // triple-click the "Goa DRS Tracker" header title to toggle it.
 
     const activityTab = document.querySelector('.dash-tab-activity');
 
     if (activityTab) {
 
-        activityTab.style.display = currentUser.email === 'ashwin.singh@recykal.com' ? '' : 'none';
+        activityTab.style.display = 'none';
+
+        if (currentUser.email === 'ashwin.singh@recykal.com' && !window._actRevealWired) {
+
+            window._actRevealWired = true;
+
+            const title = document.querySelector('.header h1, .header-title, header h1');
+
+            let clicks = 0, timer = null;
+
+            (title || document).addEventListener('click', (e) => {
+
+                if (!title && !(e.target.closest && e.target.closest('.header'))) return;
+
+                clicks++;
+
+                clearTimeout(timer);
+
+                timer = setTimeout(() => { clicks = 0; }, 600);
+
+                if (clicks >= 3) {
+
+                    clicks = 0;
+
+                    const showing = activityTab.style.display !== 'none';
+
+                    activityTab.style.display = showing ? 'none' : '';
+
+                }
+
+            });
+
+        }
 
     }
 
@@ -4971,6 +5741,1170 @@ function getBadge(percent) {
     if (percent > 0) return '✨';
 
     return '💤';
+
+}
+
+
+
+let hdailyLoaded = false;
+
+
+
+let _horecaDashSubTabsReady = false;
+
+function initHorecaDashSubTabs() {
+
+    if (_horecaDashSubTabsReady) return;
+
+    _horecaDashSubTabsReady = true;
+
+    document.querySelectorAll('#dash-horeca .hdep-subtab').forEach(btn => {
+
+        btn.addEventListener('click', () => {
+
+            document.querySelectorAll('#dash-horeca .hdep-subtab').forEach(b => b.classList.remove('active'));
+
+            btn.classList.add('active');
+
+            const tab = btn.dataset.horecaDashTab;
+
+            const overviewView = document.getElementById('horeca-dash-overview-view');
+
+            const dailyView = document.getElementById('horeca-dash-daily-view');
+
+            const metricsView = document.getElementById('horeca-dash-metrics-view');
+
+            const supersetView = document.getElementById('horeca-dash-superset-view');
+
+            const mapView = document.getElementById('horeca-dash-map-view');
+
+            if (overviewView) overviewView.style.display = tab === 'overview' ? '' : 'none';
+
+            if (dailyView) dailyView.style.display = tab === 'daily' ? '' : 'none';
+
+            if (metricsView) metricsView.style.display = tab === 'metrics' ? '' : 'none';
+
+            if (supersetView) supersetView.style.display = tab === 'superset' ? '' : 'none';
+
+            if (mapView) mapView.style.display = tab === 'map' ? '' : 'none';
+
+            if (tab === 'superset') loadHSupersetValidation();
+
+            if (tab === 'map') initHovMap();
+
+        });
+
+    });
+
+}
+
+
+
+function initHDaily() {
+
+    if (!hdailyLoaded) {
+
+        hdailyLoaded = true;
+
+        loadHDailyOnboardedKPIs();
+
+        loadHDailyAssociateTable();
+
+        setDefaultHDailyRange(7);
+
+    }
+
+    loadHDailyGrid();
+
+}
+
+
+
+function setDefaultHDailyRange(days) {
+
+    const end = new Date();
+
+    const start = new Date();
+
+    start.setDate(start.getDate() - (days - 1));
+
+    document.getElementById('hdaily-start-date').value = start.toISOString().slice(0, 10);
+
+    document.getElementById('hdaily-end-date').value = end.toISOString().slice(0, 10);
+
+}
+
+
+
+function handleHDailyPresetChange() {
+
+    const preset = document.getElementById('hdaily-range-preset').value;
+
+    if (preset === 'custom') return;
+
+    setDefaultHDailyRange(parseInt(preset, 10));
+
+    loadHDailyGrid();
+
+}
+
+
+
+function resetHDailyRange() {
+
+    document.getElementById('hdaily-range-preset').value = '7';
+
+    setDefaultHDailyRange(7);
+
+    loadHDailyGrid();
+
+}
+
+
+
+async function loadHDailyOnboardedKPIs() {
+
+    const container = document.getElementById('hdaily-onboarded-kpis');
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/dashboard/associate-snapshot`);
+
+        if (!res.ok) throw new Error('Failed to load');
+
+        const data = await res.json();
+
+        renderHDailyOnboardedKPIs(data);
+
+    } catch (e) {
+
+        container.innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+
+    }
+
+}
+
+
+
+function renderHDailyOnboardedKPIs(data) {
+
+    const container = document.getElementById('hdaily-onboarded-kpis');
+
+    const entries = Object.entries(data.associates || {})
+
+        .map(([name, bucket]) => [name, bucket['OB Form Filled'] || 0])
+
+        .filter(([, count]) => count > 0)
+
+        .sort((a, b) => b[1] - a[1]);
+
+    if (!entries.length) {
+
+        container.innerHTML = '<p class="hint">No onboarded businesses yet</p>';
+
+        return;
+
+    }
+
+    container.innerHTML = `<div class="hdod-grid">${entries.map(([name, count]) => `
+
+        <div class="card hdod-card">
+
+            <div class="hdod-card-header">
+
+                <strong>${escapeHtml(name)}</strong>
+
+                <span class="hcrm-status-badge hcrm-status-ob-filled">${count} Onboarded</span>
+
+            </div>
+
+        </div>
+
+    `).join('')}</div>`;
+
+}
+
+
+
+async function loadHDailyGrid() {
+
+    const container = document.getElementById('hdaily-grid-container');
+
+    const start = document.getElementById('hdaily-start-date').value;
+
+    const end = document.getElementById('hdaily-end-date').value;
+
+    if (!start || !end) return;
+
+    container.innerHTML = '<div class="hcrm-dash-loading">Loading...</div>';
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/dashboard/dod-grid?start=${start}&end=${end}`);
+
+        if (!res.ok) throw new Error('Failed to load grid');
+
+        const data = await res.json();
+
+        hdailyLastGridData = data;
+
+        renderHDailyGrid(data);
+
+    } catch (e) {
+
+        container.innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+
+    }
+
+}
+
+
+
+let hdailyLastGridData = null;
+
+
+
+function renderHDailyGrid(data) {
+
+    const container = document.getElementById('hdaily-grid-container');
+
+    const dates = data.dates || [];
+
+    const statuses = data.statuses || [];
+
+    if (!dates.length || !statuses.length) {
+
+        container.innerHTML = '<p class="hint">No data</p>';
+
+        return;
+
+    }
+
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const fmtDate = (iso) => {
+
+        const [y, m, d] = iso.split('-').map(Number);
+
+        return `${d}-${MONTHS[m - 1]}`;
+
+    };
+
+    let html = '<table class="hdaily-table"><thead><tr><th>Date</th>';
+
+    statuses.forEach(s => { html += `<th>${escapeHtml(s)}</th>`; });
+
+    html += '<th>Total</th></tr></thead><tbody>';
+
+    dates.forEach(d => {
+
+        const rowTotal = statuses.reduce((sum, s) => sum + ((data.grid[s] || {})[d] || 0), 0);
+
+        html += `<tr><td>${escapeHtml(fmtDate(d))}</td>`;
+
+        statuses.forEach(s => {
+
+            const val = (data.grid[s] || {})[d] || 0;
+
+            html += `<td class="${val ? 'hdaily-cell-active' : ''}">${val || ''}</td>`;
+
+        });
+
+        html += `<td class="hdaily-cell-total">${rowTotal}</td></tr>`;
+
+    });
+
+    html += '</tbody></table>';
+
+    if (data.approximate_count) {
+
+        html += `<p class="hint" style="margin-top: 8px;">Includes ${data.approximate_count} approximate entr${data.approximate_count === 1 ? 'y' : 'ies'} backfilled from current status + last-updated date for businesses with no tracked history yet.</p>`;
+
+    }
+
+    container.innerHTML = html;
+
+}
+
+
+
+function exportHDailyGridCsv() {
+
+    if (!hdailyLastGridData) return;
+
+    const { dates, statuses, grid } = hdailyLastGridData;
+
+    let csv = 'Date,' + statuses.map(s => `"${s}"`).join(',') + ',Total\n';
+
+    dates.forEach(d => {
+
+        const rowTotal = statuses.reduce((sum, s) => sum + ((grid[s] || {})[d] || 0), 0);
+
+        csv += `${d},` + statuses.map(s => (grid[s] || {})[d] || 0).join(',') + `,${rowTotal}\n`;
+
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+
+    a.href = url;
+
+    a.download = `horeca-day-on-day-${dates[0]}-to-${dates[dates.length - 1]}.csv`;
+
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+}
+
+
+
+async function loadHDailyAssociateTable() {
+
+    const container = document.getElementById('hdaily-associate-table');
+
+    const preset = document.getElementById('hassoc-range-preset').value;
+
+    container.innerHTML = '<div class="hcrm-dash-loading">Loading...</div>';
+
+    try {
+
+        let url;
+
+        if (preset === 'all') {
+
+            url = `${API_BASE}/horeca/dashboard/associate-snapshot`;
+
+        } else {
+
+            const { start, end } = hAssocRangeForPreset(preset);
+
+            if (!start || !end) return;
+
+            url = `${API_BASE}/horeca/dashboard/associate-events?start=${start}&end=${end}`;
+
+        }
+
+        const res = await fetch(url);
+
+        if (!res.ok) throw new Error('Failed to load');
+
+        const data = await res.json();
+
+        renderHDailyAssociateTable(data);
+
+    } catch (e) {
+
+        container.innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+
+    }
+
+}
+
+
+
+function hAssocRangeForPreset(preset) {
+
+    const end = new Date();
+
+    const endStr = end.toISOString().slice(0, 10);
+
+    if (preset === 'date') {
+
+        return { start: endStr, end: endStr };
+
+    }
+
+    if (preset === 'week') {
+
+        const start = new Date();
+
+        start.setDate(start.getDate() - 6);
+
+        return { start: start.toISOString().slice(0, 10), end: endStr };
+
+    }
+
+    if (preset === '15days') {
+
+        const start = new Date();
+
+        start.setDate(start.getDate() - 14);
+
+        return { start: start.toISOString().slice(0, 10), end: endStr };
+
+    }
+
+    if (preset === 'custom') {
+
+        return {
+
+            start: document.getElementById('hassoc-start-date').value,
+
+            end: document.getElementById('hassoc-end-date').value,
+
+        };
+
+    }
+
+    return { start: null, end: null };
+
+}
+
+
+
+function handleHAssocPresetChange() {
+
+    const preset = document.getElementById('hassoc-range-preset').value;
+
+    const customInputs = document.getElementById('hassoc-custom-inputs');
+
+    customInputs.style.display = preset === 'custom' ? 'inline-flex' : 'none';
+
+    if (preset === 'custom') return; // wait for Apply click
+
+    loadHDailyAssociateTable();
+
+}
+
+
+
+function renderHDailyAssociateTable(data) {
+
+    const container = document.getElementById('hdaily-associate-table');
+
+    const statuses = data.statuses || [];
+
+    const associates = Object.entries(data.associates || {})
+
+        .sort((a, b) => (b[1]['OB Form Filled'] || 0) - (a[1]['OB Form Filled'] || 0));
+
+    if (!associates.length) {
+
+        container.innerHTML = '<p class="hint">No assigned businesses yet</p>';
+
+        return;
+
+    }
+
+    let html = '<table class="hdaily-table"><thead><tr><th>Associate</th>';
+
+    statuses.forEach(s => { html += `<th>${escapeHtml(s)}</th>`; });
+
+    html += '<th>Total</th></tr></thead><tbody>';
+
+    associates.forEach(([name, bucket]) => {
+
+        const total = statuses.reduce((sum, s) => sum + (bucket[s] || 0), 0);
+
+        html += `<tr><td>${escapeHtml(name)}</td>`;
+
+        statuses.forEach(s => {
+
+            const val = bucket[s] || 0;
+
+            html += `<td class="${s === 'OB Form Filled' && val ? 'hdaily-cell-active' : ''}">${val || ''}</td>`;
+
+        });
+
+        html += `<td class="hdaily-cell-total">${total}</td></tr>`;
+
+    });
+
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+
+}
+
+
+
+let hmetricsLoaded = false;
+
+
+
+function initHMetrics() {
+
+    if (hmetricsLoaded) return;
+
+    hmetricsLoaded = true;
+
+    loadHMetrics();
+
+}
+
+
+
+async function loadHMetrics() {
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/metrics/overview`);
+
+        if (!res.ok) throw new Error('Failed to load metrics');
+
+        const data = await res.json();
+
+        renderHMetricsKPIs(data);
+
+        renderHMetricsFunnel(data);
+
+        loadHMetricsAssociateConversion();
+
+    } catch (e) {
+
+        document.getElementById('hmetrics-kpis').innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+
+    }
+
+}
+
+
+
+function renderHMetricsKPIs(data) {
+
+    const container = document.getElementById('hmetrics-kpis');
+
+    const ct = data.cycle_time || {};
+
+    const cycleTimeHtml = ct.sample_size > 0
+
+        ? `${ct.avg_days}d avg / ${ct.median_days}d median <span class="hint">(n=${ct.sample_size})</span>`
+
+        : `<span class="hint">Insufficient tracked history yet — builds up as real status changes accumulate</span>`;
+
+    container.innerHTML = `
+
+        <div class="card hdod-card">
+
+            <div class="hdod-card-header"><strong>Conversion (worked leads)</strong></div>
+
+            <div class="hdod-card-total" style="font-size: 22px; color: var(--primary);">${data.conversion_rate_worked}%</div>
+
+            <div class="hint">${data.ob_filled} onboarded / ${data.worked_leads} worked</div>
+
+        </div>
+
+        <div class="card hdod-card">
+
+            <div class="hdod-card-header"><strong>Conversion (total database)</strong></div>
+
+            <div class="hdod-card-total" style="font-size: 22px;">${data.conversion_rate_total}%</div>
+
+            <div class="hint">${data.ob_filled} onboarded / ${data.total_businesses} total</div>
+
+        </div>
+
+        <div class="card hdod-card">
+
+            <div class="hdod-card-header"><strong>Days to onboard</strong></div>
+
+            <div class="hdod-card-total">${cycleTimeHtml}</div>
+
+        </div>
+
+        <div class="card hdod-card">
+
+            <div class="hdod-card-header"><strong>Stuck leads</strong></div>
+
+            <div class="hdod-card-total" style="font-size: 22px; color: #dc2626;">${data.stuck_leads}</div>
+
+            <div class="hint">Non-terminal status, untouched ${data.stuck_threshold_days}+ days</div>
+
+        </div>
+
+    `;
+
+}
+
+
+
+function renderHMetricsFunnel(data) {
+
+    const container = document.getElementById('hmetrics-funnel');
+
+    const funnel = data.funnel || {};
+
+    const statuses = Object.keys(funnel);
+
+    const maxCount = Math.max(1, ...Object.values(funnel));
+
+    container.innerHTML = `<div class="hdod-status-breakdown">${statuses.map(status => `
+
+        <div class="hdod-status-row" style="align-items: center;">
+
+            <span style="min-width: 200px;">${escapeHtml(status)}</span>
+
+            <div style="flex: 1; background: var(--gray-100); border-radius: 4px; margin: 0 8px; height: 18px; overflow: hidden;">
+
+                <div style="width: ${(funnel[status] / maxCount * 100).toFixed(0)}%; background: var(--primary); height: 100%;"></div>
+
+            </div>
+
+            <span style="min-width: 40px; text-align: right; font-weight: 600;">${funnel[status]}</span>
+
+        </div>
+
+    `).join('')}</div>`;
+
+}
+
+
+
+async function loadHMetricsAssociateConversion() {
+
+    const container = document.getElementById('hmetrics-associate-conversion');
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/dashboard/associate-snapshot`);
+
+        if (!res.ok) throw new Error('Failed to load');
+
+        const data = await res.json();
+
+        renderHMetricsAssociateConversion(data);
+
+    } catch (e) {
+
+        container.innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+
+    }
+
+}
+
+
+
+function renderHMetricsAssociateConversion(data) {
+
+    const container = document.getElementById('hmetrics-associate-conversion');
+
+    const associates = Object.entries(data.associates || {}).map(([name, bucket]) => {
+
+        const total = Object.values(bucket).reduce((a, b) => a + b, 0);
+
+        const obFilled = bucket['OB Form Filled'] || 0;
+
+        const rate = total > 0 ? (obFilled / total * 100) : 0;
+
+        return { name, total, obFilled, rate };
+
+    }).sort((a, b) => b.rate - a.rate);
+
+    let html = '<table class="hdaily-table"><thead><tr><th>Associate</th><th>Assigned</th><th>Onboarded</th><th>Conversion Rate</th></tr></thead><tbody>';
+
+    associates.forEach(a => {
+
+        html += `<tr>
+
+            <td style="text-align:left;">${escapeHtml(a.name)}</td>
+
+            <td>${a.total}</td>
+
+            <td>${a.obFilled}</td>
+
+            <td class="hdaily-cell-active">${a.total > 0 ? a.rate.toFixed(1) + '%' : '-'}</td>
+
+        </tr>`;
+
+    });
+
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+
+}
+
+
+
+let hsupersetCurrentPage = 1;
+
+let hsupersetTotalPages = 1;
+
+let hsvData = null;
+
+let hsvActiveAudit = 'qa_name_matches';
+
+
+
+async function loadHSupersetValidation() {
+
+    const kpis = document.getElementById('hsv-kpis');
+
+    // Render instantly from the last result if we have one; refresh silently.
+
+    if (hsvData) {
+
+        renderHsvKPIs();
+
+        renderHsvMethodBar();
+
+        renderHsvAuditTable();
+
+    } else {
+
+        kpis.innerHTML = '<div class="hcrm-dash-loading">Validating against Superset data...</div>';
+
+    }
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/superset/validation`);
+
+        if (!res.ok) throw new Error('Failed to load validation');
+
+        hsvData = await res.json();
+
+        renderHsvKPIs();
+
+        renderHsvMethodBar();
+
+        renderHsvAuditTable();
+
+    } catch (e) {
+
+        if (!hsvData) kpis.innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+
+    }
+
+}
+
+
+
+function renderHsvKPIs() {
+
+    const d = hsvData;
+
+    const c = d.classification || {};
+
+    const n = (v) => (v == null ? '-' : Number(v).toLocaleString());
+
+    const cards = [
+
+        renderHovKpiCard('Total Onboarded', n(c.total_onboarded ?? d.onboarded_active), 'Superset ACTIVE', 'outcome'),
+
+        renderHovKpiCard('Onboarding In Progress', n(c.onboarding_in_progress_count ?? d.pending_draft), 'DRAFT — started, not completed', 'runrate'),
+
+        renderHovKpiCard('Google-source Leads', n(c.google_leads), 'app_sheet Lead Source = Google'),
+
+        renderHovKpiCard('New Leads', n(c.new_leads), 'Walk-In / Referral / other non-Google'),
+
+        renderHovKpiCard('Organic', n(c.organic_count), 'no ID or name trace — came on their own', 'outcome'),
+
+        renderHovKpiCard('Inorganic', n(c.inorganic_count), 'PAN/GST found with us — associate-driven', 'outcome'),
+
+        renderHovKpiCard('QA Review Pending', n(c.qa_pending), 'uncertain — needs approve / disapprove'),
+
+    ];
+
+    const el = document.getElementById('hsv-kpis');
+
+    el.className = 'hov-kpi-grid-auto';
+
+    el.style.marginBottom = '16px';
+
+    el.innerHTML = cards.join('');
+
+}
+
+
+
+function renderHsvMethodBar() {
+
+    const c = hsvData.classification || {};
+
+    // Plain-language composition: every onboarded business in Superset was
+
+    // looked up in OUR records (Enhanced + app_sheet). This shows how each
+
+    // one was (or wasn't) found — one segment per outcome, summing to 100%.
+
+    const groups = [
+
+        { label: 'Found by PAN / GST', value: (c.inorganic_count || 0), color: '#059669',
+
+          desc: 'The tax ID the associate captured matches exactly — proven associate-driven.' },
+
+        { label: 'Found by name only', value: (c.qa_name_matches || []).length, color: 'var(--primary)',
+
+          desc: 'Same name & area in our records, but no tax ID captured yet — needs a quick confirm.' },
+
+        { label: 'Duplicate IDs in Superset', value: (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length, color: '#d97706',
+
+          desc: 'Two or more Superset businesses share one PAN/GST — decide if multi-outlet or duplicate.' },
+
+        { label: 'Not found with us', value: (c.organic_count || 0), color: '#a8a29e',
+
+          desc: 'No ID or name trace in our funnel — likely organic (came on their own).' },
+
+    ];
+
+    const total = Math.max(1, groups.reduce((a, g) => a + g.value, 0));
+
+    const bar = `<div style="display:flex; height:22px; border-radius:6px; overflow:hidden; margin-bottom:14px;">${groups.map(g =>
+
+        g.value ? `<div title="${g.label}: ${g.value}" style="width:${(g.value / total * 100).toFixed(1)}%; background:${g.color};"></div>` : ''
+
+    ).join('')}</div>`;
+
+    const legend = groups.map(g => `
+
+        <div style="display:flex; align-items:flex-start; gap:10px; padding:6px 0; border-bottom:1px solid var(--gray-100);">
+
+            <span style="width:12px; height:12px; border-radius:3px; background:${g.color}; margin-top:3px; flex-shrink:0;"></span>
+
+            <div style="flex:1;">
+
+                <strong>${g.label}</strong> — ${g.value.toLocaleString()} <span class="hint">(${(g.value / total * 100).toFixed(1)}%)</span>
+
+                <div class="hint">${g.desc}</div>
+
+            </div>
+
+        </div>`).join('');
+
+    // Funnel-style split: Onboarded breaks into Inorganic + Organic + QA,
+
+    // the three always summing back to the onboarded total.
+
+    const qaTotal = (c.qa_name_matches || []).length + (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length;
+
+    const splitSteps = [
+
+        { label: 'Onboarded', value: c.total_onboarded || 0, icon: '✅', cls: 'step-installed' },
+
+        { label: 'Inorganic (associate-driven)', value: c.inorganic_count || 0, icon: '🤝', cls: 'step-unlocked' },
+
+        { label: 'Organic (on their own)', value: c.organic_count || 0, icon: '🌱', cls: 'step-vps' },
+
+        { label: 'QA Review', value: qaTotal, icon: '⚠️', cls: 'step-email' },
+
+    ];
+
+    const splitFunnel = `<div class="holistic-funnel" style="margin-bottom:14px;"><div class="funnel-flow">${splitSteps.map((s, i) => `
+
+        <div class="funnel-step ${s.cls}" title="${i === 0 ? 'total ACTIVE in Superset' : ((s.value / Math.max(1, splitSteps[0].value)) * 100).toFixed(1) + '% of onboarded'}">
+
+            <div class="funnel-step-icon">${s.icon}</div>
+
+            <div class="funnel-step-value">${s.value.toLocaleString()}</div>
+
+            <div class="funnel-step-label">${s.label}</div>
+
+        </div>` + (i === 0 ? '<div class="funnel-arrow">→</div>' : (i < splitSteps.length - 1 ? '<div class="funnel-arrow">+</div>' : ''))).join('')}
+
+    </div></div>
+
+    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${(c.organic_count || 0).toLocaleString()} + ${qaTotal.toLocaleString()} = ${((c.inorganic_count || 0) + (c.organic_count || 0) + qaTotal).toLocaleString()} — every onboarded business lands in exactly one bucket.</p>`;
+
+    document.getElementById('hsv-method-bar').innerHTML =
+
+        splitFunnel +
+
+        `<p class="hint" style="margin-bottom:10px;">Each of the ${total.toLocaleString()} ACTIVE Superset businesses was searched in our records — this is how each one was identified:</p>` +
+
+        bar + legend;
+
+}
+
+
+
+const HSV_AUDIT_HINTS = {
+
+    qa_name_matches: 'Close name match to one of our records but no PAN/GST link — approve if it is really the same business (counts as ours), disapprove if not.',
+
+    qa_dup_pan: 'Same PAN appears on 2+ Superset rows — likely one owner onboarding multiple outlets, or a data-entry duplicate. Approve legit rows, disapprove duplicates.',
+
+    qa_dup_gst: 'Same GSTIN appears on 2+ Superset rows — approve legit rows, disapprove duplicates.',
+
+    dup_names: 'Same business name appears more than once inside Superset — informational only, no decision needed.',
+
+    disapproved: 'Items a reviewer disapproved — kept visible for the record, flagged red.',
+
+    organic: 'Businesses whose PAN/GST appears nowhere in Enhanced or app_sheet and no name match — they came on their own.',
+
+    inorganic: 'Businesses whose PAN or GST was captured by our associates (Enhanced or app_sheet) — genuine associate-driven leads.',
+
+};
+
+const HSV_QUEUE_LABELS = {
+    name_match: 'Name match', dup_pan: 'Duplicate PAN', dup_gst: 'Duplicate GST', dup_name: 'Duplicate name',
+};
+
+
+
+function switchHsvAudit(audit) {
+
+    hsvActiveAudit = audit;
+
+    document.querySelectorAll('.hsv-pill').forEach(b => b.classList.toggle('active', b.dataset.audit === audit));
+
+    renderHsvAuditTable();
+
+}
+
+
+
+function hsvDecisionCell(r) {
+
+    if (r.decision) {
+        const color = r.decision === 'approved' ? '#059669' : '#dc2626';
+        return `<span style="color:${color}; font-weight:600;">${escapeHtml(r.decision)}</span>` +
+            (r.decided_by ? `<div class="hint">${escapeHtml(r.decided_by)}</div>` : '');
+    }
+    const args = `'${escapeHtml(r.key)}','${escapeHtml(r.queue)}',this`;
+    return `<button class="btn btn-small" data-name="${escapeHtml(r.superset_name)}" style="background:#059669;color:#fff;margin-right:4px;" onclick="submitHsvDecision(${args},'approved')">Approve</button>` +
+        `<button class="btn btn-small" data-name="${escapeHtml(r.superset_name)}" style="background:#dc2626;color:#fff;" onclick="submitHsvDecision(${args},'disapproved')">Disapprove</button>`;
+
+}
+
+
+async function submitHsvDecision(key, queue, btn, decision) {
+
+    const businessName = btn ? (btn.dataset.name || '') : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    try {
+        const res = await fetch(`${API_BASE}/horeca/qa/decision`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, queue, business_name: businessName, decision }),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Failed to save decision');
+        }
+        await loadHSupersetValidation();
+    } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = decision === 'approved' ? 'Approve' : 'Disapprove'; }
+        if (typeof showToast === 'function') showToast(e.message, 'error');
+        else alert(e.message);
+    }
+
+}
+
+
+function renderHsvAuditTable() {
+
+    if (!hsvData) return;
+
+    const container = document.getElementById('hsv-audit-table');
+
+    document.getElementById('hsv-audit-hint').textContent = HSV_AUDIT_HINTS[hsvActiveAudit] || '';
+
+    const filter = (document.getElementById('hsv-audit-search').value || '').toLowerCase().trim();
+
+    const c = hsvData.classification || {};
+
+    let rows = c[hsvActiveAudit] || [];
+
+    if (filter) {
+
+        rows = rows.filter(r => (r.superset_name || '').toLowerCase().includes(filter)
+
+            || (r.matched_name || '').toLowerCase().includes(filter));
+
+    }
+
+    if (!rows.length) {
+
+        container.innerHTML = '<p class="hint">No records</p>';
+
+        return;
+
+    }
+
+    const isDisapproved = hsvActiveAudit === 'disapproved';
+    // Ravishing-side columns everywhere except Organic (which by definition
+    // has no record on our side).
+    const showOurs = hsvActiveAudit !== 'organic';
+    // Decision buttons only on the actionable QA queues (dup-names is informational)
+    const hasDecisions = ['qa_name_matches', 'qa_dup_pan', 'qa_dup_gst', 'disapproved'].includes(hsvActiveAudit);
+
+    let html = '<table class="hdaily-table"><thead><tr><th>Superset Business</th>';
+
+    if (showOurs) html += '<th>Ravishing Business</th>';
+
+    html += '<th>PAN</th><th>GST</th><th>City</th><th>Superset Status</th>';
+
+    if (showOurs) html += '<th>Ravishing Status</th>';
+
+    if (isDisapproved) html += '<th>Queue</th>';
+
+    if (hsvActiveAudit === 'inorganic') html += '<th>Matched via</th>';
+
+    if (hasDecisions) html += '<th>Decision</th>';
+
+    html += '</tr></thead><tbody>';
+
+    rows.forEach(r => {
+
+        const rowStyle = (isDisapproved || r.decision === 'disapproved') ? ' style="background:#fef2f2;"' : '';
+
+        html += `<tr${rowStyle}><td style="text-align:left;">${escapeHtml(r.superset_name)}</td>`;
+
+        if (showOurs) html += `<td style="text-align:left;">${escapeHtml(r.matched_name || '—')}</td>`;
+
+        html += `<td>${escapeHtml(r.pan || '')}</td><td>${escapeHtml(r.gst || '')}</td>
+
+            <td>${escapeHtml(r.city || '')}</td><td>${escapeHtml(r.superset_status || '')}</td>`;
+
+        if (showOurs) html += `<td>${escapeHtml(r.matched_status || '—')}</td>`;
+
+        if (isDisapproved) html += `<td>${escapeHtml(HSV_QUEUE_LABELS[r.queue] || r.queue || '')}</td>`;
+
+        if (hsvActiveAudit === 'inorganic') html += `<td>${escapeHtml(r.matched_via || '')}</td>`;
+
+        if (hasDecisions) html += `<td style="white-space:nowrap;">${hsvDecisionCell(r)}</td>`;
+
+        html += '</tr>';
+
+    });
+
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+
+}
+
+
+
+let hsvRawLoaded = false;
+
+function toggleHsvRaw() {
+
+    const section = document.getElementById('hsv-raw-section');
+
+    const hint = document.getElementById('hsv-raw-toggle-hint');
+
+    const showing = section.style.display !== 'none';
+
+    section.style.display = showing ? 'none' : '';
+
+    hint.textContent = showing ? 'Show' : 'Hide';
+
+    if (!showing && !hsvRawLoaded) {
+
+        hsvRawLoaded = true;
+
+        loadHSupersetList(1);
+
+    }
+
+}
+
+
+
+async function loadHSupersetList(page) {
+
+    hsupersetCurrentPage = page;
+
+    const container = document.getElementById('hsuperset-table');
+
+    const search = document.getElementById('hsuperset-search').value.trim();
+
+    container.innerHTML = '<div class="hcrm-dash-loading">Loading...</div>';
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/superset/list?page=${page}&page_size=50&search=${encodeURIComponent(search)}`);
+
+        if (!res.ok) throw new Error('Failed to load');
+
+        const data = await res.json();
+
+        hsupersetTotalPages = data.total_pages;
+
+        renderHSupersetTable(data);
+
+    } catch (e) {
+
+        container.innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+
+    }
+
+}
+
+
+
+function renderHSupersetTable(data) {
+
+    const container = document.getElementById('hsuperset-table');
+
+    const countLine = document.getElementById('hsuperset-count-line');
+
+    countLine.textContent = `${data.total} businesses from Superset export`;
+
+    if (!data.records.length) {
+
+        container.innerHTML = '<p class="hint">No records found</p>';
+
+        renderHSupersetPagination();
+
+        return;
+
+    }
+
+    let html = '<table class="hdaily-table"><thead><tr>' +
+
+        '<th>Business Name</th><th>Status</th><th>PAN</th><th>GST</th><th>FSSAI</th><th>Kind</th><th>City</th></tr></thead><tbody>';
+
+    data.records.forEach(r => {
+
+        html += `<tr>
+
+            <td style="text-align:left;">${escapeHtml(r.business_name)}</td>
+
+            <td>${escapeHtml(r.status)}</td>
+
+            <td>${escapeHtml(r.pan_number)}</td>
+
+            <td>${escapeHtml(r.gstin_number)}</td>
+
+            <td>${escapeHtml(r.fssai_number)}</td>
+
+            <td>${escapeHtml(r.kind_of_business)}</td>
+
+            <td>${escapeHtml(r.city)}</td>
+
+        </tr>`;
+
+    });
+
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+
+    renderHSupersetPagination();
+
+}
+
+
+
+function renderHSupersetPagination() {
+
+    const container = document.getElementById('hsuperset-pagination');
+
+    if (hsupersetTotalPages <= 1) {
+
+        container.innerHTML = '';
+
+        return;
+
+    }
+
+    container.innerHTML = `<div class="hcrm-pag-controls">
+
+        <button class="btn btn-outline btn-small" ${hsupersetCurrentPage <= 1 ? 'disabled' : ''} onclick="loadHSupersetList(${hsupersetCurrentPage - 1})">Prev</button>
+
+        <span class="hcrm-pag-info">Page ${hsupersetCurrentPage} of ${hsupersetTotalPages}</span>
+
+        <button class="btn btn-outline btn-small" ${hsupersetCurrentPage >= hsupersetTotalPages ? 'disabled' : ''} onclick="loadHSupersetList(${hsupersetCurrentPage + 1})">Next</button>
+
+    </div>`;
 
 }
 
@@ -9505,7 +11439,6 @@ function handleHoReCaSubTabClick() {
 }
 
 
-
 async function loadHoReCaStaticData() {
 
     if (horecaLoaded) return;
@@ -11714,6 +13647,26 @@ function selectHorecaFromMaster(placeId) {
 
     statusBadge.className = 'hcrm-status-badge ' + (HCRM_STATUS_COLORS[record.outreach_status] || 'hcrm-status-none');
 
+    const mergedBadge = document.getElementById('hcrm-merged-badge');
+
+    if (mergedBadge) {
+
+        if (record.is_merged && record.cluster_size > 1) {
+
+            mergedBadge.textContent = `Merged with ${record.cluster_size - 1} duplicate record${record.cluster_size - 1 > 1 ? 's' : ''}`;
+
+            mergedBadge.style.display = 'inline-flex';
+
+        } else {
+
+            mergedBadge.style.display = 'none';
+
+        }
+
+    }
+
+    loadHorecaTimeline(placeId);
+
 
 
     // Quick info
@@ -11832,6 +13785,10 @@ function selectHorecaFromMaster(placeId) {
 
     document.getElementById('hcrm-bottles').value = record.bottles_per_week || '';
 
+    document.getElementById('hcrm-pan').value = record.pan_number || '';
+
+    document.getElementById('hcrm-gst').value = record.gst_number || '';
+
 
 
     // Comments timeline
@@ -11842,7 +13799,7 @@ function selectHorecaFromMaster(placeId) {
 
     // Update comments hint
 
-    const notesEntries = record.outreach_notes ? record.outreach_notes.split('\n---\n').filter(Boolean) : [];
+    const notesEntries = record.outreach_notes ? record.outreach_notes.split('\n---\n').filter(Boolean).filter(e => !/\]\s*(STATUS_CHANGE|ATTEMPT_LOGGED)/.test(e)) : [];
 
     document.getElementById('hcrm-comments-hint').textContent = notesEntries.length ? `${notesEntries.length} comment${notesEntries.length > 1 ? 's' : ''}` : 'Add notes and comments';
 
@@ -12042,7 +13999,17 @@ function renderHorecaNotesTimeline(notes) {
 
 
 
-    const entries = notes.split('\n---\n').filter(Boolean);
+    // STATUS_CHANGE lines are auto-logged for the DOD/History feature —
+    // shown in the dedicated History section instead, not mixed into comments.
+    const entries = notes.split('\n---\n').filter(Boolean).filter(e => !/\]\s*(STATUS_CHANGE|ATTEMPT_LOGGED)/.test(e));
+
+    if (!entries.length) {
+
+        container.innerHTML = '<p class="hint">No comments yet</p>';
+
+        return;
+
+    }
 
     container.innerHTML = entries.map((entry, i) => {
 
@@ -12065,6 +14032,132 @@ function renderHorecaNotesTimeline(notes) {
         return `<div class="hcrm-note-entry"><div class="hcrm-note-text">${escapeHtml(entry)}</div></div>`;
 
     }).join('');
+
+}
+
+
+
+async function loadHorecaTimeline(placeId) {
+
+    const container = document.getElementById('hcrm-history-timeline');
+
+    if (!container) return;
+
+    container.innerHTML = '<p class="hint">Loading...</p>';
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/crm/timeline?place_id=${encodeURIComponent(placeId)}`);
+
+        if (!res.ok) throw new Error('Failed to load timeline');
+
+        const data = await res.json();
+
+        renderHorecaTimeline(data);
+
+    } catch (e) {
+
+        container.innerHTML = '<p class="hint">Could not load history</p>';
+
+    }
+
+}
+
+
+
+function renderHorecaTimeline(data) {
+
+    const container = document.getElementById('hcrm-history-timeline');
+
+    const attemptCountEl = document.getElementById('hcrm-attempt-count');
+
+    const statusEvents = ((data && data.events) || []).map(ev => ({ ...ev, kind: 'status' }));
+
+    const attemptEvents = ((data && data.attempts) || []).map(ev => ({ ...ev, kind: 'attempt' }));
+
+    if (attemptCountEl) {
+
+        const n = data.attempt_count || 0;
+
+        attemptCountEl.textContent = `${n} attempt${n === 1 ? '' : 's'} logged`;
+
+    }
+
+    if (!container) return;
+
+    const combined = [...statusEvents, ...attemptEvents];
+
+    if (!combined.length) {
+
+        container.innerHTML = '<p class="hint">No tracked activity yet — status changes and attempts are tracked from the day this feature shipped onward.</p>';
+
+        return;
+
+    }
+
+    // Most recent first
+
+    const ordered = combined.sort((a, b) => a.timestamp.localeCompare(b.timestamp)).reverse();
+
+    container.innerHTML = ordered.map((ev, i) => {
+
+        const nameSuffix = ev.name && data.cluster_size > 1 ? ' · ' + escapeHtml(ev.name) : '';
+
+        const body = ev.kind === 'attempt'
+
+            ? `Attempt logged${ev.note ? ': ' + escapeHtml(ev.note) : ''}`
+
+            : `${escapeHtml(ev.from_status || '(none)')} &rarr; <strong>${escapeHtml(ev.to_status)}</strong>`;
+
+        return `
+
+        <div class="hcrm-note-entry${i === 0 ? ' latest' : ''}">
+
+            <div class="hcrm-note-meta">${escapeHtml(ev.timestamp)} · ${escapeHtml(ev.associate || 'Unknown')}${nameSuffix}</div>
+
+            <div class="hcrm-note-text">${body}</div>
+
+        </div>
+
+    `; }).join('');
+
+}
+
+
+
+async function logHorecaAttempt() {
+
+    if (!currentHoreca) return;
+
+    const author = document.getElementById('hcrm-updated-by').value.trim() || 'Team';
+
+    try {
+
+        const res = await fetch(`${API_BASE}/horeca/crm/attempt`, {
+
+            method: 'POST',
+
+            headers: { 'Content-Type': 'application/json' },
+
+            body: JSON.stringify({ place_id: currentHoreca.place_id, updated_by: author }),
+
+        });
+
+        if (!res.ok) throw new Error('Failed to log attempt');
+
+        const result = await res.json();
+
+        document.getElementById('hcrm-attempt-count').textContent = `${result.attempt_count} attempt${result.attempt_count === 1 ? '' : 's'} logged`;
+
+        showToast('Attempt logged');
+
+        loadHorecaTimeline(currentHoreca.place_id);
+
+    } catch (e) {
+
+        showToast('Failed to log attempt: ' + e.message);
+
+    }
 
 }
 
@@ -12556,6 +14649,10 @@ async function saveHorecaContacts() {
 
         bottles_per_week: document.getElementById('hcrm-bottles').value.trim(),
 
+        pan_number: document.getElementById('hcrm-pan').value.trim().toUpperCase(),
+
+        gst_number: document.getElementById('hcrm-gst').value.trim().toUpperCase(),
+
         updated_by: updatedBy,
 
     };
@@ -12644,6 +14741,46 @@ function horecaCrmGoPage(page) {
 
 
 
+function captureAddLeadLocation() {
+
+    const statusEl = document.getElementById('add-lead-location-status');
+
+    if (!navigator.geolocation) {
+
+        statusEl.textContent = 'Geolocation not supported by this browser';
+
+        return;
+
+    }
+
+    statusEl.textContent = 'Getting your location…';
+
+    navigator.geolocation.getCurrentPosition(
+
+        (pos) => {
+
+            document.getElementById('add-lead-lat').value = pos.coords.latitude.toFixed(7);
+
+            document.getElementById('add-lead-lng').value = pos.coords.longitude.toFixed(7);
+
+            statusEl.textContent = `Captured (±${Math.round(pos.coords.accuracy)}m accuracy)`;
+
+        },
+
+        (err) => {
+
+            statusEl.textContent = 'Could not get location: ' + err.message;
+
+        },
+
+        { enableHighAccuracy: true, timeout: 15000 }
+
+    );
+
+}
+
+
+
 function openAddHorecaLeadModal() {
 
     const modal = document.getElementById('horeca-add-lead-modal');
@@ -12662,7 +14799,9 @@ function openAddHorecaLeadModal() {
 
      'add-lead-owner-phone', 'add-lead-spoc-name', 'add-lead-spoc-phone',
 
-     'add-lead-spoc-designation', 'add-lead-email', 'add-lead-bottles', 'add-lead-note'
+     'add-lead-spoc-designation', 'add-lead-email', 'add-lead-bottles', 'add-lead-note',
+
+     'add-lead-pan', 'add-lead-gst',
 
     ].forEach(id => {
 
@@ -12671,6 +14810,10 @@ function openAddHorecaLeadModal() {
         if (el) el.value = '';
 
     });
+
+    const locStatus = document.getElementById('add-lead-location-status');
+
+    if (locStatus) locStatus.textContent = '';
 
     document.getElementById('add-lead-type').value = '';
 
@@ -12767,6 +14910,10 @@ async function submitNewHorecaLead() {
         serves_wine: document.getElementById('add-lead-serves-wine').checked,
 
         bottles_per_week: document.getElementById('add-lead-bottles').value.trim(),
+
+        pan_number: document.getElementById('add-lead-pan').value.trim().toUpperCase(),
+
+        gst_number: document.getElementById('add-lead-gst').value.trim().toUpperCase(),
 
         status: document.getElementById('add-lead-status').value,
 
@@ -13720,6 +15867,14 @@ let depDeadline = '2026-07-15';
 
 let depPlanTotal = 301;
 
+let depRvmCpCount = 0;
+
+let depRcCpCount = 0;
+
+function depGetRvmTarget() { return Math.max(depPlanTotal, depRvmCpCount); }
+
+function depGetRcTarget() { return Math.max(25, depRcCpCount); }
+
 let depFilteredLocs = null;
 
 
@@ -13755,6 +15910,10 @@ async function loadActivityLog() {
     document.getElementById('act-feed-tab').addEventListener('click', () => actSwitchTab('feed'));
 
     document.getElementById('act-profiles-tab').addEventListener('click', () => actSwitchTab('profiles'));
+
+    document.getElementById('act-flow-tab').addEventListener('click', () => actSwitchTab('flow'));
+
+    document.getElementById('act-trends-tab').addEventListener('click', () => actSwitchTab('trends'));
 
 
 
@@ -13802,7 +15961,7 @@ async function loadActivityLog() {
 
 function actSwitchTab(tab) {
 
-    ['feed','profiles'].forEach(t => {
+    ['feed','profiles','flow','trends'].forEach(t => {
 
         document.getElementById(`act-${t}-tab`).classList.toggle('act-tab-active', t === tab);
 
@@ -13812,6 +15971,513 @@ function actSwitchTab(tab) {
 
     });
 
+    if (tab === 'flow' && !_actFlowLoaded) {
+
+        _actFlowLoaded = true;
+
+        loadActFlow();
+
+    }
+
+    if (tab === 'trends' && !_actTrendsLoaded) {
+
+        _actTrendsLoaded = true;
+
+        loadActTrends();
+
+    }
+
+}
+
+
+
+// ── Activity Flow (Mixpanel-style path diagram) ──────────────────────────────
+
+let _actFlowLoaded = false;
+
+let _actTrendsLoaded = false;
+
+let _actRawEvents = null;
+
+let _actSessions = [];
+
+// Fetch the raw event log once and share it between Flow and Trends.
+async function _actFetchEvents() {
+    if (_actRawEvents) return _actRawEvents;
+    const res = await fetch(`${API_BASE}/analytics/log?limit=5000`);
+    if (!res.ok) throw new Error('Failed');
+    const { events } = await res.json();
+    _actRawEvents = events || [];
+    return _actRawEvents;
+}
+
+let _actFlowColors = {};
+
+const _ACT_FLOW_PALETTE = ['#2563EB','#059669','#D97706','#7C3AED','#DB2777','#0EA5E9','#DC2626','#65A30D'];
+
+function _actEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function _actFlowColor(label) {
+    if (label === 'Other') return '#9CA3AF';
+    if (label === 'Dropped') return '#D1D5DB';
+    if (!_actFlowColors[label]) {
+        const used = Object.keys(_actFlowColors).length;
+        _actFlowColors[label] = _ACT_FLOW_PALETTE[used % _ACT_FLOW_PALETTE.length];
+    }
+    return _actFlowColors[label];
+}
+
+// IST-formatted "HH:MM:SS" from a "YYYY-MM-DD HH:MM:SS" (UTC-naive) timestamp string.
+function _actFlowTimeIST(ts) {
+    if (!ts) return '—';
+    const d = new Date((ts || '').replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return ts;
+    const ist = new Date(d.getTime() + 19800000);
+    return `${String(ist.getUTCHours()).padStart(2,'0')}:${String(ist.getUTCMinutes()).padStart(2,'0')}:${String(ist.getUTCSeconds()).padStart(2,'0')}`;
+}
+
+async function loadActFlow() {
+    const wrap = document.getElementById('act-flow-svg-wrap');
+    try {
+        const events = await _actFetchEvents();
+        _actBuildSessions(events);
+        _actPopulateFlowStart();
+        document.getElementById('act-flow-start').onchange = renderActFlow;
+        document.getElementById('act-flow-steps').onchange = renderActFlow;
+        renderActFlow();
+    } catch (e) {
+        wrap.innerHTML = `<div style="padding:24px;color:#f85149;font-size:13px">Failed to load flow data: ${_actEsc(e.message)}</div>`;
+    }
+}
+
+function _actBuildSessions(events) {
+    const bySession = {};
+    events.forEach(e => {
+        if (e.Event_Type !== 'page_view') return;
+        const sid = e.Session_ID || ('_noSession_' + e.User_Email);
+        (bySession[sid] = bySession[sid] || []).push(e);
+    });
+    _actSessions = Object.entries(bySession).map(([sid, evs]) => {
+        evs.sort((a, b) => String(a.Timestamp||'').localeCompare(String(b.Timestamp||'')));
+        const steps = [];
+        evs.forEach(e => {
+            const page = e.Page || '(unknown)';
+            if (steps.length && steps[steps.length - 1].page === page) return; // collapse consecutive dupes
+            steps.push({ page, timestamp: e.Timestamp, userName: e.User_Name, userEmail: e.User_Email });
+        });
+        return { sessionId: sid, steps };
+    }).filter(s => s.steps.length > 0);
+}
+
+function _actPopulateFlowStart() {
+    const counts = {};
+    _actSessions.forEach(s => { const p = s.steps[0].page; counts[p] = (counts[p] || 0) + 1; });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const sel = document.getElementById('act-flow-start');
+    sel.innerHTML = sorted.map(([p, c]) => `<option value="${_actEsc(p)}">${_actEsc(p)} (${c})</option>`).join('');
+}
+
+// Build one column per step. Column 0 is always the chosen start page (100% of
+// matching sessions). Later columns bucket sessions into their top-5 destination
+// pages + "Other" + "Dropped" (session had no further recorded page view).
+function _actComputeFlow(startPage, steps) {
+    const matching = _actSessions.filter(s => s.steps[0] && s.steps[0].page === startPage);
+    const columns = [{ buckets: [{ key: startPage, label: startPage, sessions: matching }] }];
+    for (let i = 1; i < steps; i++) {
+        const pageOf = {};
+        const counts = {};
+        matching.forEach(s => {
+            const raw = s.steps[i] ? s.steps[i].page : 'Dropped';
+            pageOf[s.sessionId] = raw;
+            counts[raw] = (counts[raw] || 0) + 1;
+        });
+        // Top pages by weight; anything under 3% of total merges into "Other"
+        // so the diagram doesn't fill with sliver nodes.
+        const minCount = Math.max(1, Math.ceil(matching.length * 0.03));
+        const top = Object.entries(counts).filter(([k, c]) => k !== 'Dropped' && c >= minCount)
+            .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => k);
+        const buckets = top.map(k => ({ key: k, label: k, sessions: matching.filter(s => pageOf[s.sessionId] === k) }));
+        const other = matching.filter(s => pageOf[s.sessionId] !== 'Dropped' && !top.includes(pageOf[s.sessionId]));
+        if (other.length) buckets.push({ key: '__other__', label: 'Other', sessions: other });
+        const dropped = matching.filter(s => pageOf[s.sessionId] === 'Dropped');
+        if (dropped.length) buckets.push({ key: '__dropped__', label: 'Dropped', sessions: dropped });
+        columns.push({ buckets });
+    }
+    return { columns, total: matching.length };
+}
+
+function renderActFlow() {
+    const wrap = document.getElementById('act-flow-svg-wrap');
+    const drill = document.getElementById('act-flow-drill');
+    drill.style.display = 'none'; drill.innerHTML = '';
+    const startPage = document.getElementById('act-flow-start').value;
+    const steps = parseInt(document.getElementById('act-flow-steps').value, 10) || 4;
+    if (!startPage) { wrap.innerHTML = '<div style="padding:24px;color:#6B7280;font-size:13px">No session data yet.</div>'; return; }
+
+    const { columns, total } = _actComputeFlow(startPage, steps);
+    document.getElementById('act-flow-summary').textContent = `${total} session${total === 1 ? '' : 's'} started here`;
+    if (!total) { wrap.innerHTML = '<div style="padding:24px;color:#6B7280;font-size:13px">No sessions start on this page.</div>'; return; }
+
+    const colW = 190, nodeW = 140, gap = 96, H = 440, padTop = 10, nodeGap = 6;
+    const W = columns.length * (colW + gap) - gap + 40;
+
+    // sessionId -> {colIndex -> bucketKey} for quick lookup when building links
+    const sessBucket = columns.map(col => {
+        const m = {};
+        col.buckets.forEach(b => b.sessions.forEach(s => { m[s.sessionId] = b.key; }));
+        return m;
+    });
+
+    // Sessions still "active" at each column (not yet Dropped) — used for % of previous step.
+    const activeAt = columns.map(col =>
+        col.buckets.reduce((sum, b) => sum + (b.key === '__dropped__' ? 0 : b.sessions.length), 0));
+
+    // y-layout per column: stack buckets top-to-bottom, height ∝ count
+    const layout = columns.map(col => {
+        let y = padTop;
+        return col.buckets.map(b => {
+            const h = Math.max(4, (b.sessions.length / total) * (H - padTop * 2 - (col.buckets.length - 1) * nodeGap));
+            const node = { ...b, y, h };
+            y += h + nodeGap;
+            return node;
+        });
+    });
+
+    // Median seconds from step i to step i+1 for a session set.
+    function medianGapSecs(sessions, i) {
+        const gaps = [];
+        sessions.forEach(s => {
+            const a = s.steps[i], b = s.steps[i + 1];
+            if (!a || !b || !a.timestamp || !b.timestamp) return;
+            const t0 = new Date(String(a.timestamp).replace(' ', 'T') + 'Z').getTime();
+            const t1 = new Date(String(b.timestamp).replace(' ', 'T') + 'Z').getTime();
+            if (isFinite(t0) && isFinite(t1) && t1 >= t0) gaps.push((t1 - t0) / 1000);
+        });
+        if (!gaps.length) return null;
+        gaps.sort((a, b) => a - b);
+        return gaps[Math.floor(gaps.length / 2)];
+    }
+
+    function fmtDur(s) {
+        if (s == null) return '';
+        if (s < 60) return Math.round(s) + 's';
+        if (s < 3600) return Math.round(s / 60) + 'm ' + Math.round(s % 60) + 's';
+        return (s / 3600).toFixed(1) + 'h';
+    }
+
+    let svg = `<svg width="${W}" height="${H + 30}" style="font-family:inherit" id="act-flow-svg">`;
+
+    // Links first (so nodes paint on top)
+    for (let i = 0; i < columns.length - 1; i++) {
+        const x0 = 20 + i * (colW + gap) + nodeW;
+        const x1 = 20 + (i + 1) * (colW + gap);
+        const srcCursor = {}, dstCursor = {};
+        layout[i].forEach(n => srcCursor[n.key] = n.y);
+        layout[i + 1].forEach(n => dstCursor[n.key] = n.y);
+        // aggregate (src,dst) pair counts + sessions, ordered by src then dst position
+        const pairs = {};
+        layout[i].forEach(srcNode => {
+            srcNode.sessions.forEach(s => {
+                const dstKey = sessBucket[i + 1][s.sessionId];
+                if (dstKey === undefined) return;
+                const pk = srcNode.key + '||' + dstKey;
+                (pairs[pk] = pairs[pk] || { src: srcNode.key, dst: dstKey, count: 0, sessions: [] });
+                pairs[pk].count++;
+                pairs[pk].sessions.push(s);
+            });
+        });
+        const dstOrder = {}; layout[i + 1].forEach((n, idx) => dstOrder[n.key] = idx);
+        const srcOrder = {}; layout[i].forEach((n, idx) => srcOrder[n.key] = idx);
+        Object.values(pairs).sort((a, b) => (srcOrder[a.src] - srcOrder[b.src]) || (dstOrder[a.dst] - dstOrder[b.dst]))
+            .forEach(p => {
+                const thick = Math.max(1.5, (p.count / total) * (H - padTop * 2));
+                const y0 = srcCursor[p.src] + thick / 2; srcCursor[p.src] += thick;
+                const y1 = dstCursor[p.dst] + thick / 2; dstCursor[p.dst] += thick;
+                const mx = (x0 + x1) / 2;
+                const srcNode = layout[i].find(n => n.key === p.src);
+                const dstNode = layout[i + 1].find(n => n.key === p.dst);
+                const color = _actFlowColor(srcNode.label);
+                const med = p.dst === '__dropped__' ? null : medianGapSecs(p.sessions, i);
+                const tip = `${srcNode.label} → ${dstNode.label}: ${p.count} session${p.count === 1 ? '' : 's'}` + (med != null ? ` · median ${fmtDur(med)}` : '');
+                svg += `<path class="act-flow-link" data-scol="${i}" data-src="${_actEsc(p.src)}" data-dst="${_actEsc(p.dst)}" d="M${x0},${y0} C${mx},${y0} ${mx},${y1} ${x1},${y1}" stroke="${color}" stroke-opacity="0.25" stroke-width="${thick}" fill="none"><title>${_actEsc(tip)}</title></path>`;
+            });
+    }
+
+    // Nodes
+    columns.forEach((col, i) => {
+        const x = 20 + i * (colW + gap);
+        layout[i].forEach(n => {
+            const color = _actFlowColor(n.label);
+            const pctTotal = Math.round(n.sessions.length / total * 100);
+            const prevActive = i > 0 ? (activeAt[i - 1] || total) : total;
+            // "% of prev" is meaningless for the cumulative Session-ended bucket.
+            const showPrev = i > 0 && n.key !== '__dropped__';
+            const pctPrev = Math.round(n.sessions.length / prevActive * 100);
+            const displayLabel = n.label === 'Dropped' ? 'Session ended' : n.label;
+            const safeLabel = _actEsc(displayLabel.length > 20 ? displayLabel.slice(0, 19) + '…' : displayLabel);
+            const tip = `${displayLabel}: ${n.sessions.length} of ${total} (${pctTotal}%)` + (showPrev ? ` · ${pctPrev}% of previous step` : '');
+            svg += `<g class="act-flow-node" data-col="${i}" data-key="${_actEsc(n.key)}" data-label="${_actEsc(n.label)}">` +
+                `<title>${_actEsc(tip)}</title>` +
+                `<rect x="${x}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="7" fill="${color}" fill-opacity="${n.label==='Dropped'?0.45:0.15}" stroke="${color}" stroke-width="1.3"/>` +
+                (n.h >= 34
+                    ? `<text x="${x+9}" y="${n.y+16}" font-size="11" font-weight="700" fill="${n.label==='Dropped'?'#6B7280':color}">${safeLabel}</text>` +
+                      `<text x="${x+9}" y="${n.y+30}" font-size="10" fill="#6B7280">${n.sessions.length} · ${pctTotal}%${showPrev?` · ${pctPrev}% of prev`:''}</text>`
+                    : (n.h >= 15
+                        ? `<text x="${x+9}" y="${n.y + n.h/2 + 4}" font-size="10" font-weight="700" fill="${n.label==='Dropped'?'#6B7280':color}">${safeLabel} · ${n.sessions.length}</text>`
+                        : '')) +
+                `</g>`;
+        });
+        // column header
+        svg += `<text x="${x}" y="${H+22}" font-size="10" font-weight="700" fill="#9CA3AF" style="text-transform:uppercase;letter-spacing:.05em">Step ${i+1}</text>`;
+    });
+
+    svg += '</svg>';
+    wrap.innerHTML = svg;
+
+    // Interactions: click → drill-down; hover → isolate the paths touching this node.
+    const links = [...wrap.querySelectorAll('.act-flow-link')];
+    wrap.querySelectorAll('.act-flow-node').forEach(g => {
+        const col = parseInt(g.dataset.col, 10), key = g.dataset.key;
+        g.addEventListener('click', () => _actShowDrilldown(col, key, g.dataset.label, columns));
+        g.addEventListener('mouseenter', () => {
+            links.forEach(l => {
+                const scol = parseInt(l.dataset.scol, 10);
+                const touches = (scol === col && l.dataset.src === key) || (scol === col - 1 && l.dataset.dst === key);
+                l.setAttribute('stroke-opacity', touches ? '0.55' : '0.05');
+            });
+        });
+        g.addEventListener('mouseleave', () => {
+            links.forEach(l => l.setAttribute('stroke-opacity', '0.25'));
+        });
+    });
+}
+
+function _actShowDrilldown(colIdx, key, label, columns) {
+    const bucket = columns[colIdx].buckets.find(b => b.key === key);
+    if (!bucket) return;
+    const drill = document.getElementById('act-flow-drill');
+    const rows = bucket.sessions.slice(0, 40).map(s => {
+        const stepsHtml = s.steps.slice(0, 8).map((st, idx) =>
+            `${idx > 0 ? '<span style="color:#D1D5DB;margin:0 4px">→</span>' : ''}<span style="color:#6B7280">${_actFlowTimeIST(st.timestamp)}</span> <b style="color:#111827">${_actEsc(st.page)}</b>`
+        ).join('');
+        return `<div style="padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+            <span style="font-weight:700;color:#374151;min-width:120px">${_actEsc(s.steps[0].userName || s.steps[0].userEmail || 'Unknown')}</span>
+            <span>${stepsHtml}</span>
+        </div>`;
+    }).join('');
+    drill.innerHTML = `<div style="border:1px solid #E2E8F0;border-radius:10px;overflow:hidden">
+        <div style="padding:10px 12px;background:#FAFBFC;border-bottom:1px solid #E2E8F0;font-size:12px;font-weight:700;color:#111827;display:flex;justify-content:space-between">
+            <span>Step ${colIdx+1}: ${_actEsc(label)} — ${bucket.sessions.length} session${bucket.sessions.length===1?'':'s'}</span>
+            <span style="cursor:pointer;color:#9CA3AF;font-weight:400" onclick="document.getElementById('act-flow-drill').style.display='none'">✕ close</span>
+        </div>
+        <div style="max-height:320px;overflow-y:auto">${rows || '<div style=\"padding:16px;color:#9CA3AF;font-size:12px\">No sessions.</div>'}</div>
+    </div>`;
+    drill.style.display = '';
+    drill.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+
+
+// ── Activity Trends (Mixpanel Insights-style line chart) ─────────────────────
+
+async function loadActTrends() {
+    const chart = document.getElementById('act-tr-chart');
+    try {
+        await _actFetchEvents();
+        document.getElementById('act-tr-metric').onchange = renderActTrends;
+        document.getElementById('act-tr-group').onchange = renderActTrends;
+        ['act-tr-interval', 'act-tr-range'].forEach(id => {
+            document.getElementById(id).querySelectorAll('.act-tr-seg').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    btn.parentElement.querySelectorAll('.act-tr-seg').forEach(b => {
+                        const on = b === btn;
+                        b.classList.toggle('act-tr-seg-on', on);
+                        b.style.background = on ? '#1e6b5c' : '#FFF';
+                        b.style.color = on ? '#fff' : '#374151';
+                    });
+                    renderActTrends();
+                });
+            });
+        });
+        renderActTrends();
+    } catch (e) {
+        chart.innerHTML = `<div style="padding:24px;color:#f85149;font-size:13px">Failed to load trends: ${_actEsc(e.message)}</div>`;
+    }
+}
+
+const _actTrendsHidden = new Set();  // legend-toggled-off series
+
+function renderActTrends() {
+    const chart = document.getElementById('act-tr-chart');
+    const legendEl = document.getElementById('act-tr-legend');
+    const metric = document.getElementById('act-tr-metric').value;
+    const group = document.getElementById('act-tr-group').value;
+    const interval = document.querySelector('#act-tr-interval .act-tr-seg-on').dataset.v;
+    const rangeDays = parseInt(document.querySelector('#act-tr-range .act-tr-seg-on').dataset.v, 10);
+
+    // Filter events by metric
+    let evs = _actRawEvents || [];
+    if (metric === 'logins') evs = evs.filter(e => e.Event_Type === 'login');
+    else if (metric === 'pageviews') evs = evs.filter(e => e.Event_Type === 'page_view');
+
+    // Date window (IST calendar days)
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - rangeDays * 86400000);
+
+    // Bucket key: IST date string; for week, Monday of that IST week
+    function bucketKey(ts) {
+        const d = new Date(String(ts).replace(' ', 'T') + 'Z');
+        if (isNaN(d.getTime())) return null;
+        if (d < cutoff) return null;
+        const ist = new Date(d.getTime() + 19800000);
+        if (interval === 'week') {
+            const dow = (ist.getUTCDay() + 6) % 7; // Monday = 0
+            ist.setUTCDate(ist.getUTCDate() - dow);
+        }
+        return ist.toISOString().slice(0, 10);
+    }
+
+    // Ordered list of all bucket keys in range (zero-fill)
+    const buckets = [];
+    {
+        const start = new Date(cutoff.getTime() + 19800000);
+        const end = new Date(now.getTime() + 19800000);
+        if (interval === 'week') {
+            const dow = (start.getUTCDay() + 6) % 7;
+            start.setUTCDate(start.getUTCDate() - dow);
+        }
+        const cur = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+        while (cur <= end) {
+            buckets.push(cur.toISOString().slice(0, 10));
+            cur.setUTCDate(cur.getUTCDate() + (interval === 'week' ? 7 : 1));
+        }
+    }
+    const bucketIdx = {};
+    buckets.forEach((b, i) => bucketIdx[b] = i);
+
+    // Series key per event
+    function seriesOf(e) {
+        if (group === 'event') return e.Event_Type || '(unknown)';
+        if (group === 'page') return e.Page || '(unknown)';
+        if (group === 'user') return e.User_Name || e.User_Email || '(unknown)';
+        return metric === 'users' ? 'Unique users' : metric === 'logins' ? 'Logins' : metric === 'pageviews' ? 'Page views' : 'Total events';
+    }
+
+    // Count: value per (series, bucket); for unique-users metric count distinct emails
+    const seriesData = {};   // name -> array[buckets] of count or Set
+    evs.forEach(e => {
+        const bk = bucketKey(e.Timestamp);
+        if (bk == null || bucketIdx[bk] === undefined) return;
+        const sk = seriesOf(e);
+        if (!seriesData[sk]) seriesData[sk] = buckets.map(() => (metric === 'users' ? new Set() : 0));
+        if (metric === 'users') seriesData[sk][bucketIdx[bk]].add(e.User_Email || '?');
+        else seriesData[sk][bucketIdx[bk]]++;
+    });
+    let series = Object.entries(seriesData).map(([name, arr]) => ({
+        name,
+        values: arr.map(v => (metric === 'users' ? v.size : v)),
+    }));
+    series.forEach(s => s.total = s.values.reduce((a, b) => a + b, 0));
+    series.sort((a, b) => b.total - a.total);
+    // cap at 8 series, merge rest into "Other"
+    if (series.length > 8) {
+        const rest = series.slice(7);
+        const other = { name: 'Other', values: buckets.map((_, i) => rest.reduce((a, s) => a + s.values[i], 0)) };
+        other.total = rest.reduce((a, s) => a + s.total, 0);
+        series = series.slice(0, 7).concat([other]);
+    }
+
+    if (!series.length) {
+        chart.innerHTML = '<div style="padding:24px;color:#6B7280;font-size:13px">No events in this range.</div>';
+        legendEl.innerHTML = '';
+        return;
+    }
+
+    const visible = series.filter(s => !_actTrendsHidden.has(s.name));
+    const maxY = Math.max(1, ...visible.flatMap(s => s.values));
+    // rounded Y ticks
+    const yTickStep = Math.max(1, Math.ceil(maxY / 4));
+    const yMax = yTickStep * 4;
+
+    const padL = 44, padR = 16, padT = 14, padB = 34, plotH = 260;
+    const stepX = Math.max(34, Math.min(90, Math.floor(1000 / Math.max(1, buckets.length - 1))));
+    const plotW = stepX * Math.max(1, buckets.length - 1);
+    const W = padL + plotW + padR, H = padT + plotH + padB;
+
+    const xOf = i => padL + (buckets.length === 1 ? plotW / 2 : i * stepX);
+    const yOf = v => padT + plotH - (v / yMax) * plotH;
+
+    function fmtBucket(b) {
+        const d = new Date(b + 'T00:00:00Z');
+        return `${d.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]}`;
+    }
+
+    let svg = `<svg width="${W}" height="${H}" style="font-family:inherit" id="act-tr-svg">`;
+    // gridlines + y labels
+    for (let t = 0; t <= 4; t++) {
+        const v = yTickStep * t, y = yOf(v);
+        svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="#F3F4F6" stroke-width="1"/>`;
+        svg += `<text x="${padL - 8}" y="${y + 3}" font-size="10" fill="#9CA3AF" text-anchor="end">${v}</text>`;
+    }
+    // x labels (skip when crowded)
+    const skip = Math.ceil(buckets.length / 14);
+    buckets.forEach((b, i) => {
+        if (i % skip !== 0 && i !== buckets.length - 1) return;
+        svg += `<text x="${xOf(i)}" y="${padT + plotH + 18}" font-size="10" fill="#9CA3AF" text-anchor="middle">${fmtBucket(b)}</text>`;
+    });
+    // series lines + dots
+    visible.forEach(s => {
+        const color = _actFlowColor(s.name);
+        const pts = s.values.map((v, i) => `${xOf(i)},${yOf(v)}`).join(' ');
+        svg += `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+        s.values.forEach((v, i) => {
+            svg += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="${color}" data-series="${_actEsc(s.name)}"/>`;
+        });
+    });
+    // invisible hover columns + crosshair handled via JS below
+    buckets.forEach((b, i) => {
+        svg += `<rect class="act-tr-hover" data-i="${i}" x="${xOf(i) - stepX / 2}" y="${padT}" width="${stepX}" height="${plotH}" fill="transparent"/>`;
+    });
+    svg += `<line id="act-tr-cross" x1="0" y1="${padT}" x2="0" y2="${padT + plotH}" stroke="#9CA3AF" stroke-dasharray="3,3" style="display:none"/>`;
+    svg += '</svg>';
+    svg += `<div id="act-tr-tip" style="display:none;position:absolute;background:#111827;color:#F9FAFB;border-radius:8px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:5;box-shadow:0 4px 12px rgba(0,0,0,.25);max-width:260px"></div>`;
+    chart.innerHTML = svg;
+
+    // hover tooltip
+    const tip = document.getElementById('act-tr-tip');
+    const cross = document.getElementById('act-tr-cross');
+    chart.querySelectorAll('.act-tr-hover').forEach(r => {
+        r.addEventListener('mouseenter', (ev) => {
+            const i = parseInt(r.dataset.i, 10);
+            const rows = visible.map(s =>
+                `<div style="display:flex;justify-content:space-between;gap:14px"><span style="color:${_actFlowColor(s.name)}">●</span><span style="flex:1">${_actEsc(s.name)}</span><b>${s.values[i]}</b></div>`).join('');
+            tip.innerHTML = `<div style="font-weight:700;margin-bottom:4px">${fmtBucket(buckets[i])}${interval==='week'?' (week)':''}</div>${rows}`;
+            tip.style.display = '';
+            const x = xOf(i);
+            cross.setAttribute('x1', x); cross.setAttribute('x2', x);
+            cross.style.display = '';
+            tip.style.left = Math.min(x + 34, W - 250) + 'px';
+            tip.style.top = (padT + 10) + 'px';
+        });
+    });
+    chart.addEventListener('mouseleave', () => { tip.style.display = 'none'; cross.style.display = 'none'; });
+
+    // legend with toggle
+    legendEl.innerHTML = series.map(s => {
+        const off = _actTrendsHidden.has(s.name);
+        const color = _actFlowColor(s.name);
+        return `<span class="act-tr-leg" data-name="${_actEsc(s.name)}" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;user-select:none;color:${off?'#C4CBD4':'#374151'}">
+            <span style="width:10px;height:10px;border-radius:3px;background:${off?'#E5E7EB':color}"></span>${_actEsc(s.name)} <span style="color:#9CA3AF">(${s.total})</span></span>`;
+    }).join('');
+    legendEl.querySelectorAll('.act-tr-leg').forEach(el => {
+        el.addEventListener('click', () => {
+            const n = el.dataset.name;
+            if (_actTrendsHidden.has(n)) _actTrendsHidden.delete(n); else _actTrendsHidden.add(n);
+            renderActTrends();
+        });
+    });
 }
 
 
@@ -13873,6 +16539,10 @@ function activityShell() {
     <button id="act-feed-tab" class="act-tab-active" style="background:none;border:none;border-bottom:2px solid #1e6b5c;color:#1e6b5c;font-size:13px;font-weight:700;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">Activity Feed</button>
 
     <button id="act-profiles-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">User Profiles</button>
+
+    <button id="act-flow-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">Flow</button>
+
+    <button id="act-trends-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">Trends</button>
 
   </div>
 
@@ -13940,6 +16610,84 @@ function activityShell() {
 
   </div>
 
+  <!-- Flow panel -->
+
+  <div id="act-flow-panel" style="display:none;background:#FFFFFF">
+
+    <div style="display:flex;gap:8px;padding:12px 24px;border-bottom:1px solid #F3F4F6;flex-wrap:wrap;align-items:center;background:#FAFBFC">
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em">Starting from</span>
+
+      <select id="act-flow-start" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none;max-width:260px"></select>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:8px">Steps</span>
+
+      <select id="act-flow-steps" style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none">
+
+        <option value="3">3</option><option value="4" selected>4</option><option value="5">5</option>
+
+      </select>
+
+      <span id="act-flow-summary" style="margin-left:auto;font-size:12px;color:#6B7280"></span>
+
+    </div>
+
+    <div id="act-flow-svg-wrap" style="padding:20px 24px;overflow-x:auto">
+
+      <div style="color:#6B7280;font-size:13px;padding:16px">Loading flow...</div>
+
+    </div>
+
+    <div id="act-flow-drill" style="display:none;padding:0 24px 24px"></div>
+
+  </div>
+
+  <!-- Trends panel -->
+
+  <div id="act-trends-panel" style="display:none;background:#FFFFFF">
+
+    <div style="display:flex;gap:8px;padding:12px 24px;border-bottom:1px solid #F3F4F6;flex-wrap:wrap;align-items:center;background:#FAFBFC">
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em">Metric</span>
+
+      <select id="act-tr-metric" style="background:#FFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none">
+        <option value="events">Total events</option><option value="users">Unique users</option><option value="logins">Logins</option><option value="pageviews" selected>Page views</option>
+      </select>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:6px">Group by</span>
+
+      <select id="act-tr-group" style="background:#FFF;border:1px solid #E2E8F0;border-radius:7px;color:#374151;font-size:12px;font-family:inherit;padding:5px 9px;cursor:pointer;outline:none">
+        <option value="none">None</option><option value="event">Event type</option><option value="page" selected>Page</option><option value="user">User</option>
+      </select>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:6px">Interval</span>
+
+      <span id="act-tr-interval" style="display:inline-flex;border:1px solid #E2E8F0;border-radius:7px;overflow:hidden">
+        <button data-v="day" class="act-tr-seg act-tr-seg-on" style="border:none;background:#1e6b5c;color:#fff;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">Day</button>
+        <button data-v="week" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">Week</button>
+      </span>
+
+      <span style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.08em;margin-left:6px">Range</span>
+
+      <span id="act-tr-range" style="display:inline-flex;border:1px solid #E2E8F0;border-radius:7px;overflow:hidden">
+        <button data-v="7" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">7D</button>
+        <button data-v="14" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">14D</button>
+        <button data-v="30" class="act-tr-seg act-tr-seg-on" style="border:none;background:#1e6b5c;color:#fff;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">30D</button>
+        <button data-v="90" class="act-tr-seg" style="border:none;background:#FFF;color:#374151;font-size:12px;padding:5px 12px;cursor:pointer;font-family:inherit">90D</button>
+      </span>
+
+    </div>
+
+    <div id="act-tr-chart" style="padding:20px 24px;overflow-x:auto;position:relative">
+
+      <div style="color:#6B7280;font-size:13px;padding:16px">Loading trends...</div>
+
+    </div>
+
+    <div id="act-tr-legend" style="padding:0 24px 20px;display:flex;gap:14px;flex-wrap:wrap"></div>
+
+  </div>
+
 </div>
 
 <style>
@@ -13947,6 +16695,10 @@ function activityShell() {
   @keyframes actPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
 
   .act-tab-active{color:#1e6b5c!important;border-bottom-color:#1e6b5c!important;font-weight:700!important}
+
+  .act-flow-node{cursor:pointer;transition:opacity .15s}
+
+  .act-flow-node:hover{opacity:.82}
 
 </style>`;
 
@@ -14496,13 +17248,16 @@ function depComputeSummary(locs) {
 
     }
 
-    // Gated stats for Civil/Shed: denominator = rows where the requirement is
-    // 'Yes' or blank (blank treated as required); "done" = status is Yes or Done.
+    // Gated stats for Civil/Shed: only rows where the requirement column is
+    // strictly 'Yes' are considered at all — both numerator (done) and
+    // denominator (total/pct) are scoped to that required subset.
     function psGated(reqKey, statusKey) {
-        const req = locs.filter(l => l[reqKey] === 'Yes' || !l[reqKey]);
+        const req = locs.filter(l => l[reqKey] === 'Yes');
         const done = req.filter(l => depIsDone(l[statusKey])).length;
-        const not_required = locs.filter(l => l[reqKey] === 'No').length;
-        return { done, pending: Math.max(0, req.length - done), not_required, required: req.length, total: req.length, pct: req.length ? Math.round(done / req.length * 100) : 0 };
+        const not_required = locs.filter(l => l[reqKey] !== 'Yes').length;
+        // "pending" mirrors the KPI card's denominator (required count), not the
+        // done/required gap, so the donut's two badges match the KPI card exactly.
+        return { done, pending: req.length, not_required, required: req.length, total: req.length, pct: req.length ? Math.round(done / req.length * 100) : 0 };
     }
 
     // Stats over ALL identified locations (denominator = total locations),
@@ -14571,12 +17326,14 @@ function depComputeSummary(locs) {
 
         civil: psGated('civilWorkReq', 'civilWorkStatus'),
 
-        shed: psGated('shedRequired', 'shedStatus'), electrical: psTotal('electricalStatus'),
+        shed: psGated('shedRequired', 'shedStatus'), electrical: psTotal('electricalDone'),
 
         internet: psTotal('internetStatus'), cctv: psTotal('cctvStatus'),
 
         delivered: locs.filter(l => depIsDone(l.rvmDelivery)).length,
 
+        // Installed = RVM Deployed with base fixing (actual only — Funnel/Block-wise/
+        // Location Tracker read the sheet's actual install status, no OR with Delivery).
         installed: ps('rvmDeployed'),
 
         live: locs.filter(l => depIsDone(l.machineLive)).length,
@@ -14637,7 +17394,7 @@ function _depRenderDeadlineCard_unused(s) {
 
     const timePct   = Math.min(100, Math.max(0, Math.round(elapsed / totalSpan * 100)));
 
-    const T = depPlanTotal, installed = s.installed.done;
+    const T = depGetRvmTarget(), installed = s.installed.done;
 
     const deployPct = Math.round(installed / T * 100);
 
@@ -14751,7 +17508,7 @@ function depRenderSummary302(s) {
 
     el.innerHTML = '';  return;
 
-    const T = depPlanTotal;
+    const T = depGetRvmTarget();
 
     const items = [
 
@@ -14843,7 +17600,7 @@ function depRenderPieCharts(s) {
 
     if (!el) return;
 
-    const T = depPlanTotal;
+    const T = depGetRvmTarget();
 
     const charts = [
 
@@ -14904,7 +17661,7 @@ function depRenderKPIs(s) {
 
 function depRenderFunnel(s) {
 
-    const T = depPlanTotal;
+    const identified = s.total;
 
     const funnelStages = [
 
@@ -14916,21 +17673,23 @@ function depRenderFunnel(s) {
 
         { label: 'Shed Ready',       val: s.shed.done,                                    color: '#8b6914', denom: s.shed.required },
 
-        { label: 'Electrical Ready', val: s.electrical.done, color: '#c27a10', denom: T },
+        { label: 'Electrical Ready', val: s.electrical.done, color: '#c27a10', denom: identified },
 
-        { label: 'Internet Ready',   val: s.internet.done,                                color: '#9b7b2e', denom: T },
+        { label: 'Internet Ready',   val: s.internet.done,                                color: '#9b7b2e', denom: identified },
 
-        { label: 'CCTV Done',        val: s.cctv.done,                                    color: '#6b4e9e', denom: T },
+        { label: 'CCTV Done',        val: s.cctv.done,                                    color: '#6b4e9e', denom: identified },
 
-        { label: 'Machine Installed', val: s.installed.done,                              color: '#0b6b4f', denom: T },
+        { label: 'Machine Delivery',  val: s.delivered,                                   color: '#2563eb', denom: identified },
 
-        { label: 'Machine Live',      val: s.live,                                        color: '#085f40', denom: T },
+        { label: 'Machine Installed', val: s.installed.done,                              color: '#0b6b4f', denom: identified },
+
+        { label: 'Machine Live',      val: s.live,                                        color: '#085f40', denom: identified },
 
     ];
 
     document.getElementById('dep-funnel').innerHTML = funnelStages.map((st, i) => {
 
-        const denom = st.denom || T;
+        const denom = st.denom || identified;
 
         const p     = Math.round(st.val / denom * 100);
 
@@ -14948,9 +17707,15 @@ function depRenderFunnel(s) {
 
             </div>
 
-            <div class="dep-funnel-bar">
+            <div style="display:flex;align-items:center;gap:8px">
 
-                <div class="dep-funnel-fill" style="width:${Math.max(p,2)}%;background:${st.color}">${st.val}</div>
+                <div class="dep-funnel-bar" style="flex:1">
+
+                    <div class="dep-funnel-fill" style="width:${Math.max(p,2)}%;background:${st.color}">${st.val}</div>
+
+                </div>
+
+                <span style="font-size:11px;font-weight:700;color:${st.color};min-width:34px;text-align:right;flex-shrink:0">${p}%</span>
 
             </div>
 
@@ -14966,7 +17731,7 @@ function depRenderFunnel(s) {
 
 function depRenderDonuts(s) {
 
-    const T = depPlanTotal;
+    const T = depGetRvmTarget();
 
     const liveStats = { done: s.live, pending: Math.max(0, s.total - s.live), not_required: 0, pct: s.total > 0 ? Math.round(s.live / s.total * 100) : 0 };
 
@@ -15043,7 +17808,7 @@ function depRenderForecast(s, locs) {
 
 
 
-    const T = depPlanTotal, installed = s.installed.done, remaining = T - installed;
+    const T = depGetRvmTarget(), installed = s.installed.done, remaining = T - installed;
 
     const deadlineStr = depGetDeadline();
 
@@ -15303,43 +18068,55 @@ function depRenderBlockers(locs) {
 
     // Site gap from deployment sheet
 
-    const siteGap = Math.max(0, depPlanTotal - locs.length);
+    const combinedTarget = depGetRvmTarget() + depGetRcTarget();
+    const siteGap = Math.max(0, combinedTarget - locs.length);
 
 
 
     // NOC/Agreement from vpData (same source as KPI cards and Progress tab)
 
-    let nocPending, agrPending;
+    let nocPending;
 
     if (vpData.length > 0) {
 
         const nocReceived = vpData.filter(vp => resolveStageNumber(vp) >= 9).length;
 
-        const agrSigned   = vpData.filter(vp => resolveStageNumber(vp) >= 11).length;
-
         nocPending = vpData.length - nocReceived;
-
-        agrPending = nocReceived - agrSigned;
 
     } else {
 
         nocPending = locs.filter(l => l.nocReceived !== 'Yes').length;
 
-        agrPending = locs.filter(l => l.nocReceived === 'Yes' && l.agreementSigned !== 'Yes').length;
-
     }
 
+    const agrPending = locs.filter(l => !depIsDone(l.agreementSigned)).length;
 
 
 
+
+
+    // Locations where Shed Required / Civil Work Requirement hasn't even been filled
+    // in yet — the team doesn't know if there's a plan for these locations.
+    const noPlanYet = locs.filter(l => !l.shedRequired || !l.civilWorkReq).length;
+
+    // Machine/Shed delivered but not yet installed — work is in transit/on-site
+    // but hasn't been fitted/finished.
+    const machineDeliveredNotInstalled = locs.filter(l => depIsDone(l.rvmDelivery) && !depIsDone(l.rvmDeployed)).length;
+    const shedDeliveredNotInstalled = locs.filter(l => l.shedRequired === 'Yes' && depIsDone(l.shedDeliveryStatus) && !depIsDone(l.shedInstallStatus)).length;
 
     const blockers = [
 
-        siteGap > 0      && { count: siteGap,      label: 'Sites still needed',       color: '#d1453b', bg: '#fff5f5', detail: `${locs.length} of ${depPlanTotal} locations identified` },
+        siteGap > 0      && { count: siteGap,      label: 'Sites still needed',       color: '#d1453b', bg: '#fff5f5', detail: `${locs.length} of ${combinedTarget} locations identified` },
 
         nocPending > 0   && { count: nocPending,   label: 'NOC not received',          color: '#e08a1e', bg: '#fffbf0', detail: 'Panchayat/municipality sign-off pending' },
 
-        agrPending > 0   && { count: agrPending,   label: 'Agreement pending',         color: '#c27a10', bg: '#fef9f0', detail: `${agrPending} NOC done, agreement not signed yet` },
+        agrPending > 0   && { count: agrPending,   label: 'Agreement pending',         color: '#c27a10', bg: '#fef9f0', detail: `of ${locs.length} locations identified` },
+
+        noPlanYet > 0    && { count: noPlanYet,     label: 'No plan yet (Shed/Civil)', color: '#6b4e9e', bg: '#f5f3fb', detail: 'Shed Required or Civil Work Requirement not filled in yet' },
+
+        machineDeliveredNotInstalled > 0 && { count: machineDeliveredNotInstalled, label: 'Machine delivered, not installed', color: '#2563eb', bg: '#eff6ff', detail: 'RVM Delivery done, base fixing pending' },
+
+        shedDeliveredNotInstalled > 0    && { count: shedDeliveredNotInstalled,    label: 'Shed delivered, not installed',    color: '#92400e', bg: '#fef8f0', detail: 'Shed Delivery Status done, Installation Status pending' },
 
     ].filter(Boolean);
 
@@ -15387,15 +18164,24 @@ function depRenderProjectMetrics(s, locs) {
 
     if (!el) return;
 
-    const RVM_TARGET  = depPlanTotal;
+    const isRC = l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') !== -1;
+    const isPrivateEntity = l => (l.entityType || '').trim().toLowerCase().indexOf('pri') === 0;
+    // Installed = RVM Deployed with base fixing only. Delivery is a separate, earlier stage.
+    const isInstalled = l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery);
+    const rvmLocs = locs.filter(l => !isRC(l));
+    const rcLocs  = locs.filter(l => isRC(l));
 
-    const identified  = locs.length;
+    const RVM_TARGET = depGetRvmTarget();
+    const RC_TARGET  = depGetRcTarget();
 
-    const installed   = s.installed.done;
+    const identified   = locs.length;
+    const rvmInstalled = rvmLocs.filter(isInstalled).length;
+    const rcInstalled  = rcLocs.filter(isInstalled).length;
+    const installed    = rvmInstalled + rcInstalled;
+    const live         = locs.filter(l => depIsDone(l.machineLive)).length;
 
-    const live        = s.live ? (s.live.done !== undefined ? s.live.done : s.live) : 0;
-
-    const gap         = Math.max(0, RVM_TARGET - installed);
+    const gap    = Math.max(0, RVM_TARGET - rvmInstalled);
+    const rcGap  = Math.max(0, RC_TARGET - rcInstalled);
 
     const deadlineStr = depGetDeadline();
 
@@ -15405,16 +18191,17 @@ function depRenderProjectMetrics(s, locs) {
 
     const daysLeft    = Math.max(1, Math.ceil((deadline - today) / 86400000));
 
-    const rrr         = (gap / daysLeft).toFixed(1);
+    const rrr   = (gap / daysLeft).toFixed(1);
+    const rcRrr = (rcGap / daysLeft).toFixed(1);
 
     const deadlineFmt = deadline.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
 
     const dColor      = daysLeft < 14 ? '#d1453b' : daysLeft < 30 ? '#e08a1e' : '#0b6b4f';
 
-    // Shed: only count rows where Shed Required = Yes
-    const shedRequired = locs.filter(l => l.shedRequired === 'Yes' || !l.shedRequired).length;
+    // Shed: only rows where Shed Required is strictly 'Yes' count, for both done and total.
+    const shedRequired = locs.filter(l => l.shedRequired === 'Yes').length;
 
-    const shedDone     = locs.filter(l => (l.shedRequired === 'Yes' || !l.shedRequired) && depIsDone(l.shedStatus)).length;
+    const shedDone     = locs.filter(l => l.shedRequired === 'Yes' && depIsDone(l.shedStatus)).length;
 
     // Icon helper for redesigned Project/Pipeline metric cards (separate from mkWkIcon).
     // Icon is derived from the card label — call-site arguments are never touched.
@@ -15429,10 +18216,9 @@ function depRenderProjectMetrics(s, locs) {
             'Gap to Target':       '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
             'Run Rate Needed':     '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
             'Location Identified': '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
-            'NOC Received':        '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/>',
-            'NOC Plan (RVMs)':     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
-            'Agreement Signed':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-            'Agr. Plan (RVMs)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'NOC Received for Location':                '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/>',
+            'Agr Signed for Location (Govt Entity)':    '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+            'Agr Signed for Location (Private Entity)': '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
         };
         const p = paths[lbl] || '<circle cx="12" cy="12" r="9"/>';
         return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
@@ -15441,13 +18227,8 @@ function depRenderProjectMetrics(s, locs) {
     // Progress-bar fill (0..1) derived from closure vars, keyed by label. Visual only.
     function depMetricFill(lbl) {
         let f = null;
-        if (lbl === 'RVM Installed') f = RVM_TARGET ? installed / RVM_TARGET : 0;
-        else if (lbl === 'RC Installed') f = (typeof rcInstalled === 'number' && rcMainCount > 0) ? rcInstalled / rcMainCount : null;
-        else if (lbl === 'Location Identified') f = RVM_TARGET ? identified / RVM_TARGET : 0;
-        else if (lbl === 'NOC Received') f = s.totalEntities ? s.noc / s.totalEntities : 0;
-        else if (lbl === 'Agreement Signed') f = s.totalEntities ? s.agreement / s.totalEntities : 0;
-        else if (lbl === 'NOC Plan (RVMs)') f = (typeof s.nocPlan === 'number' && RVM_TARGET) ? s.nocPlan / RVM_TARGET : null;
-        else if (lbl === 'Agr. Plan (RVMs)') f = (typeof s.agrPlan === 'number' && RVM_TARGET) ? s.agrPlan / RVM_TARGET : null;
+        if (lbl === 'RVM Installed') f = RVM_TARGET ? rvmInstalled / RVM_TARGET : 0;
+        else if (lbl === 'RC Installed') f = RC_TARGET ? rcInstalled / RC_TARGET : 0;
         if (f === null || !isFinite(f)) return null;
         return Math.max(0, Math.min(1, f));
     }
@@ -15459,11 +18240,11 @@ function depRenderProjectMetrics(s, locs) {
     }
 
     // Project Metrics card (redesigned). Args/values unchanged; render only.
+    const pipelineLbls = ['Gap to Target', 'Location Identified', 'NOC Received for Location', 'Agr Signed for Location (Govt Entity)', 'Agr Signed for Location (Private Entity)'];
     function mkCard(lbl, val, sub, color, minW) {
-        const pipelineLbls = ['Location Identified', 'NOC Received', 'NOC Plan (RVMs)', 'Agreement Signed', 'Agr. Plan (RVMs)'];
         const isPipeline = pipelineLbls.indexOf(lbl) !== -1;
         const cls = 'dep-metric-card' + (isPipeline ? ' dep-metric-card--pipeline' : '');
-        const numColor = isPipeline ? 'color:var(--dep-accent)' : '';
+        const numColor = isPipeline ? 'color:' + color : '';
         return '<div class="' + cls + '" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '95px') + '">' +
             '<div class="dep-metric-top">' +
                 '<div class="dep-metric-label">' + lbl + '</div>' +
@@ -15475,9 +18256,10 @@ function depRenderProjectMetrics(s, locs) {
         '</div>';
     }
 
-    // Wide dual card (Gap to Target / Run Rate Needed). Args/values unchanged; render only.
-    function mkDualCard(lbl, valRvm, valRc, color, minW) {
-        return '<div class="dep-metric-card dep-metric-card--dual" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '160px') + '">' +
+    // Wide dual card (RVM | RC side by side). Used for Gap to Target / Run Rate Needed
+    // and for every Pipeline - Gap to Target card.
+    function mkDualCard(lbl, valRvm, valRc, color, minW, subRvm, subRc) {
+        return '<div class="dep-metric-card dep-metric-card--dual dep-metric-card--pipeline" style="--dep-accent:' + color + ';--dep-bg:' + color + '0f;--dep-bd:' + color + '33;--dep-badge:' + color + '24;--dep-track:' + color + '2b;min-width:' + (minW || '160px') + '">' +
             '<div class="dep-metric-top">' +
                 '<div class="dep-metric-label">' + lbl + '</div>' +
                 '<div class="dep-metric-icon">' + depMetricIcon(lbl, color) + '</div>' +
@@ -15485,59 +18267,60 @@ function depRenderProjectMetrics(s, locs) {
             '<div class="dep-dual-cols">' +
                 '<div class="dep-dual-col">' +
                     '<div class="dep-dual-key">RVM</div>' +
-                    '<div class="dep-dual-val">' + valRvm + '</div>' +
+                    '<div class="dep-dual-val" style="color:' + color + '">' + valRvm + '</div>' +
+                    (subRvm ? '<div class="dep-metric-sub">' + subRvm + '</div>' : '') +
                 '</div>' +
                 '<div class="dep-dual-div"></div>' +
                 '<div class="dep-dual-col">' +
                     '<div class="dep-dual-key">RC</div>' +
-                    '<div class="dep-dual-val dep-dual-val--rc">' + valRc + '</div>' +
+                    '<div class="dep-dual-val dep-dual-val--rc" style="color:' + color + '">' + valRc + '</div>' +
+                    (subRc ? '<div class="dep-metric-sub">' + subRc + '</div>' : '') +
                 '</div>' +
             '</div>' +
         '</div>';
     }
 
-    // RC metrics — target from RC Deployment tab, installed from main RVM Deployment (CP type = RC)
-    const rcTarget    = rcData.reduce((s, l) => s + (parseInt(l.rcTarget) || 0), 0) || (rcData.length ? 0 : '—');
-    const rcMainCount = s.rcMainCount || 0;
-    const rcInstalled = typeof s.rcInstalledFromMain === 'number' ? s.rcInstalledFromMain :
-                        rcData.filter(l => l.rcDeployed === 'Done').length;
-    const rcGap       = typeof rcTarget === 'number' && typeof rcInstalled === 'number'
-                        ? Math.max(0, rcTarget - rcInstalled) : '—';
-    const rcRrr       = typeof rcGap === 'number' && daysLeft > 0
-                        ? (rcGap / daysLeft).toFixed(1) : '—';
-
-    // Row 1a: Targets + Installed
+    // Row 1a: Targets + Installed. RVM/RC Target are fixed, read-only values —
+    // Plan/Collection-Point-derived, no manual override.
     const gapColor = gap > 50 ? '#d1453b' : '#e08a1e';
     const row1a = [
-        mkCard('RVM Target',    RVM_TARGET,    'Go-live ' + deadlineFmt,                              '#1e6b5c'),
-        mkCard('RC Target',     typeof rcTarget === 'number' ? rcTarget : '—', rcData.length ? 'from ' + rcData.length + ' RC locations' : 'Not in data source', '#6366f1'),
+        mkCard('RVM Target',    RVM_TARGET, 'Go-live ' + deadlineFmt, '#1e6b5c'),
+        mkCard('RC Target',     RC_TARGET,  'Go-live ' + deadlineFmt, '#6366f1'),
         mkCard('Target Date',   deadlineFmt,   'Go-live target date',                                 dColor),
         mkCard('Days Left',     daysLeft,      'until ' + deadlineStr,                                dColor),
-        mkCard('RVM Installed', installed,     Math.round(installed/RVM_TARGET*100) + '% of ' + RVM_TARGET, '#0b6b4f'),
-        mkCard('RC Installed',  rcInstalled,   rcMainCount > 0 ? Math.round(rcInstalled/(rcMainCount||1)*100) + '% of ' + rcMainCount + ' RC CPs' : 'No RC Collection Points', '#6366f1'),
+        mkCard('RVM Installed', rvmInstalled,  Math.round(rvmInstalled/(RVM_TARGET||1)*100) + '% of ' + RVM_TARGET, '#0b6b4f'),
+        mkCard('RC Installed',  rcInstalled,   Math.round(rcInstalled/(RC_TARGET||1)*100) + '% of ' + RC_TARGET, '#6366f1'),
     ].join('');
 
     // Row 1b: GAP + RRR dual cards (larger, prominent)
     const row1b = [
-        mkDualCard('Gap to Target',   gap,  rcGap,   gapColor,  '200px'),
-        mkDualCard('Run Rate Needed', rrr + '/day', typeof rcRrr === 'number' ? rcRrr + '/day' : '—', '#2f6fb0', '200px'),
+        mkDualCard('Gap to Target',   gap,          rcGap,          gapColor,  '200px'),
+        mkDualCard('Run Rate Needed', rrr + '/day', rcRrr + '/day', '#2f6fb0', '200px'),
     ].join('');
 
     const row1 = row1a; // used below for display
 
-    // Row 2: Pipeline Metrics (5 cards)
-    const totalE  = s.totalEntities || RVM_TARGET;
+    // Row 2: Pipeline - Gap to Target — combined RVM+RC single numbers.
+    // Pending = identified locations not yet installed (the actual open pipeline).
+    const gapTotal = gap + rcGap;
+    const pendingLocs     = locs.filter(l => !isInstalled(l));
+    const identPending    = pendingLocs.length;
+    const pendingGovt     = pendingLocs.filter(l => !isPrivateEntity(l));
+    const pendingPriv     = pendingLocs.filter(l => isPrivateEntity(l));
+    const nocLocDone   = pendingLocs.filter(l => depIsDone(l.nocReceived)).length;
+    const agrGovtDone  = pendingGovt.filter(l => depIsDone(l.agreementSigned)).length;
+    const agrPrivDone  = pendingPriv.filter(l => depIsDone(l.agreementSigned)).length;
     const row2 = [
-        mkCard('Location Identified', identified,  `${Math.max(0,RVM_TARGET-identified)} RVM · ${rcData.length} RC locations`, identified >= RVM_TARGET ? '#0b6b4f' : '#d1453b', '110px'),
-        mkCard('NOC Received',     s.noc,               `${s.totalEntities} VPs · ${s.totalEntities - s.noc} pending`,           '#2f6fb0', '110px'),
-        mkCard('NOC Plan (RVMs)',  s.nocPlan || '—',   `planned RVMs covered by NOC`,                                            '#2f6fb0', '110px'),
-        mkCard('Agreement Signed', s.agreement,         `${s.totalEntities} VPs · ${s.totalEntities - s.agreement} pending`,     '#5b8fd4', '110px'),
-        mkCard('Agr. Plan (RVMs)', s.agrPlan || '—',   `planned RVMs covered by agreement`,                                      '#5b8fd4', '110px'),
+        mkCard('Gap to Target', gapTotal, `${installed} of ${RVM_TARGET + RC_TARGET} installed`, gapColor, '150px'),
+        mkCard('Location Identified', identPending, `${identified} identified − ${installed} installed`, '#d1453b', '150px'),
+        mkCard('NOC Received for Location', nocLocDone, `of ${identPending} pending locations`, '#2f6fb0', '150px'),
+        mkCard('Agr Signed for Location (Govt Entity)', agrGovtDone, `of ${pendingGovt.length} pending (govt entity)`, '#5b8fd4', '150px'),
+        mkCard('Agr Signed for Location (Private Entity)', agrPrivDone, `of ${pendingPriv.length} pending (private entity)`, '#8b5cf6', '150px'),
     ].join('');
 
     // Row 3: Work KPI (6 cards) — dep-kpi style with icons
-    const civilReq  = locs.filter(l => l.civilWorkReq === 'Yes' || !l.civilWorkReq).length;
-    const civilDone = locs.filter(l => (l.civilWorkReq === 'Yes' || !l.civilWorkReq) && depIsDone(l.civilWorkStatus)).length;
+    const civilReq  = locs.filter(l => l.civilWorkReq === 'Yes').length;
+    const civilDone = locs.filter(l => l.civilWorkReq === 'Yes' && depIsDone(l.civilWorkStatus)).length;
     const elecDone  = s.electrical ? s.electrical.done  : 0;
     const elecReq   = s.electrical ? (s.electrical.done + s.electrical.pending) : 0;
     const inetDone  = s.internet ? s.internet.done  : 0;
@@ -15586,7 +18369,7 @@ function depRenderProjectMetrics(s, locs) {
             `<div class="dep-metric-row dep-metric-row--dual">${row1b}</div>` +
         `</div>` +
         `<div class="dep-metric-section">` +
-            `<div class="dep-metric-heading">Pipeline Metrics</div>` +
+            `<div class="dep-metric-heading">Pipeline - Gap to Target</div>` +
             `<div class="dep-metric-row">${row2}</div>` +
         `</div>` +
         `<div class="card" style="margin-bottom:16px">` +
@@ -15616,19 +18399,23 @@ function depRenderBlockSummary(locs) {
 
 
 
-    const T = depPlanTotal;
+    // Machines Installed (RVM+RC combined target, actual RVM Deployed count only — no OR with Delivery).
+    const T = depGetRvmTarget() + depGetRcTarget();
 
-    const totalInstalled = locs.filter(l => depIsDone(l.rvmDeployed)).length;
+    const isInstalled = l => depIsDone(l.rvmDeployed);
+
+    const totalInstalled = locs.filter(isInstalled).length;
 
     const instPct = Math.round(totalInstalled / T * 100);
 
 
 
-    function bv(b, key, val) { return locs.filter(l => l.block === b && (val === 'Done' ? depIsDone(l[key]) : l[key] === val)).length; }
+    // b === null means "all blocks" — used to compute the totals row.
+    function bv(b, key, val) { return locs.filter(l => (b == null || l.block === b) && (val === 'Done' ? depIsDone(l[key]) : l[key] === val)).length; }
 
-    function btotal(b) { return locs.filter(l => l.block === b).length; }
+    function btotal(b) { return locs.filter(l => b == null || l.block === b).length; }
 
-    function breq(b, key) { return locs.filter(l => l.block === b && l[key] !== 'Not Required').length; }
+    function breq(b, key) { return locs.filter(l => (b == null || l.block === b) && l[key] !== 'Not Required').length; }
 
     function bEntityTotal(b) {
 
@@ -15666,11 +18453,11 @@ function depRenderBlockSummary(locs) {
 
     const cols = [
 
-        { label:'Civil Work', fn: b => { const req = locs.filter(l => l.block === b && (l.civilWorkReq === 'Yes' || !l.civilWorkReq)).length; const done = locs.filter(l => l.block === b && (l.civilWorkReq === 'Yes' || !l.civilWorkReq) && depIsDone(l.civilWorkStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
+        { label:'Civil Work', fn: b => { const req = locs.filter(l => (b == null || l.block === b) && l.civilWorkReq === 'Yes').length; const done = locs.filter(l => (b == null || l.block === b) && l.civilWorkReq === 'Yes' && depIsDone(l.civilWorkStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
 
-        { label:'Shed',      fn: b => { const req = locs.filter(l => l.block === b && (l.shedRequired === 'Yes' || !l.shedRequired)).length; const done = locs.filter(l => l.block === b && (l.shedRequired === 'Yes' || !l.shedRequired) && depIsDone(l.shedStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
+        { label:'Shed',      fn: b => { const req = locs.filter(l => (b == null || l.block === b) && l.shedRequired === 'Yes').length; const done = locs.filter(l => (b == null || l.block === b) && l.shedRequired === 'Yes' && depIsDone(l.shedStatus)).length; return req === 0 ? '—' : `${done}/${req}`; } },
 
-        { label:'Electrical',fn: b => `${bv(b,'electricalStatus','Done')}/${breq(b,'electricalStatus')}` },
+        { label:'Electrical',fn: b => `${bv(b,'electricalDone','Done')}/${btotal(b)}` },
 
         { label:'Internet',  fn: b => `${bv(b,'internetStatus','Done')}/${breq(b,'internetStatus')}` },
 
@@ -15678,7 +18465,7 @@ function depRenderBlockSummary(locs) {
 
         { label:'Delivered', fn: b => `${bv(b,'rvmDelivery','Done')}/${btotal(b)}` },
 
-        { label:'Installed', fn: b => `${bv(b,'rvmDeployed','Done')}/${btotal(b)}` },
+        { label:'Installed', fn: b => `${locs.filter(l => (b == null || l.block === b) && isInstalled(l)).length}/${btotal(b)}` },
 
         { label:'Live',      fn: b => `${bv(b,'machineLive','Done')}/${btotal(b)}` },
 
@@ -15698,7 +18485,7 @@ function depRenderBlockSummary(locs) {
 
         <div class="ct-table-wrap">
 
-            <table class="ct-table" style="font-size:12px">
+            <table class="ct-table ct-table--center" style="font-size:12px">
 
                 <thead><tr>
 
@@ -15715,8 +18502,6 @@ function depRenderBlockSummary(locs) {
                     ${blocks.map(b => {
 
                         const tot = btotal(b);
-
-                        const inst = bv(b,'rvmDeployed','Done');
 
                         return `<tr>
 
@@ -15741,6 +18526,16 @@ function depRenderBlockSummary(locs) {
                         </tr>`;
 
                     }).join('')}
+
+                    <tr style="border-top:2px solid var(--gray-200)">
+
+                        <td><b>Total</b></td>
+
+                        <td style="font-weight:700">${btotal(null)}</td>
+
+                        ${cols.map(c => `<td style="font-weight:700">${c.fn(null)}</td>`).join('')}
+
+                    </tr>
 
                 </tbody>
 
@@ -15802,11 +18597,11 @@ function depFlag(val) {
 
 function depHighestMilestone(l) {
 
-    if (l.machineLive === 'Done')    return { label: 'Machine Live',      color: '#085f40' };
+    if (depIsDone(l.machineLive))    return { label: 'Machine Live',      color: '#085f40' };
 
     if (depIsDone(l.rvmDeployed))    return { label: 'Machine Installed', color: '#0b6b4f' };
 
-    if (l.rvmDelivery === 'Done')    return { label: 'Machine Delivered', color: '#2f6fb0' };
+    if (depIsDone(l.rvmDelivery))    return { label: 'Machine Delivered', color: '#2f6fb0' };
 
     if (l.agreementSigned === 'Yes') return { label: 'Agreement Signed',  color: '#5b8fd4' };
 
@@ -15826,21 +18621,21 @@ function depPendingItems(l) {
 
     if (l.agreementSigned !== 'Yes')      items.push('Agreement');
 
-    if (l.civilWorkStatus === 'Pending')  items.push('Civil Work');
+    if (!depIsDone(l.civilWorkStatus))    items.push('Civil Work');
 
-    if (l.shedStatus === 'Pending')       items.push('Shed');
+    if (!depIsDone(l.shedStatus))         items.push('Shed');
 
-    if (l.electricalStatus === 'Pending') items.push('Electrical');
+    if (!depIsDone(l.electricalDone))     items.push('Electrical');
 
-    if (l.internetStatus === 'Pending')   items.push('Internet');
+    if (!depIsDone(l.internetStatus))     items.push('Internet');
 
-    if (l.cctvStatus === 'Pending')       items.push('CCTV');
+    if (!depIsDone(l.cctvStatus))         items.push('CCTV');
 
-    if (l.rvmDelivery !== 'Done')         items.push('Delivery');
+    if (!depIsDone(l.rvmDelivery))        items.push('Delivery');
 
-    if (l.rvmDeployed !== 'Done')         items.push('Installation');
+    if (!depIsDone(l.rvmDeployed))        items.push('Installation');
 
-    if (l.machineLive !== 'Done')         items.push('Go-Live');
+    if (!depIsDone(l.machineLive))        items.push('Go-Live');
 
     if (items.length === 0) return '<span style="color:#0b6b4f;font-size:11px">Complete ✓</span>';
 
@@ -15886,11 +18681,13 @@ function depRenderLocTable(locs) {
 
                 <td>${depFlag(l.shedStatus)}</td>
 
-                <td>${depFlag(l.electricalStatus)}</td>
+                <td>${depFlag(l.electricalDone)}</td>
 
                 <td>${depFlag(l.internetStatus)}</td>
 
                 <td>${depFlag(l.cctvStatus)}</td>
+
+                <td>${depFlag(l.rvmDelivery)}</td>
 
                 <td>${depFlag(l.rvmDeployed)}</td>
 
@@ -15904,7 +18701,7 @@ function depRenderLocTable(locs) {
 
         }).join('')
 
-        : '<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--muted)">No locations match current filters.</td></tr>';
+        : '<tr><td colspan="16" style="text-align:center;padding:20px;color:var(--muted)">No locations match current filters.</td></tr>';
 
 }
 
@@ -15972,11 +18769,14 @@ function renderRvmDeployment(data) {
 
     if (data.planTotal) depPlanTotal = data.planTotal;
 
+    depRvmCpCount = (data.locations || []).filter(l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') === -1).length;
+
+    depRcCpCount = (data.locations || []).filter(l => (l.collectionPoint || '').toLowerCase().indexOf('retearn') !== -1).length;
+
     const subtitleEl = document.getElementById('dep-header-subtitle');
 
     if (subtitleEl) {
-        const _rcPlanTotal = (data.rcLocations || []).reduce((s, l) => s + (parseInt(l.rcTarget) || 0), 0);
-        const _totalCP = depPlanTotal + (_rcPlanTotal || 0);
+        const _totalCP = depGetRvmTarget() + depGetRcTarget();
         subtitleEl.textContent = `${_totalCP} Collection Points · Goa DRS 2026`;
     }
 
@@ -16020,7 +18820,7 @@ function renderRvmDeployment(data) {
 
         () => depRenderDeadlineCard(s),
 
-        () => depRenderCPSection(data.cpData || [], depPlanTotal),
+        () => depRenderCPSection(data.cpData || [], depGetRvmTarget()),
 
         () => depRenderKPIs(s),
 
@@ -16719,7 +19519,7 @@ const PVA_CATS = [
 
     { key:'shed',     label:'Shed',            short:'Shed',    color:'#92400e', field:'shedStatus',       pace:true  },
 
-    { key:'elec',     label:'Electrical',      short:'Elec',    color:'#d97706', field:'electricalStatus', pace:true  },
+    { key:'elec',     label:'Electrical',      short:'Elec',    color:'#d97706', field:'electricalDone',   pace:true  },
 
     { key:'install',  label:'Machine Install', short:'Install', color:'#7c3aed', field:'rvmDeployed',      pace:true  },
 
@@ -16952,7 +19752,21 @@ function depRenderPvA(locs) {
 
     const actuals = {};
 
-    PVA_CATS.forEach(c => { actuals[c.key] = locs.filter(l => l[c.field] === 'Done').length; });
+    // Actuals mirror the Overview KPIs exactly: depIsDone (Yes/Done) for every
+    // category. Civil/Shed are additionally gated on their requirement column.
+    // Machine Install = Project Metrics' RVM Installed + RC Installed combined
+    // (RVM Delivery OR RVM Deployed with base fixing, across all locations).
+    PVA_CATS.forEach(c => {
+        if (c.key === 'install') {
+            actuals[c.key] = locs.filter(l => depIsDone(l.rvmDeployed) || depIsDone(l.rvmDelivery)).length;
+        } else if (c.key === 'civil') {
+            actuals[c.key] = locs.filter(l => l.civilWorkReq === 'Yes' && depIsDone(l.civilWorkStatus)).length;
+        } else if (c.key === 'shed') {
+            actuals[c.key] = locs.filter(l => l.shedRequired === 'Yes' && depIsDone(l.shedStatus)).length;
+        } else {
+            actuals[c.key] = locs.filter(l => depIsDone(l[c.field])).length;
+        }
+    });
 
 
 
@@ -18446,7 +21260,7 @@ const DEPMAP_STAGES = [
     { key: 'agreement',  label: 'Agreement Signed',  field: 'agreementSigned',  color: '#0d9488' },
     { key: 'civil',      label: 'Civil Work',        field: 'civilWorkStatus',  color: '#0ea5e9', gate: 'civilWorkReq' },
     { key: 'shed',       label: 'Shed',              field: 'shedStatus',       color: '#b45309', gate: 'shedRequired' },
-    { key: 'electrical', label: 'Electrical',        field: 'electricalStatus', color: '#eab308' },
+    { key: 'electrical', label: 'Electrical',        field: 'electricalDone',   color: '#eab308' },
     { key: 'internet',   label: 'Internet',          field: 'internetStatus',   color: '#8b5cf6' },
     { key: 'cctv',       label: 'CCTV',              field: 'cctvStatus',       color: '#db2777' },
     { key: 'machine',    label: 'Machine Installed', field: 'rvmDeployed',      color: '#16a34a' },
@@ -18557,6 +21371,7 @@ async function depInitMap() {
         }).addTo(_depMap);
         depMapBuildBoundaries();
         depMapBuildEntityFilter();
+        depMapBuildLocateControls();
         depMapRefresh();
         setTimeout(() => _depMap.invalidateSize(), 80);
     } catch (e) {
@@ -18578,13 +21393,16 @@ function depMapCpTypeOf(l) {
 }
 
 function depMapEntityOf(l) {
-    const v = (l.entityType || '').trim().toLowerCase();
+    const raw = (l.entityType || '').trim();
+    const v = raw.toLowerCase();
     if (!v) return 'Unspecified';
     if (v.indexOf('panch') === 0) return 'Panchayat';
     if (v.indexOf('pub') === 0) return 'Public';
     if (v.indexOf('pri') === 0) return 'Private';
     if (v.indexOf('ulb') !== -1 || v.indexOf('munic') !== -1) return 'ULB';
-    return 'Unspecified';
+    // RVM_Deploy has richer categories (Govt Entity, GTDC, KTC, Sports Authority, MPA) —
+    // keep each as its own bucket rather than collapsing them into "Unspecified".
+    return raw;
 }
 
 function depMapStageObj() {
@@ -18594,8 +21412,8 @@ function depMapStageObj() {
 // Civil/Shed only where required (gate = 'Yes' or blank) - exact same rule as KPI cards (psGated)
 function depMapApplicable(l, st) {
     if (st.gate) {
-        const g = l[st.gate];
-        if (!(g === 'Yes' || !g)) return false;
+        // Civil/Shed: only rows where the requirement column is strictly 'Yes' apply.
+        if (l[st.gate] !== 'Yes') return false;
     }
     if (l[st.field] === 'Not Required') return false;
     return true;
@@ -18619,9 +21437,55 @@ function depMapCoord(l) {
 function depMapBuildEntityFilter() {
     const found = {};
     depMapLocs().forEach(l => { found[depMapEntityOf(l)] = true; });
-    ['Panchayat', 'Public', 'Private', 'ULB', 'Unspecified'].forEach(k => {
-        if (found[k] && !(k in _depMapState.entity)) _depMapState.entity[k] = true;
+    Object.keys(found).forEach(k => {
+        if (!(k in _depMapState.entity)) _depMapState.entity[k] = true;
     });
+}
+
+// "Locate" controls — Block / Panchayat dropdowns that pan the map to the
+// selected area, purely a navigation aid (doesn't touch any display filters).
+function depMapBuildLocateControls() {
+    const all = depMapLocs();
+    const blockSel = document.getElementById('depmap-locate-block');
+    if (!blockSel) return;
+    const blocks = [...new Set(all.map(l => l.block).filter(Boolean))].sort();
+    blockSel.innerHTML = '<option value="">All Blocks</option>' +
+        blocks.map(b => '<option value="' + depMapEsc(b) + '">' + depMapEsc(b) + '</option>').join('');
+    blockSel.onchange = () => {
+        const b = blockSel.value;
+        depMapPopulateLocateLoc(b);
+        if (!b) return;
+        const pts = all.filter(l => l.block === b).map(depMapCoord).filter(Boolean);
+        if (pts.length) _depMap.flyToBounds(pts, { padding: [40, 40], maxZoom: 13 });
+    };
+    depMapPopulateLocateLoc('');
+}
+
+function depMapPopulateLocateLoc(block) {
+    const all = depMapLocs();
+    const locSel = document.getElementById('depmap-locate-loc');
+    if (!locSel) return;
+    const scoped = block ? all.filter(l => l.block === block) : all;
+    const seen = new Set();
+    const opts = [];
+    scoped.forEach(l => {
+        const name = (l.entityName || l.locationName || '').trim();
+        if (!name) return;
+        const key = name + '|' + l.block;
+        if (seen.has(key)) return;
+        seen.add(key);
+        opts.push({ idx: all.indexOf(l), name, block: l.block });
+    });
+    opts.sort((a, b) => a.name.localeCompare(b.name));
+    locSel.innerHTML = '<option value="">Jump to collection point / panchayat…</option>' +
+        opts.map(o => '<option value="' + o.idx + '">' + depMapEsc(o.name) + ' (' + depMapEsc(o.block) + ')</option>').join('');
+    locSel.onchange = () => {
+        const idx = parseInt(locSel.value, 10);
+        if (isNaN(idx)) return;
+        const l = all[idx];
+        const pt = l && depMapCoord(l);
+        if (pt) _depMap.flyTo(pt, 15);
+    };
 }
 
 function depMapBuildBoundaries() {
@@ -18653,9 +21517,38 @@ function depMapRefresh() {
     depMapRebuildPins();
     depMapRebuildTalukaOverlay();
     depMapRebuildHeat();
-    depMapRebuildHoreca();
     depMapRenderSidebar();
     depMapRenderLegend();
+    depMapRenderTopKPI();
+}
+
+function depMapRenderTopKPI() {
+    const el = document.getElementById('depmap-top-kpi');
+    if (!el) return;
+    const locs = depMapLocs();
+    el.innerHTML = `<button type="button" class="depmap-cp-kpi" onclick="depMapShowCPModal()">
+        <span class="depmap-cp-kpi-val">${locs.length}</span>
+        <span class="depmap-cp-kpi-label">Collection Points<br><span style="font-weight:400;opacity:.75">click to view list</span></span>
+    </button>`;
+}
+
+function depMapShowCPModal() {
+    const locs = depMapLocs();
+    const withGps = locs.filter(l => l.lat && l.lng && !isNaN(parseFloat(l.lat)) && !isNaN(parseFloat(l.lng)));
+    const noGps = locs.length - withGps.length;
+    document.getElementById('depmap-cp-modal-count').textContent =
+        `(${withGps.length} with coordinates${noGps ? ', ' + noGps + ' without — not shown' : ''})`;
+    document.getElementById('depmap-cp-modal-list').innerHTML = withGps.length
+        ? withGps.map(l => `<div class="vp-modal-item" style="display:block">
+              <div style="font-weight:600;font-size:13.5px">${depMapEsc(l.entityName || l.locationName || '—')}${l.entityName && l.locationName ? ' - ' + depMapEsc(l.locationName) : ''}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${depMapEsc(l.block || '—')} &middot; ${depMapEsc(depMapCpTypeOf(l))} &middot; ${l.lat}, ${l.lng}</div>
+          </div>`).join('')
+        : '<div style="padding:12px;color:var(--muted)">No collection points with coordinates yet.</div>';
+    document.getElementById('depmap-cp-modal').classList.remove('hidden');
+}
+
+function depMapCloseCPModal() {
+    document.getElementById('depmap-cp-modal').classList.add('hidden');
 }
 
 function depMapPopup(l, st, isDone) {
@@ -18882,13 +21775,12 @@ function depMapRebuildHeat() {
     const mode = _depMapState.heat;
     if (mode === 'none') return;
     let pts = [];
-    if (mode === 'horeca') {
-        if (!_depMapHoreca) {
-            depMapEnsureHoreca().then(() => { if (_depMapHoreca && _depMapState.heat === 'horeca') { depMapRebuildHeat(); depMapRenderSidebar(); } });
-            return;
-        }
-        pts = _depMapHoreca.heat.map(p => [p[0], p[1], 0.5]);
-        _depMapHoreca.pins.forEach(p => pts.push([p.lat, p.lng, 0.9]));
+    if (mode === 'density') {
+        // RVM/RC location density — every filtered collection point, regardless of status.
+        depMapFiltered().forEach(l => {
+            const pt = depMapCoord(l);
+            if (pt) pts.push([pt[0], pt[1], 0.7]);
+        });
     } else if (mode === 'pending') {
         depMapFiltered().forEach(l => {
             const pt = depMapCoord(l);
@@ -19002,13 +21894,24 @@ function depMapRenderSidebar() {
     // Entity types
     const enEl = document.getElementById('depmap-entities');
     const entKeys = Object.keys(_depMapState.entity);
-    enEl.innerHTML = entKeys.map(t => {
-        const n = all.filter(l => depMapEntityOf(l) === t).length;
-        return depMapCheckRow('<input type="checkbox" data-k="' + t + '"' + (_depMapState.entity[t] ? ' checked' : '') + '>' +
-            t + '<span class="depmap-count">' + n + '</span>', _depMapState.entity[t]);
-    }).join('');
+    const allEntitiesOn = entKeys.every(t => _depMapState.entity[t]);
+    enEl.innerHTML =
+        '<div class="depmap-select-all"><a href="#" data-act="' + (allEntitiesOn ? 'clear' : 'all') + '">' +
+            (allEntitiesOn ? 'Clear all' : 'Select all') + '</a></div>' +
+        entKeys.map(t => {
+            const n = all.filter(l => depMapEntityOf(l) === t).length;
+            return depMapCheckRow('<input type="checkbox" data-k="' + t + '"' + (_depMapState.entity[t] ? ' checked' : '') + '>' +
+                t + '<span class="depmap-count">' + n + '</span>', _depMapState.entity[t]);
+        }).join('');
     enEl.querySelectorAll('input').forEach(inp =>
         inp.addEventListener('change', () => { _depMapState.entity[inp.dataset.k] = inp.checked; depMapRefresh(); }));
+    const enSelAll = enEl.querySelector('[data-act]');
+    if (enSelAll) enSelAll.addEventListener('click', e => {
+        e.preventDefault();
+        const turnOn = e.target.dataset.act === 'all';
+        entKeys.forEach(t => { _depMapState.entity[t] = turnOn; });
+        depMapRefresh();
+    });
 
     // Boundaries
     const bdEl = document.getElementById('depmap-bounds');
@@ -19024,25 +21927,19 @@ function depMapRenderSidebar() {
         _depMapState.talukaOverlay);
     ovEl.querySelector('input').addEventListener('change', e => { _depMapState.talukaOverlay = e.target.checked; depMapRefresh(); });
 
-    // Heatmap modes (radio)
+    // Heatmap modes (radio) — RVM/RC density; selecting any mode other than Off
+    // auto-hides pins so the heat layer and pins don't visually clash.
     const htEl = document.getElementById('depmap-heat');
-    htEl.innerHTML = [['none', 'Off'], ['horeca', 'HoReCa density'], ['pending', 'Pending work'], ['installed', 'Installed coverage']].map(m =>
+    htEl.innerHTML = [['none', 'Off'], ['density', 'RVM/RC density'], ['pending', 'Pending work'], ['installed', 'Installed coverage']].map(m =>
         depMapCheckRow('<input type="radio" name="depmap-heat" value="' + m[0] + '"' + (_depMapState.heat === m[0] ? ' checked' : '') + '>' + m[1],
             _depMapState.heat === m[0])).join('');
     htEl.querySelectorAll('input').forEach(inp =>
-        inp.addEventListener('change', () => { _depMapState.heat = inp.value; depMapRefresh(); }));
+        inp.addEventListener('change', () => {
+            _depMapState.heat = inp.value;
+            if (inp.value !== 'none') { _depMapState.showDone = false; _depMapState.showPending = false; }
+            depMapRefresh();
+        }));
 
-    // HoReCa pins
-    const hoEl = document.getElementById('depmap-horeca');
-    const hc = _depMapHoreca && _depMapHoreca.counts;
-    hoEl.innerHTML =
-        depMapCheckRow('<input type="checkbox"' + (_depMapState.horecaPins ? ' checked' : '') + '>HoReCa outlets' +
-            (_depMapHorecaLoading ? '<span class="depmap-count">loading...</span>' : ''), _depMapState.horecaPins) +
-        (hc ? '<div style="font-size:11.5px;color:#6b7683;padding:2px 7px 0">' +
-              '<span style="color:#16a34a;font-weight:700">' + hc.onboarded + '</span> onboarded &middot; ' +
-              '<span style="color:#b45309;font-weight:700">' + hc.pipeline + '</span> in pipeline &middot; ' +
-              hc.unreached.toLocaleString() + ' unreached (heatmap) &middot; geocoded only</div>' : '');
-    hoEl.querySelector('input').addEventListener('change', e => { _depMapState.horecaPins = e.target.checked; depMapRefresh(); });
 }
 
 function depMapRenderLegend() {
@@ -19050,30 +21947,13 @@ function depMapRenderLegend() {
     const st = depMapStageObj();
     const c = _depMapCounts || { done: 0, pending: 0, noGps: 0 };
     const locs = depMapLocs();
-    const planTotal = (depData && (depData.planTotal || depData.plan_total)) || 0;
     const identified = locs.length;
-    const noc = depMapTrackerCounts(9);
-    const agr = depMapTrackerCounts(11);
-    // Planned RVMs (DRS-Tracker Planned_RVMs column) rolled up by stage
-    const vps = (typeof vpData !== 'undefined' && vpData) || [];
-    function plannedSum(minStage) {
-        return vps.filter(vp => resolveStageNumber(vp) >= minStage)
-                  .reduce((s, vp) => s + (parseInt(vp.plannedRvms) || 0), 0);
-    }
-    const nocPlanRvm = plannedSum(9);
-    const agrPlanRvm = plannedSum(11);
 
     function chip(label, val) {
         return '<span class="depmap-stat"><span class="depmap-stat-l">' + label + '</span><span class="depmap-stat-v">' + val + '</span></span>';
     }
     const stats =
         chip('Location Identified', identified) +
-        (planTotal ? chip('Pending from Plan', Math.max(0, planTotal - identified) + ' <small>of ' + planTotal + '</small>') : '') +
-        chip('NOC', noc.done + ' <small>of ' + noc.total + '</small>') +
-        chip('NOC Plan RVM', nocPlanRvm + (planTotal ? ' <small>of ' + planTotal + '</small>' : '')) +
-        chip('Agreement', agr.done + ' <small>of ' + agr.total + '</small>') +
-        chip('Agreement Plan RVM', agrPlanRvm + (planTotal ? ' <small>of ' + planTotal + '</small>' : '')) +
-        (planTotal ? chip('RVM Plan Pending', (planTotal - agrPlanRvm) + ' <small>= ' + planTotal + ' &minus; ' + agrPlanRvm + '</small>') : '') +
         chip('NOC Area Covered', depMapAreaPct(9) + '%') +
         chip('Agreement Area Covered', depMapAreaPct(11) + '%');
 

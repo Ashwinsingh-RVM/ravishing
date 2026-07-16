@@ -4,6 +4,7 @@ Uses refresh token for authentication (no credentials.json needed)
 """
 import os
 import json
+import re
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta
@@ -16,6 +17,31 @@ from ..config.settings import Settings, DeploymentStage, STAGE_LABELS
 from ..models.entities import VillagePanchayat, MeetingUpdate
 
 settings = Settings()
+
+
+def _gs_retry(fn, *args, _attempts=4, _base_delay=2, **kwargs):
+    """Call a gspread operation, retrying on transient Google Sheets errors
+    (429 rate-limit and 5xx) with exponential backoff. This is what stops a
+    momentary per-minute read-cap from surfacing to the browser as a 500 —
+    it waits and retries instead of crashing the request."""
+    import time as _t
+    last = None
+    for attempt in range(_attempts):
+        try:
+            return fn(*args, **kwargs)
+        except gspread.exceptions.APIError as e:
+            code = None
+            try:
+                code = e.response.status_code
+            except Exception:
+                pass
+            if code in (429, 500, 502, 503, 504) and attempt < _attempts - 1:
+                last = e
+                _t.sleep(_base_delay * (2 ** attempt))  # 2s, 4s, 8s
+                continue
+            raise
+    if last:
+        raise last
 
 
 def _safe_int(value, default=0):
@@ -239,7 +265,7 @@ class GoogleSheetsService:
             worksheet.update(f'A{row_num}', [row_data])
         else:
             # Append new row
-            all_values = worksheet.get_all_values()
+            all_values = _gs_retry(worksheet.get_all_values)
             next_row = len(all_values) + 1
             sl_no = len(all_values)  # -1 for header, but starting from 1
             row_data = self.vp_to_row(vp, sl_no)
@@ -424,15 +450,15 @@ class GoogleSheetsService:
     # ==================== RVM Deployment Methods ====================
 
     def get_planned_rvms_total(self) -> int:
-        """Sum of the 'Planned_RVMs' column in the DRS-Tracker sheet.
+        """Sum of the 'Plan' column in the 'Plan RVM' sheet tab.
 
         Non-numeric cells (e.g. formula errors like #REF!) are treated as 0.
         Falls back to 301 only if the column/tab can't be read.
         """
         try:
             spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
-            worksheet = spreadsheet.worksheet("DRS-Tracker")
-            all_values = worksheet.get_all_values()
+            worksheet = spreadsheet.worksheet("Plan RVM")
+            all_values = _gs_retry(worksheet.get_all_values)
             if not all_values:
                 return 301
 
@@ -440,8 +466,7 @@ class GoogleSheetsService:
                 return " ".join(str(s).split()).strip().lower()
 
             headers = [_nk(h) for h in all_values[0]]
-            ci = next((i for i, h in enumerate(headers)
-                       if h in ('planned_rvms', 'planned rvms', 'planned_rvm', 'planned rvm')), None)
+            ci = next((i for i, h in enumerate(headers) if h == 'plan'), None)
             if ci is None:
                 return 301
             total = 0
@@ -453,21 +478,26 @@ class GoogleSheetsService:
             return 301
 
     def get_deployment_data(self) -> List[Dict]:
-        """Fetch all rows from the 'RVM Deployment' sheet tab."""
+        """Fetch all rows from the 'RVM_Deploy' sheet tab. Headers are on row 2
+        (row 1 holds merged section titles), fed via an IMPORTRANGE from a
+        separate 'Master Base' spreadsheet spanning columns A:AK — any columns
+        added later (e.g. Electrical Done, Machine Date) live beyond AK and are
+        picked up automatically since we read the whole sheet, not a fixed range.
+        """
         try:
             spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
             try:
-                worksheet = spreadsheet.worksheet("RVM Deployment")
+                worksheet = spreadsheet.worksheet("RVM_Deploy")
             except Exception:
                 return []
             # Use get_all_values() instead of get_all_records() to tolerate
             # duplicate or blank column headers that break get_all_records()
-            all_values = worksheet.get_all_values()
-            if not all_values:
+            all_values = _gs_retry(worksheet.get_all_values)
+            if len(all_values) < 2:
                 return []
-            headers = [str(h).strip() for h in all_values[0]]
+            headers = [str(h).strip() for h in all_values[1]]
             records = []
-            for row_vals in all_values[1:]:
+            for row_vals in all_values[2:]:
                 row = {}
                 for i, header in enumerate(headers):
                     row[header] = row_vals[i].strip() if i < len(row_vals) else ''
@@ -508,6 +538,14 @@ class GoogleSheetsService:
                 if not loc_name and not entity_name:
                     continue
                 current_stage = self._compute_deployment_stage(row)
+                # Shed done = Delivery Status OR Installation Status is Yes (two separate
+                # sub-steps in RVM_Deploy; the old tab had one combined status column).
+                shed_delivery = g('Delivery Status')
+                shed_install = g('Installation Status')
+                shed_status = 'Yes' if (shed_delivery == 'Yes' or shed_install == 'Yes') else 'Pending'
+                # Final Check uses Ready/Not Ready tokens (not Yes/Done like other columns).
+                final_check = g('Final Check')
+                machine_live = 'Yes' if final_check in ('Ready', 'Yes', 'Done') else final_check
                 locations.append({
                     'locationName':    loc_name,
                     'block':           g('Block'),
@@ -517,24 +555,29 @@ class GoogleSheetsService:
                     'collectionPoint': g('Collection Point', 'Collection_Point'),
                     'nocReceived':     g('NOC Received', 'NOC_Received'),
                     'agreementSigned': g('Service Agreement Signed', 'Service_Agreement_Signed'),
-                    'siteClearanceReq':    g('Site Clearance Requirement'),
+                    'siteClearanceReq':    g('Site Clearance requirement'),
                     'siteClearanceStatus': g('Site Clearance Status'),
                     'civilWorkReq':    g('Civil Work Requirement'),
                     'civilWorkStatus': g('Civil Work Status'),
-                    'electricalStatus': g('Electrical Work status', 'Electrical Connection for Installation'),
+                    'electricalStatus': g('Electrical Connection for Installation'),
+                    'electricalDone':   g('Plug Point Installation Status', 'Electrical Done'),
                     'shedRequired': g('Shed Required'),
                     'shedType':     g('Shed Type'),
-                    'shedStatus':   g('Shed Installation Status', 'Shed Status'),
+                    'shedDeliveryStatus': shed_delivery,
+                    'shedInstallStatus':  shed_install,
+                    'shedStatus':   shed_status,
                     'internetRequired': g('Internet Required'),
                     'internetStatus':   g('Internet Status'),
                     'cctvStatus': g('CCTV Installation Status'),
                     'rvmDelivery': g('RVM Delivery'),
-                    'rvmDeployed': g('Machine install', 'RVM install', 'RVM Deployed with Base Fixing'),
-                    'finalCheck':  g('Final Check'),
-                    'machineLive': g('RVM Working Condition Check'),
-                    'installDate': g('Machine install date', 'Machine Install Date'),
+                    'rvmDeployed': g('RVM Deployed with base fixing', 'RVM Deployed with Base Fixing', 'Machine install', 'RVM install'),
+                    'finalCheck':  final_check,
+                    'machineLive': machine_live,
+                    'rvmWorkingCondition': g('RVM Working Condition Check'),
+                    'installDate': g('Machine Date', 'Machine Install Date', 'Deployement Date', 'Deployment Date'),
                     'lat': g('Lat', 'Latitude'),
                     'lng': g('Long', 'Longitude', 'Lng'),
+                    'blockPOC': g('Block POC'),
                     'currentStage': current_stage,
                 })
             return locations
@@ -582,7 +625,7 @@ class GoogleSheetsService:
                 worksheet = spreadsheet.worksheet("RC Deployment")
             except Exception:
                 return []
-            all_values = worksheet.get_all_values()
+            all_values = _gs_retry(worksheet.get_all_values)
             if not all_values:
                 return []
             headers = [str(h).strip() for h in all_values[0]]
@@ -1166,7 +1209,7 @@ class GoogleSheetsService:
             stage_map['punch_meeting_required'] = 4
 
             # Read all rows (columns N and O: Current_Stage and Stage_Number)
-            all_values = worksheet.get_all_values()
+            all_values = _gs_retry(worksheet.get_all_values)
             if len(all_values) <= 1:
                 return {'success': True, 'message': 'No data rows', 'fixed': 0}
 
@@ -1432,6 +1475,65 @@ class GoogleSheetsService:
         'Post-meeting mail to be sent', 'Post meeting mail sent',
         'OB Form Opened', 'OB Form Filled',
     ]
+    # Matches auto-appended DOD lines in Outreach_Notes, e.g.:
+    # "[2026-07-09 10:15|Shilpa] STATUS_CHANGE: Meeting aligned -> OB Form Filled"
+    HORECA_STATUS_CHANGE_RE = re.compile(
+        r'^\[(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})\|([^\]]*)\]\s*STATUS_CHANGE:\s*(.*?)\s*->\s*(.*)$'
+    )
+    # Matches auto-appended attempt-log lines, e.g.:
+    # "[2026-07-09 10:15|Shilpa] ATTEMPT_LOGGED: owner asked to call back tomorrow"
+    HORECA_ATTEMPT_RE = re.compile(
+        r'^\[(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})\|([^\]]*)\]\s*ATTEMPT_LOGGED(?::\s*(.*))?$'
+    )
+
+    # The team roster for the Overall Daily dashboard, in the order given.
+    HORECA_ASSOCIATE_WHITELIST = [
+        'varsha.madhyan@recykal.com',
+        'aruna.shanmugam@recykal.com',
+        'isabella.alexander@recykal.com',
+        'shilpa.lazar@recykal.com',
+        'rahul.das@recykal.com',
+        'anil.goswami@recykal.com',
+        'ayaan.sharif@recykal.com',
+        'justin.nunes@recykal.com',
+        'jagannath.pawar@recykal.com',
+        'tynan.joshua@recykal.com',
+    ]
+
+    # Maps the free-text name variants actually seen in Assigned_To /
+    # Updated_By / STATUS_CHANGE log entries to their canonical email.
+    # Built from the live sheet's real distinct values. Deliberately does
+    # NOT merge "Ayaansh" (23 occurrences in Updated_By) into "Ayaan" (72
+    # occurrences) — these may be two different people, not a typo, so it's
+    # left unmapped rather than guessed.
+    HORECA_ASSOCIATE_ALIASES = {
+        'varsha': 'varsha.madhyan@recykal.com',
+        'aruna': 'aruna.shanmugam@recykal.com',
+        'isabella': 'isabella.alexander@recykal.com',
+        'shilpa': 'shilpa.lazar@recykal.com',
+        'rahul das': 'rahul.das@recykal.com',
+        'rahul': 'rahul.das@recykal.com',
+        'anil': 'anil.goswami@recykal.com',
+        'ayaan': 'ayaan.sharif@recykal.com',
+        'justin': 'justin.nunes@recykal.com',
+        'jagannath': 'jagannath.pawar@recykal.com',
+        'jagganath': 'jagannath.pawar@recykal.com',
+        'jaganath': 'jagannath.pawar@recykal.com',
+        'tynan': 'tynan.joshua@recykal.com',
+    }
+
+    @classmethod
+    def _resolve_associate_email(cls, raw_name):
+        """Map a free-text associate name to a canonical whitelisted email,
+        case/whitespace-insensitive. Returns None if unrecognized."""
+        if not raw_name:
+            return None
+        return cls.HORECA_ASSOCIATE_ALIASES.get(raw_name.strip().lower())
+
+    @staticmethod
+    def _associate_display_name(email):
+        local = email.split('@')[0]
+        return ' '.join(part.capitalize() for part in local.split('.'))
 
     def _get_horeca_crm_cache(self):
         """Get or initialize the HoReCa CRM cache"""
@@ -1445,11 +1547,12 @@ class GoogleSheetsService:
         # Fetch all data from the enriched sheet
         spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
         worksheet = spreadsheet.sheet1
-        all_values = worksheet.get_all_values()
+        all_values = _gs_retry(worksheet.get_all_values)
 
         if len(all_values) < 2:
             _horeca_crm_cache['data'] = []
             _horeca_crm_cache['headers'] = []
+            _horeca_crm_cache['clusters'] = ({}, {})
             _horeca_crm_cache['expiry'] = now + timedelta(minutes=2)
             return [], []
 
@@ -1458,10 +1561,274 @@ class GoogleSheetsService:
 
         _horeca_crm_cache['data'] = rows
         _horeca_crm_cache['headers'] = headers
+        _horeca_crm_cache['clusters'] = self._get_horeca_duplicate_clusters(rows, headers)
         _horeca_crm_cache['expiry'] = now + timedelta(minutes=2)
         return rows, headers
 
-    def _horeca_row_to_dict(self, row, headers):
+    def _get_horeca_clusters_cached(self):
+        """Duplicate-cluster map for the currently cached HoReCa rows.
+        (place_id -> cluster_root, cluster_root -> {members, primary})"""
+        global _horeca_crm_cache
+        self._get_horeca_crm_cache()  # ensures cache (and clusters) are populated/fresh
+        return _horeca_crm_cache.get('clusters') or ({}, {})
+
+    @staticmethod
+    def _normalize_horeca_name(name):
+        name = (name or '').lower().strip()
+        name = re.sub(r'[^a-z0-9 ]', '', name)
+        name = re.sub(r'\s+', ' ', name)
+        return name
+
+    @staticmethod
+    def _haversine_meters(lat1, lng1, lat2, lng2):
+        from math import radians, sin, cos, asin, sqrt
+        try:
+            lat1, lng1, lat2, lng2 = float(lat1), float(lng1), float(lat2), float(lng2)
+        except (TypeError, ValueError):
+            return None
+        if not (lat1 or lng1) or not (lat2 or lng2):
+            return None
+        r = 6371000
+        p1, p2 = radians(lat1), radians(lat2)
+        dphi = radians(lat2 - lat1)
+        dlmb = radians(lng2 - lng1)
+        a = sin(dphi / 2) ** 2 + cos(p1) * cos(p2) * sin(dlmb / 2) ** 2
+        return 2 * r * asin(sqrt(a))
+
+    # Same-name rows within this distance are treated as the same physical
+    # outlet. Matches the scale of the offline ETL's own examples in the
+    # "Duplicates" tab (6m-175m) — deliberately tight, since a common
+    # generic name (e.g. "Aangan Restaurant") can legitimately recur at
+    # unrelated locations many km apart and must NOT be merged.
+    HORECA_DUPLICATE_GEO_THRESHOLD_M = 300
+
+    def _get_horeca_duplicate_clusters(self, rows, headers):
+        """Group Enhanced rows representing the same real-world business.
+
+        Two signals, since the offline enrichment pipeline's own duplicate
+        flags are unreliable in practice (Is_Duplicate is never TRUE in the
+        live sheet, and Merged_Place_IDs is usually just self-referential):
+          1) Merged_Place_IDs, when it points to a DIFFERENT Place ID than
+             its own row — trust it, it's a genuine ETL-detected link.
+          2) Exact match on normalized name + close geo proximity (<= 300m)
+             — catches slip-throughs the ETL never flagged (e.g. two
+             identical-name rows from different source batches that are
+             actually the same physical outlet). Geo proximity, not the
+             City text column, is the disambiguator: City values are
+             inconsistently entered, while two rows genuinely 30+ km apart
+             sharing a common name (verified real case: two unrelated
+             "Aangan Restaurant"s) must never be merged just because the
+             city field happens to match or be blank on both.
+
+        Returns (place_to_cluster, cluster_info) where cluster_info maps a
+        cluster root id -> {'members': [place_id, ...], 'primary': place_id}
+        for every cluster with 2+ members. Singleton businesses aren't
+        included — callers should treat "not present" as "not a duplicate".
+        """
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        pid_idx = h.get('Place ID', 0)
+        name_idx = h.get('Name', 1)
+        lat_idx = h.get('Latitude', 10)
+        lng_idx = h.get('Longitude', 11)
+        merged_idx = h.get('Merged_Place_IDs')
+        last_updated_idx = h.get('Last_Updated', 63)
+
+        def g(row, idx):
+            return row[idx].strip() if idx is not None and idx < len(row) else ''
+
+        parent = {}
+
+        def find(x):
+            root = x
+            while parent.get(root, root) != root:
+                root = parent[root]
+            while parent.get(x, x) != root:
+                parent[x], x = root, parent.get(x, root)
+            return root
+
+        def union(a, b):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+
+        place_ids = []
+        name_buckets = {}  # normalized name -> [(place_id, lat, lng), ...]
+        row_by_pid = {}
+
+        for row in rows:
+            pid = g(row, pid_idx)
+            if not pid:
+                continue
+            place_ids.append(pid)
+            row_by_pid[pid] = row
+            parent.setdefault(pid, pid)
+
+            if merged_idx is not None:
+                merged = g(row, merged_idx)
+                if merged and merged != pid:
+                    for other in re.split(r'[,;|]', merged):
+                        other = other.strip()
+                        if other and other != pid:
+                            parent.setdefault(other, other)
+                            union(pid, other)
+
+            norm_name = self._normalize_horeca_name(g(row, name_idx))
+            if norm_name:
+                lat, lng = g(row, lat_idx), g(row, lng_idx)
+                name_buckets.setdefault(norm_name, []).append((pid, lat, lng))
+
+        # Within each same-name bucket, union pairs that are also geographically
+        # close — O(n^2) per bucket, but buckets are tiny (a handful of rows
+        # sharing an exact normalized name out of ~16k total).
+        for members in name_buckets.values():
+            if len(members) < 2:
+                continue
+            for i in range(len(members)):
+                pid_a, lat_a, lng_a = members[i]
+                for j in range(i + 1, len(members)):
+                    pid_b, lat_b, lng_b = members[j]
+                    dist = self._haversine_meters(lat_a, lng_a, lat_b, lng_b)
+                    if dist is not None and dist <= self.HORECA_DUPLICATE_GEO_THRESHOLD_M:
+                        union(pid_a, pid_b)
+
+        clusters = {}
+        for pid in place_ids:
+            clusters.setdefault(find(pid), []).append(pid)
+
+        def last_updated_of(pid):
+            row = row_by_pid.get(pid)
+            return g(row, last_updated_idx) if row else ''
+
+        place_to_cluster = {}
+        cluster_info = {}
+        for root, members in clusters.items():
+            if len(members) < 2:
+                continue
+            primary = max(members, key=lambda pid: last_updated_of(pid) or '')
+            cluster_info[root] = {'members': members, 'primary': primary}
+            for m in members:
+                place_to_cluster[m] = root
+
+        return place_to_cluster, cluster_info
+
+    def _collapse_horeca_duplicates(self, rows, headers):
+        """Collapse duplicate-cluster rows down to one (the freshest) per
+        cluster. Read-time only — never mutates the sheet. Returns
+        (collapsed_rows, merge_meta) where merge_meta maps the surviving
+        primary's Place ID -> {'merged_place_ids': [...], 'cluster_size': N}.
+        """
+        place_to_cluster, cluster_info = self._get_horeca_clusters_cached()
+        if not cluster_info:
+            return rows, {}
+
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        pid_idx = h.get('Place ID', 0)
+
+        collapsed = []
+        merge_meta = {}
+        for row in rows:
+            pid = row[pid_idx] if pid_idx < len(row) else ''
+            root = place_to_cluster.get(pid)
+            if root is None:
+                collapsed.append(row)
+                continue
+            info = cluster_info[root]
+            if pid != info['primary']:
+                continue  # skip non-primary duplicate rows entirely
+            collapsed.append(row)
+            merge_meta[pid] = {
+                'merged_place_ids': [m for m in info['members'] if m != pid],
+                'cluster_size': len(info['members']),
+            }
+        return collapsed, merge_meta
+
+    def _parse_horeca_status_changes(self, notes_text, place_id='', name=''):
+        """Extract STATUS_CHANGE events auto-logged into Outreach_Notes."""
+        events = []
+        if not notes_text:
+            return events
+        for line in notes_text.split('\n'):
+            line = line.strip()
+            if not line or line == '---':
+                continue
+            m = self.HORECA_STATUS_CHANGE_RE.match(line)
+            if not m:
+                continue
+            date_s, time_s, associate, from_status, to_status = m.groups()
+            events.append({
+                'place_id': place_id,
+                'name': name,
+                'date': date_s,
+                'time': time_s,
+                'timestamp': f'{date_s} {time_s}',
+                'associate': associate.strip(),
+                'from_status': from_status.strip(),
+                'to_status': to_status.strip(),
+            })
+        return events
+
+    def _parse_horeca_attempts(self, notes_text, place_id='', name=''):
+        """Extract ATTEMPT_LOGGED events auto-logged into Outreach_Notes.
+        Attempts are tracked going forward only — there's no way to
+        recover contact-attempt history for businesses touched before this
+        existed, so this is genuinely empty for most pre-existing leads."""
+        attempts = []
+        if not notes_text:
+            return attempts
+        for line in notes_text.split('\n'):
+            line = line.strip()
+            if not line or line == '---':
+                continue
+            m = self.HORECA_ATTEMPT_RE.match(line)
+            if not m:
+                continue
+            date_s, time_s, associate, note = m.groups()
+            attempts.append({
+                'place_id': place_id,
+                'name': name,
+                'date': date_s,
+                'time': time_s,
+                'timestamp': f'{date_s} {time_s}',
+                'associate': associate.strip(),
+                'note': (note or '').strip(),
+            })
+        return attempts
+
+    def log_horeca_attempt(self, place_id, note='', author='Team', actor_email='', actor_name=''):
+        """Append a contact-attempt entry into Outreach_Notes (same
+        append-only convention as STATUS_CHANGE — no new sheet structure).
+        Returns the attempt count for this business so far (this session
+        onward only)."""
+        try:
+            row_num = self.find_horeca_row(place_id)
+            if not row_num:
+                raise ValueError(f"HoReCa record not found: {place_id}")
+
+            spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+            worksheet = spreadsheet.sheet1
+
+            associate = actor_name or actor_email or author or 'Team'
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+            suffix = f': {note}' if note else ''
+            log_line = f'[{timestamp}|{associate}] ATTEMPT_LOGGED{suffix}'
+
+            existing_notes = worksheet.acell(f'BJ{row_num}').value or ''
+            combined_notes = f'{log_line}\n---\n{existing_notes}' if existing_notes else log_line
+            worksheet.update(f'BJ{row_num}', [[combined_notes]])
+            worksheet.update(f'BL{row_num}', [[datetime.now().isoformat()]])
+            worksheet.update(f'BM{row_num}', [[associate]])
+
+            global _horeca_crm_cache
+            _horeca_crm_cache['expiry'] = None
+
+            attempt_count = len(self._parse_horeca_attempts(combined_notes))
+            return {'success': True, 'attempt_count': attempt_count}
+        except ValueError:
+            raise
+        except Exception as e:
+            raise RuntimeError(f"Failed to log HoReCa attempt: {e}")
+
+    def _horeca_row_to_dict(self, row, headers, merge_meta=None):
         """Convert a HoReCa row to a frontend-friendly dict"""
         def safe_get(idx):
             return row[idx] if idx < len(row) else ''
@@ -1470,6 +1837,9 @@ class GoogleSheetsService:
         h = {}
         for i, hdr in enumerate(headers):
             h[hdr] = i
+
+        place_id = safe_get(h.get('Place ID', 0))
+        merge_info = (merge_meta or {}).get(place_id)
 
         # Actual sheet headers (65 cols after micro zone deletion):
         # A=Place ID, B=Name, C=Types, D=Primary Type, E=Street, F=Locality
@@ -1483,7 +1853,10 @@ class GoogleSheetsService:
         # AY=Zone_Density, AZ=Zone_Quadrant, BA=Zone_Priority_Rank
         # BB-BM: CRM outreach fields
         return {
-            'place_id': safe_get(h.get('Place ID', 0)),
+            'place_id': place_id,
+            'is_merged': bool(merge_info),
+            'merged_place_ids': merge_info['merged_place_ids'] if merge_info else [],
+            'cluster_size': merge_info['cluster_size'] if merge_info else 1,
             'name': safe_get(h.get('Name', 1)),
             'type': safe_get(h.get('HoReCa_Type', 34)) or safe_get(h.get('Primary Type', 3)),
             'address': safe_get(h.get('Full Address', 9)) or safe_get(h.get('Street', 4)),
@@ -1520,6 +1893,8 @@ class GoogleSheetsService:
             'updated_by': safe_get(h.get('Updated_By', 64)),
             'assigned_to': safe_get(h.get('Assigned_To', 65)),
             'assignment_history': safe_get(h.get('Assignment_History', 66)),
+            'pan_number': safe_get(h['PAN_Number']) if 'PAN_Number' in h else '',
+            'gst_number': safe_get(h['GST_Number']) if 'GST_Number' in h else '',
         }
 
     def get_horeca_map_data(self) -> dict:
@@ -1543,11 +1918,11 @@ class GoogleSheetsService:
             except (ValueError, TypeError):
                 return None
 
+        rows, _ = self._collapse_horeca_duplicates(rows, headers)
+
         pins, heat = [], []
         counts = {'onboarded': 0, 'pipeline': 0, 'unreached': 0}
         for row in rows:
-            if val(row, 'Is_Duplicate', 42).upper() in ('TRUE', 'YES', '1'):
-                continue
             lat = fnum(val(row, 'Latitude', 10))
             lng = fnum(val(row, 'Longitude', 11))
             if lat is None or lng is None:
@@ -1581,6 +1956,8 @@ class GoogleSheetsService:
             rows, headers = self._get_horeca_crm_cache()
             if not rows:
                 return {'records': [], 'total': 0, 'page': 1, 'total_pages': 0}
+
+            rows, merge_meta = self._collapse_horeca_duplicates(rows, headers)
 
             # Build header index for filtering
             h = {}
@@ -1684,7 +2061,7 @@ class GoogleSheetsService:
             end = start + page_size
             page_rows = filtered[start:end]
 
-            records = [self._horeca_row_to_dict(r, headers) for r in page_rows]
+            records = [self._horeca_row_to_dict(r, headers, merge_meta) for r in page_rows]
 
             return {
                 'records': records,
@@ -1716,7 +2093,45 @@ class GoogleSheetsService:
         except Exception:
             return None
 
-    def update_horeca_outreach(self, place_id, updates, author='Team'):
+    def _ensure_enhanced_pan_gst_columns(self):
+        """One-time, idempotent migration: add PAN_Number, GST_Number, and
+        FSSAI_Number columns to Enhanced (same safe pattern as
+        AppSheet_Lead_ID — verify empty before claiming). Returns
+        {'PAN_Number': idx, 'GST_Number': idx, 'FSSAI_Number': idx}
+        (1-based column indices)."""
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.sheet1
+        header_row = worksheet.row_values(1)
+        result = {}
+        col_names = ('PAN_Number', 'GST_Number', 'FSSAI_Number')
+        needed = [c for c in col_names if c not in header_row]
+
+        for col_name in col_names:
+            if col_name in header_row:
+                result[col_name] = header_row.index(col_name) + 1
+
+        if not needed:
+            return result
+
+        next_col_idx = len(header_row) + 1
+        for col_name in needed:
+            sample_cells = worksheet.range(2, next_col_idx, 20, next_col_idx)
+            if any(c.value for c in sample_cells):
+                raise RuntimeError(
+                    f'Column {next_col_idx} on Enhanced is not empty — refusing to claim it as {col_name}'
+                )
+            if worksheet.col_count < next_col_idx:
+                worksheet.resize(cols=next_col_idx)
+            worksheet.update_cell(1, next_col_idx, col_name)
+            result[col_name] = next_col_idx
+            header_row.append(col_name)
+            next_col_idx += 1
+
+        global _horeca_crm_cache
+        _horeca_crm_cache['expiry'] = None
+        return result
+
+    def update_horeca_outreach(self, place_id, updates, author='Team', actor_email='', actor_name=''):
         """Update outreach fields for a HoReCa record"""
         try:
             row_num = self.find_horeca_row(place_id)
@@ -1725,6 +2140,14 @@ class GoogleSheetsService:
 
             spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
             worksheet = spreadsheet.sheet1
+
+            # Capture the prior status before any writes below, so a real
+            # transition can be auto-logged into Outreach_Notes afterward
+            # (DOD day-on-day tracking — see bottom of this method).
+            new_status = updates.get('outreach_status')
+            from_status = ''
+            if new_status:
+                from_status = worksheet.acell(f'BB{row_num}').value or ''
 
             # Handle notes: prepend with timestamp
             if 'note' in updates and updates['note']:
@@ -1763,9 +2186,35 @@ class GoogleSheetsService:
                     col = self.HORECA_CRM_COL_MAP[field]
                     worksheet.update(f'{col}{row_num}', [[str(value)]])
 
+            # PAN/GST resolved by header name (not a hardcoded letter) since
+            # these columns were added after HORECA_CRM_COL_MAP was written.
+            pan_val = updates.get('pan_number')
+            gst_val = updates.get('gst_number')
+            if pan_val is not None or gst_val is not None:
+                col_idx_by_name = self._ensure_enhanced_pan_gst_columns()
+                if pan_val is not None and 'PAN_Number' in col_idx_by_name:
+                    worksheet.update_cell(row_num, col_idx_by_name['PAN_Number'], str(pan_val))
+                if gst_val is not None and 'GST_Number' in col_idx_by_name:
+                    worksheet.update_cell(row_num, col_idx_by_name['GST_Number'], str(gst_val))
+
             # Always update Last_Updated and Updated_By
             worksheet.update(f'BL{row_num}', [[datetime.now().isoformat()]])
             worksheet.update(f'BM{row_num}', [[author]])
+
+            # Auto-log real status transitions into Outreach_Notes (existing,
+            # already-append-only column — no new sheet structure). This is
+            # what powers the Day-on-Day view and per-business timeline.
+            # Never let a logging hiccup break the update the user is waiting on.
+            if new_status and new_status != from_status:
+                try:
+                    associate = actor_name or actor_email or author or 'Team'
+                    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+                    log_line = f"[{timestamp}|{associate}] STATUS_CHANGE: {from_status or '(none)'} -> {new_status}"
+                    existing_notes = worksheet.acell(f'BJ{row_num}').value or ''
+                    combined_notes = f"{log_line}\n---\n{existing_notes}" if existing_notes else log_line
+                    worksheet.update(f'BJ{row_num}', [[combined_notes]])
+                except Exception:
+                    pass
 
             # Invalidate cache
             global _horeca_crm_cache
@@ -1781,6 +2230,8 @@ class GoogleSheetsService:
         """Add a new HoReCa record (manual lead) to the CRM sheet"""
         try:
             import time
+            if data.get('pan_number') or data.get('gst_number'):
+                self._ensure_enhanced_pan_gst_columns()
             spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
             worksheet = spreadsheet.sheet1
             headers = worksheet.row_values(1)
@@ -1820,6 +2271,8 @@ class GoogleSheetsService:
             if 'SPOC_Designation' in h: row[h['SPOC_Designation']] = data.get('spoc_designation', '')
             if 'Outreach_Email' in h: row[h['Outreach_Email']] = data.get('email', '')
             if 'Bottles_Per_Week' in h: row[h['Bottles_Per_Week']] = data.get('bottles_per_week', '')
+            if 'PAN_Number' in h: row[h['PAN_Number']] = data.get('pan_number', '')
+            if 'GST_Number' in h: row[h['GST_Number']] = data.get('gst_number', '')
             if 'Last_Updated' in h: row[h['Last_Updated']] = datetime.now().isoformat()
             if 'Updated_By' in h: row[h['Updated_By']] = 'Manual Entry'
 
@@ -1853,6 +2306,8 @@ class GoogleSheetsService:
             rows, headers = self._get_horeca_crm_cache()
             if not rows:
                 return {'total': 0, 'statusCounts': {}, 'byZone': {}, 'byType': {}, 'recentUpdates': [], 'assignees': []}
+
+            rows, _ = self._collapse_horeca_duplicates(rows, headers)
 
             h = {}
             for i, hdr in enumerate(headers):
@@ -1921,6 +2376,1677 @@ class GoogleSheetsService:
         except Exception as e:
             raise RuntimeError(f"Failed to get HoReCa CRM summary: {e}")
 
+    def get_horeca_associate_status_snapshot(self):
+        """Current-state snapshot for the Overall Daily dashboard: for each
+        whitelisted associate, how many businesses they're responsible for
+        sit at each Outreach_Status right now. This is a live count of
+        current holdings, not a history of events — a business counts once,
+        under whatever status it's at today, however many times that status
+        has changed. Duplicate-cluster rows are collapsed first so a merged
+        business isn't double-counted under two associates.
+
+        Only the roster in HORECA_ASSOCIATE_WHITELIST is returned (all 10,
+        even with zero counts) — free-text Assigned_To values that don't
+        resolve to one of them (via HORECA_ASSOCIATE_ALIASES) are counted
+        in 'unmapped_count' but not attributed to anyone, rather than
+        guessed."""
+        rows, headers = self._get_horeca_crm_cache()
+        rows, _ = self._collapse_horeca_duplicates(rows, headers)
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        assigned_idx = h.get('Assigned_To', 65)
+        status_idx = h.get('Outreach_Status', 53)
+
+        by_associate = {
+            email: {s: 0 for s in self.HORECA_OUTREACH_STATUSES}
+            for email in self.HORECA_ASSOCIATE_WHITELIST
+        }
+        unmapped_count = 0
+        for row in rows:
+            assignee = row[assigned_idx].strip() if assigned_idx < len(row) else ''
+            if not assignee:
+                continue
+            status = row[status_idx].strip() if status_idx < len(row) else ''
+            if status not in self.HORECA_OUTREACH_STATUSES:
+                continue
+            email = self._resolve_associate_email(assignee)
+            if not email:
+                unmapped_count += 1
+                continue
+            by_associate[email][status] += 1
+
+        return {
+            'statuses': self.HORECA_OUTREACH_STATUSES,
+            'associates': {
+                self._associate_display_name(email): bucket
+                for email, bucket in by_associate.items()
+            },
+            'unmapped_count': unmapped_count,
+        }
+
+    def get_horeca_business_timeline(self, place_id):
+        """Chronological status-change history for a business, merged across
+        any duplicate cluster it belongs to (so a duplicate pair shows one
+        combined feed instead of two separate ones)."""
+        rows, headers = self._get_horeca_crm_cache()
+        place_to_cluster, cluster_info = self._get_horeca_clusters_cached()
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        pid_idx = h.get('Place ID', 0)
+        notes_idx = h.get('Outreach_Notes', 61)
+        name_idx = h.get('Name', 1)
+
+        root = place_to_cluster.get(place_id)
+        member_ids = set(cluster_info[root]['members']) if root else {place_id}
+
+        events = []
+        attempts = []
+        for row in rows:
+            pid = row[pid_idx] if pid_idx < len(row) else ''
+            if pid not in member_ids:
+                continue
+            name = row[name_idx] if name_idx < len(row) else ''
+            notes = row[notes_idx] if notes_idx < len(row) else ''
+            events.extend(self._parse_horeca_status_changes(notes, pid, name))
+            attempts.extend(self._parse_horeca_attempts(notes, pid, name))
+
+        events.sort(key=lambda e: e['timestamp'])
+        attempts.sort(key=lambda a: a['timestamp'])
+        return {
+            'place_id': place_id,
+            'is_merged': len(member_ids) > 1,
+            'cluster_size': len(member_ids),
+            'events': events,
+            'attempts': attempts,
+            'attempt_count': len(attempts),
+        }
+
+    def get_horeca_cycle_time(self, place_id):
+        """Approximate lead-to-OB-Filled cycle time from auto-logged
+        STATUS_CHANGE events. For businesses that existed before this
+        tracking was added, the first tracked event only marks when the
+        feature first observed them — not their true original lead date —
+        so this is exact only for businesses created after this shipped."""
+        timeline = self.get_horeca_business_timeline(place_id)
+        events = timeline['events']
+        if not events:
+            return {'place_id': place_id, 'cycle_days': None, 'reason': 'no tracked activity yet'}
+
+        ob_filled_event = next((e for e in events if e['to_status'] == 'OB Form Filled'), None)
+        if not ob_filled_event:
+            return {'place_id': place_id, 'cycle_days': None, 'reason': 'not yet OB Form Filled'}
+
+        fmt = '%Y-%m-%d %H:%M'
+        first_event = events[0]
+        start = datetime.strptime(first_event['timestamp'], fmt)
+        end = datetime.strptime(ob_filled_event['timestamp'], fmt)
+        days = (end - start).total_seconds() / 86400
+        return {
+            'place_id': place_id,
+            'cycle_days': round(days, 1),
+            'first_tracked': first_event['timestamp'],
+            'ob_filled_at': ob_filled_event['timestamp'],
+            'approximate': True,
+        }
+
+    def get_horeca_cycle_time_overview(self):
+        """Aggregate lead-to-OB-Filled cycle time across ALL businesses,
+        using ONLY real tracked STATUS_CHANGE history (never the
+        approximate backfill — a single snapshot point can't tell you how
+        long a journey took). Since real tracking only started recently,
+        this will show a small or zero sample size for a while; that's
+        surfaced explicitly via sample_size rather than faked."""
+        rows, headers = self._get_horeca_crm_cache()
+        rows, _ = self._collapse_horeca_duplicates(rows, headers)
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        notes_idx = h.get('Outreach_Notes', 61)
+        pid_idx = h.get('Place ID', 0)
+        name_idx = h.get('Name', 1)
+
+        fmt = '%Y-%m-%d %H:%M'
+        cycle_days = []
+        for row in rows:
+            notes = row[notes_idx] if notes_idx < len(row) else ''
+            if not notes:
+                continue
+            pid = row[pid_idx] if pid_idx < len(row) else ''
+            name = row[name_idx] if name_idx < len(row) else ''
+            real_events = self._parse_horeca_status_changes(notes, pid, name)
+            if not real_events:
+                continue
+            ob_event = next((e for e in real_events if e['to_status'] == 'OB Form Filled'), None)
+            if not ob_event:
+                continue
+            real_events.sort(key=lambda e: e['timestamp'])
+            start = datetime.strptime(real_events[0]['timestamp'], fmt)
+            end = datetime.strptime(ob_event['timestamp'], fmt)
+            cycle_days.append((end - start).total_seconds() / 86400)
+
+        if not cycle_days:
+            return {'sample_size': 0, 'avg_days': None, 'median_days': None}
+
+        cycle_days.sort()
+        n = len(cycle_days)
+        mid = n // 2
+        median = cycle_days[mid] if n % 2 else (cycle_days[mid - 1] + cycle_days[mid]) / 2
+        return {
+            'sample_size': n,
+            'avg_days': round(sum(cycle_days) / n, 1),
+            'median_days': round(median, 1),
+        }
+
+    def get_horeca_metrics_overview(self, stuck_threshold_days=14):
+        """Top-line metrics for the HoReCa Metrics dashboard: conversion
+        rate (both denominators — worked leads and total database), a
+        current funnel snapshot, a stuck-lead count, and the real-only
+        cycle-time aggregate above."""
+        rows, headers = self._get_horeca_crm_cache()
+        rows, _ = self._collapse_horeca_duplicates(rows, headers)
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        status_idx = h.get('Outreach_Status', 53)
+        last_updated_idx = h.get('Last_Updated', 63)
+
+        TERMINAL_STATUSES = {'OB Form Filled', 'De-listed'}
+        total = len(rows)
+        worked = 0
+        ob_filled = 0
+        funnel = {s: 0 for s in self.HORECA_OUTREACH_STATUSES}
+        stuck = 0
+        now = datetime.now()
+
+        for row in rows:
+            status = row[status_idx].strip() if status_idx < len(row) else ''
+            if not status:
+                continue
+            worked += 1
+            if status in self.HORECA_OUTREACH_STATUSES:
+                funnel[status] += 1
+            if status == 'OB Form Filled':
+                ob_filled += 1
+            if status not in TERMINAL_STATUSES:
+                last_updated = row[last_updated_idx].strip() if last_updated_idx < len(row) else ''
+                dt = self._parse_enhanced_datetime(last_updated)
+                if dt and (now - dt).days >= stuck_threshold_days:
+                    stuck += 1
+
+        return {
+            'total_businesses': total,
+            'worked_leads': worked,
+            'ob_filled': ob_filled,
+            'conversion_rate_worked': round(ob_filled / worked * 100, 1) if worked else 0,
+            'conversion_rate_total': round(ob_filled / total * 100, 1) if total else 0,
+            'funnel': funnel,
+            'stuck_leads': stuck,
+            'stuck_threshold_days': stuck_threshold_days,
+            'cycle_time': self.get_horeca_cycle_time_overview(),
+        }
+
+    def get_horeca_overview(self, target=10000, run_rate_window_days=30):
+        """Overview tab: funnel KPIs (cumulative, from Enhanced), the REAL
+        onboarded count (Superset ACTIVE) shown alongside our self-reported
+        OB Form Filled, conversion ratios, a run-rate/target projection, and
+        Day-on-Day + Month-on-Month movement tables.
+
+        DoD/MoM movement is derived from each Enhanced row's Last_Updated
+        date bucketed under its current status tier — approximate for history
+        (Last_Updated only marks the latest touch), exact going forward. The
+        onboarded TOTAL is reconciled against Superset (the real backend), so
+        the headline number is trustworthy even though per-day attribution is
+        Enhanced-based."""
+        rows, headers = self._get_horeca_crm_cache()
+        rows, _ = self._collapse_horeca_duplicates(rows, headers)
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        status_idx = h.get('Outreach_Status', 53)
+        # DoD/MoM are dated off "Updated Date" (the field team's own work date),
+        # NOT "Last_Updated" — the latter is an app timestamp that gets bumped
+        # by any edit (incl. bulk sync/backfill ops), which produced impossible
+        # single-day spikes. "Updated Date" reflects when work actually happened.
+        updated_date_idx = h.get('Updated Date')
+
+        def parse_work_date(val):
+            if not val:
+                return None
+            try:
+                return datetime.fromisoformat(val.strip()[:10]).date()
+            except ValueError:
+                return None
+
+        order = self.HORECA_OUTREACH_STATUSES
+        reached_bar = order.index('Meeting done')
+        started_bar = order.index('OB Form Opened')
+
+        def rank(status):
+            try:
+                return order.index(status)
+            except ValueError:
+                return -1
+
+        total_db = len(rows)
+        no_status = 0
+        delisted = 0
+        reached = 0          # Meeting done or beyond (real connections)
+        ob_opened = 0        # OB Form Opened or Filled
+        ob_filled = 0        # self-reported onboarded
+        touch_base = 0       # any non-blank status
+        undated_onboarded = 0  # OB Filled with no work date (historical)
+        first_onboard_date = None
+
+        now = datetime.now()
+        today = now.date()
+
+        # Day, week and month buckets: date -> {reached, started, onboarded}
+        dod = {}
+        wow = {}
+        mom = {}
+
+        def bucket(store, key):
+            return store.setdefault(key, {'reached': 0, 'started': 0, 'onboarded': 0})
+
+        for row in rows:
+            status = row[status_idx].strip() if status_idx < len(row) else ''
+            if not status:
+                no_status += 1
+                continue
+            touch_base += 1
+            r = rank(status)
+            if status == 'De-listed':
+                delisted += 1
+            if r >= reached_bar:
+                reached += 1
+            if r >= started_bar:
+                ob_opened += 1
+            if status == 'OB Form Filled':
+                ob_filled += 1
+
+            wd = parse_work_date(row[updated_date_idx]) if updated_date_idx is not None and updated_date_idx < len(row) else None
+            if wd is None:
+                if status == 'OB Form Filled':
+                    undated_onboarded += 1
+                continue
+            if status == 'OB Form Filled' and (first_onboard_date is None or wd < first_onboard_date):
+                first_onboard_date = wd
+            day_key = wd.isoformat()
+            week_key = (wd - timedelta(days=wd.weekday())).isoformat()  # Monday of that week
+            month_key = wd.strftime('%Y-%m')
+            for store, key in ((dod, day_key), (wow, week_key), (mom, month_key)):
+                b = bucket(store, key)
+                if r >= reached_bar:
+                    b['reached'] += 1
+                if r >= started_bar:
+                    b['started'] += 1
+                if status == 'OB Form Filled':
+                    b['onboarded'] += 1
+
+        # Real onboarded from Superset (the backend system of record)
+        superset_active = 0
+        try:
+            sup_rows, sup_headers = self._get_superset_cache()
+            ssi = {hd: i for i, hd in enumerate(sup_headers)}.get('status')
+            if ssi is not None:
+                superset_active = sum(1 for r in sup_rows if ssi < len(r) and r[ssi].strip().upper() == 'ACTIVE')
+        except Exception:
+            superset_active = 0
+
+        onboarded_real = superset_active or ob_filled
+
+        # Run rate: total onboarded ÷ days since onboarding first began.
+        # first_onboard_date comes from the earliest "Updated Date" among
+        # OB-Filled rows; days_active is inclusive of today.
+        if first_onboard_date:
+            days_active = max(1, (today - first_onboard_date).days + 1)
+        else:
+            days_active = None
+        daily_rate = round(onboarded_real / days_active, 2) if days_active else 0
+        remaining = max(0, target - onboarded_real)
+        days_to_target = round(remaining / daily_rate) if daily_rate > 0 else None
+
+        def rowify(store):
+            # conv_touch_base / conv_overall are CUMULATIVE: total onboarded
+            # up to and including that period, over the fixed denominators —
+            # so the columns read as "where we stood as of that day/month",
+            # not just that period's isolated contribution.
+            out = []
+            cumulative = 0
+            for key in sorted(store.keys()):  # oldest first for the running total
+                b = store[key]
+                cumulative += b['onboarded']
+                out.append({
+                    'period': key,
+                    'reached': b['reached'],
+                    'started': b['started'],
+                    'onboarded': b['onboarded'],
+                    'cumulative_onboarded': cumulative,
+                    'conv_day': round(b['onboarded'] / b['reached'] * 100, 1) if b['reached'] else 0,
+                    'conv_touch_base': round(cumulative / touch_base * 100, 2) if touch_base else 0,
+                    'conv_overall': round(cumulative / total_db * 100, 2) if total_db else 0,
+                })
+            out.reverse()  # newest first for display
+            return out
+
+        return {
+            'total_database': total_db,
+            'no_status': no_status,
+            'delisted': delisted,
+            'reached': reached,
+            'ob_opened': ob_opened,
+            'ob_filled': ob_filled,
+            'onboarded_real': onboarded_real,
+            'touch_base': touch_base,
+            'conversion_vs_touch_base': round(onboarded_real / touch_base * 100, 1) if touch_base else 0,
+            'conversion_vs_overall': round(onboarded_real / total_db * 100, 1) if total_db else 0,
+            'run_rate': {
+                'daily_rate': daily_rate,
+                'days_active': days_active,
+                'first_onboard_date': first_onboard_date.isoformat() if first_onboard_date else None,
+                'target': target,
+                'remaining': remaining,
+                'days_to_target': days_to_target,
+            },
+            'undated_onboarded': undated_onboarded,
+            'dod': rowify(dod),
+            'wow': rowify(wow),
+            'mom': rowify(mom),
+        }
+
+    def _collect_horeca_status_events(self):
+        """Flat list of every status-reached event across all (collapsed)
+        Enhanced businesses: real auto-logged STATUS_CHANGE entries where
+        they exist, plus a one-time read-only approximation — current
+        Outreach_Status dated to Last_Updated — for businesses with no real
+        tracked history at all (everything from before this feature
+        shipped, when Outreach_Status only ever held one value at a time).
+        Nothing is written back to the sheet. Shared by the Day-on-Day grid
+        and the Associate windowed view so both agree on the same events.
+        """
+        rows, headers = self._get_horeca_crm_cache()
+        rows, _ = self._collapse_horeca_duplicates(rows, headers)
+        h = {hdr: i for i, hdr in enumerate(headers)}
+        notes_idx = h.get('Outreach_Notes', 61)
+        status_idx = h.get('Outreach_Status', 53)
+        last_updated_idx = h.get('Last_Updated', 63)
+        updated_by_idx = h.get('Updated_By', 64)
+        pid_idx = h.get('Place ID', 0)
+        name_idx = h.get('Name', 1)
+
+        events = []
+        for row in rows:
+            pid = row[pid_idx] if pid_idx < len(row) else ''
+            name = row[name_idx] if name_idx < len(row) else ''
+            notes = row[notes_idx] if notes_idx < len(row) else ''
+            real_events = self._parse_horeca_status_changes(notes, pid, name)
+
+            if real_events:
+                for ev in real_events:
+                    events.append({**ev, 'approximate': False})
+                continue
+
+            # No real tracked history — approximate from current snapshot.
+            status = row[status_idx].strip() if status_idx < len(row) else ''
+            last_updated = row[last_updated_idx].strip() if last_updated_idx < len(row) else ''
+            if status not in self.HORECA_OUTREACH_STATUSES or not last_updated:
+                continue
+            enh_dt = self._parse_enhanced_datetime(last_updated)
+            if not enh_dt:
+                continue
+            associate = row[updated_by_idx].strip() if updated_by_idx < len(row) else ''
+            events.append({
+                'place_id': pid,
+                'name': name,
+                'date': enh_dt.date().isoformat(),
+                'associate': associate,
+                'to_status': status,
+                'approximate': True,
+            })
+
+        return events
+
+    def get_horeca_dod_grid(self, start_date_str, end_date_str):
+        """Status x date grid for the Overall Daily dashboard's Day-on-Day
+        section: rows are dates in the range, columns are the canonical
+        outreach statuses, values are how many businesses reached that
+        status on that day (real tracked events, plus a read-only
+        approximation for businesses with no tracked history — see
+        _collect_horeca_status_events)."""
+        try:
+            start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            raise ValueError('start/end must be YYYY-MM-DD')
+
+        date_list = []
+        d = start
+        while d <= end:
+            date_list.append(d.isoformat())
+            d += timedelta(days=1)
+
+        grid = {status: {ds: 0 for ds in date_list} for status in self.HORECA_OUTREACH_STATUSES}
+        approximate_count = 0
+
+        for ev in self._collect_horeca_status_events():
+            if ev['to_status'] in grid and ev['date'] in grid[ev['to_status']]:
+                grid[ev['to_status']][ev['date']] += 1
+                if ev['approximate']:
+                    approximate_count += 1
+
+        return {
+            'dates': date_list,
+            'statuses': self.HORECA_OUTREACH_STATUSES,
+            'grid': grid,
+            'approximate_count': approximate_count,
+        }
+
+    def get_horeca_associate_events_summary(self, start_date_str, end_date_str):
+        """Associate x status counts for the given window, from real
+        tracked transitions + the same read-only approximation used by the
+        Day-on-Day grid. Only the whitelisted roster is returned; anyone
+        else is counted in 'unmapped_count' rather than guessed."""
+        try:
+            start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            raise ValueError('start/end must be YYYY-MM-DD')
+
+        by_associate = {
+            email: {s: 0 for s in self.HORECA_OUTREACH_STATUSES}
+            for email in self.HORECA_ASSOCIATE_WHITELIST
+        }
+        unmapped_count = 0
+
+        for ev in self._collect_horeca_status_events():
+            try:
+                ev_date = datetime.strptime(ev['date'], '%Y-%m-%d').date()
+            except ValueError:
+                continue
+            if not (start <= ev_date <= end):
+                continue
+            if ev['to_status'] not in self.HORECA_OUTREACH_STATUSES:
+                continue
+            email = self._resolve_associate_email(ev['associate'])
+            if not email:
+                unmapped_count += 1
+                continue
+            by_associate[email][ev['to_status']] += 1
+
+        return {
+            'start': start_date_str,
+            'end': end_date_str,
+            'statuses': self.HORECA_OUTREACH_STATUSES,
+            'associates': {
+                self._associate_display_name(email): bucket
+                for email, bucket in by_associate.items()
+            },
+            'unmapped_count': unmapped_count,
+        }
+
+    # ==================== HoReCa app_sheet -> Enhanced sync (preview only) ====================
+    # app_sheet is the tab the field team actively updates (confirmed live —
+    # real recent dates, real associate emails); the web CRM only ever reads
+    # "Enhanced". The two tabs share no ID (Enhanced uses Google Place IDs,
+    # app_sheet uses its own short lead code), so matching is done by
+    # normalized name + geo-distance on app_sheet's own "Location" column
+    # (lat,lng as a single string) against Enhanced's Latitude/Longitude —
+    # validated against live data at ~97% clean unambiguous match rate.
+    APPSHEET_TAB_NAME = 'app_sheet'
+    APPSHEET_GEO_THRESHOLD_M = 500
+
+    # Best-effort mapping from app_sheet's free-text "Lead Stage" values onto
+    # Enhanced's canonical Outreach_Status vocabulary. Only high-confidence,
+    # high-volume mappings are included — anything else is left unmapped and
+    # surfaced as "needs review" rather than guessed, since a wrong status
+    # write is worse than no write.
+    APPSHEET_STATUS_MAP = {
+        'ob form filled': 'OB Form Filled',
+        'lead created': '',
+        'meeting scheduled': 'Meeting aligned',
+        'meeting completed': 'Meeting done',
+        'meeting done': 'Meeting done',
+        'no response': 'Call not answered',
+    }
+
+    @classmethod
+    def _status_rank(cls, status):
+        """Position of a status in the outreach funnel (0=earliest). None if
+        blank/unrecognized — callers must treat None as "unknown", not 0."""
+        if not status:
+            return None
+        try:
+            return cls.HORECA_OUTREACH_STATUSES.index(status)
+        except ValueError:
+            return None
+
+    def _get_appsheet_cache(self):
+        """Get or initialize the app_sheet cache (separate tab, same spreadsheet)."""
+        global _appsheet_cache
+        now = datetime.now()
+        if (_appsheet_cache['data'] is not None
+                and _appsheet_cache['expiry']
+                and now < _appsheet_cache['expiry']):
+            return _appsheet_cache['data'], _appsheet_cache['headers']
+
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.worksheet(self.APPSHEET_TAB_NAME)
+        all_values = _gs_retry(worksheet.get_all_values)
+
+        if len(all_values) < 2:
+            _appsheet_cache['data'] = []
+            _appsheet_cache['headers'] = []
+            _appsheet_cache['expiry'] = now + timedelta(minutes=2)
+            return [], []
+
+        headers = all_values[0]
+        rows = all_values[1:]
+        _appsheet_cache['data'] = rows
+        _appsheet_cache['headers'] = headers
+        _appsheet_cache['expiry'] = now + timedelta(minutes=2)
+        return rows, headers
+
+    SUPERSET_TAB_NAME = 'Superset'
+
+    # Test/dummy businesses to exclude from ALL Superset-derived numbers
+    # (matches the team's own Superset SQL exclusion regex). Applied at read
+    # time so no matter what lands in the Superset tab, these never count.
+    SUPERSET_TEST_TERMS = (
+        'recykal', 'sample', 'test', 'abhay', 'sandeep malku', 'lettuce eat',
+        'leo roar', 'mewo', 'malbar resort', 'bishal sao and associates',
+        'rahul', 'moonson family bar and restaurant', 'bay breeze hotels & resort',
+        'revanth estates', 'urdki', 'reyckal',
+    )
+
+    @classmethod
+    def _is_superset_test_row(cls, name):
+        n = (name or '').lower()
+        return any(term in n for term in cls.SUPERSET_TEST_TERMS)
+
+    def _get_superset_cache(self):
+        """Get or initialize the Superset export cache (separate tab, same
+        spreadsheet — a plain-values import, not formula-driven). Test/dummy
+        businesses (SUPERSET_TEST_TERMS) are filtered out here so every
+        downstream number excludes them automatically."""
+        global _superset_cache
+        now = datetime.now()
+        if (_superset_cache['data'] is not None
+                and _superset_cache['expiry']
+                and now < _superset_cache['expiry']):
+            return _superset_cache['data'], _superset_cache['headers']
+
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.worksheet(self.SUPERSET_TAB_NAME)
+        all_values = _gs_retry(worksheet.get_all_values)
+
+        if len(all_values) < 2:
+            _superset_cache['data'] = []
+            _superset_cache['headers'] = []
+            _superset_cache['expiry'] = now + timedelta(minutes=2)
+            return [], []
+
+        headers = all_values[0]
+        name_idx = headers.index('business_name') if 'business_name' in headers else 1
+        rows = [
+            r for r in all_values[1:]
+            if not (name_idx < len(r) and self._is_superset_test_row(r[name_idx]))
+        ]
+        _superset_cache['data'] = rows
+        _superset_cache['headers'] = headers
+        _superset_cache['expiry'] = now + timedelta(minutes=2)
+        return rows, headers
+
+    def get_horeca_superset_data(self, search='', page=1, page_size=50):
+        """Paginated read of the Superset export tab — a raw viewer only,
+        no matching against Enhanced/app_sheet yet."""
+        rows, headers = self._get_superset_cache()
+        if not rows:
+            return {'records': [], 'total': 0, 'page': 1, 'total_pages': 0}
+
+        h = {hdr: i for i, hdr in enumerate(headers)}
+
+        def g(row, col):
+            i = h.get(col)
+            return row[i].strip() if i is not None and i < len(row) else ''
+
+        search_lower = search.lower().strip()
+        filtered = rows
+        if search_lower:
+            name_idx = h.get('business_name')
+            filtered = [r for r in rows if name_idx is not None and name_idx < len(r)
+                        and search_lower in r[name_idx].lower()]
+
+        total = len(filtered)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = min(max(page, 1), total_pages)
+        start = (page - 1) * page_size
+        page_rows = filtered[start:start + page_size]
+
+        records = [{
+            'business_name': g(r, 'business_name'),
+            'status': g(r, 'status'),
+            'pan_number': g(r, 'pan_number'),
+            'gstin_number': g(r, 'gstin_number'),
+            'fssai_number': g(r, 'fssai_number'),
+            'kind_of_business': g(r, 'kind_of_business'),
+            'city': g(r, 'city') or g(r, 'region_name'),
+            'street': g(r, 'street'),
+            'pin_code': g(r, 'pin_code'),
+        } for r in page_rows]
+
+        return {
+            'records': records,
+            'total': total,
+            'page': page,
+            'total_pages': total_pages,
+        }
+
+    # ==================== Superset <-> Enhanced validation ====================
+    # Words that carry no identity in a Goan hospitality business name —
+    # generic industry terms plus locality/place names. Two unrelated
+    # businesses routinely share these, so they must not count as evidence
+    # of a match (verified live: "Baga 24 Bar" wrongly matched "De baga
+    # deck" on the shared neighbourhood name alone before this list).
+    HORECA_NAME_STOPWORDS = frozenset({
+        'bar', 'restaurant', 'restaurants', 'cafe', 'kitchen', 'resort', 'resorts',
+        'hotel', 'hotels', 'and', 'the', 'by', 'pub', 'lounge', 'grill', 'food',
+        'foods', 'family', 'multi', 'cuisine', 'dine', 'dining', 'deck', 'house',
+        'garden', 'palace', 'corner', 'view', 'point', 'side', 'beach', 'club',
+        'inn', 'bakery', 'bistro', 'shack', 'joint', 'eatery', 'grille', 'grub',
+        'goa', 'goan', 'of', 'at', 'in', 'to', 'near', 'opp', 'road', 'wine',
+        'shop', 'spot', 'zone', 'hub', 'place', 'stop', 'sea', 'ocean',
+        'baga', 'anjuna', 'calangute', 'candolim', 'panaji', 'panjim', 'vagator',
+        'arpora', 'assagao', 'siolim', 'mapusa', 'margao', 'madgaon', 'colva',
+        'benaulim', 'cavelossim', 'varca', 'majorda', 'betalbatim', 'sinquerim',
+        'morjim', 'ashwem', 'mandrem', 'arambol', 'chapora', 'ponda', 'verna',
+        'cortalim', 'bicholim', 'bardez', 'salcete', 'tiswadi', 'pernem',
+        'canacona', 'quepem', 'sanguem', 'dabolim', 'vasco', 'sangolda',
+        'corjuem', 'bambolim', 'mormugaon', 'sancoale', 'upasnagar', 'aldona',
+        'saligao', 'porvorim', 'reis', 'magos', 'santa', 'cruz', 'dona', 'paula',
+    })
+    SUPERSET_NAME_SIM_THRESHOLD = 0.6
+    SUPERSET_MIN_SHARED_TOKENS = 2
+
+    @classmethod
+    def _distinctive_name_tokens(cls, name):
+        s = re.sub(r'[^a-z0-9 ]', ' ', (name or '').lower())
+        return frozenset(
+            t for t in s.split() if len(t) > 2 and t not in cls.HORECA_NAME_STOPWORDS
+        )
+
+    def get_horeca_superset_validation(self):
+        """Validate our tracker against the Superset export (the authoritative
+        onboarding record: status ACTIVE = onboarded, DRAFT = onboarding
+        started but pending).
+
+        Matching, per Superset business, first tier wins:
+          exact PAN -> exact GST -> exact FSSAI -> confident name
+          (>=2 shared distinctive tokens, Jaccard >= 0.6, same pincode,
+          Superset alias-name columns also checked and flagged) -> no match.
+        Exact tiers strengthen automatically as PAN/GST/FSSAI populate on
+        the Enhanced side (fed by the app_sheet document auto-copy).
+
+        Collisions (two Enhanced rows claiming one Superset row — the
+        multi-location-brand case) are demoted to needs_review: counted in
+        neither matched nor unmatched, listed for human review instead.
+
+        Read-only: computes live from the cached tabs, writes nothing.
+        """
+        global _superset_validation_cache
+        now = datetime.now()
+        if _superset_validation_cache['data'] is not None:
+            fresh = (_superset_validation_cache['expiry']
+                     and now < _superset_validation_cache['expiry'])
+            if fresh:
+                return _superset_validation_cache['data']
+            # Stale-while-revalidate: hand back the previous result instantly
+            # and recompute in a background thread, so the Insights tab never
+            # blocks the user on a full re-validation.
+            if not _superset_validation_cache.get('refreshing'):
+                _superset_validation_cache['refreshing'] = True
+
+                def _refresh():
+                    try:
+                        self._compute_superset_validation()
+                    except Exception:
+                        pass
+                    finally:
+                        _superset_validation_cache['refreshing'] = False
+                import threading
+                threading.Thread(target=_refresh, daemon=True).start()
+            return _superset_validation_cache['data']
+
+        return self._compute_superset_validation()
+
+    def _compute_superset_validation(self):
+        """The actual validation computation (see get_horeca_superset_validation)."""
+        global _superset_validation_cache
+        now = datetime.now()
+
+        enh_rows, enh_headers = self._get_horeca_crm_cache()
+        enh_rows, _ = self._collapse_horeca_duplicates(enh_rows, enh_headers)
+        eh = {hdr: i for i, hdr in enumerate(enh_headers)}
+
+        def eg(row, col, default_idx=None):
+            i = eh.get(col, default_idx)
+            return row[i].strip() if i is not None and i < len(row) else ''
+
+        sup_rows, sup_headers = self._get_superset_cache()
+        sh = {hdr: i for i, hdr in enumerate(sup_headers)}
+
+        def sg(row, col):
+            i = sh.get(col)
+            return row[i].strip() if i is not None and i < len(row) else ''
+
+        # --- Enhanced-side indexes ---
+        enh_by_pan, enh_by_gst, enh_by_fssai = {}, {}, {}
+        enh_by_pincode = {}
+        for erow in enh_rows:
+            pan = eg(erow, 'PAN_Number').upper()
+            gst = eg(erow, 'GST_Number').upper()
+            fssai = eg(erow, 'FSSAI_Number')
+            if pan:
+                enh_by_pan.setdefault(pan, erow)
+            if gst:
+                enh_by_gst.setdefault(gst, erow)
+            if fssai:
+                enh_by_fssai.setdefault(fssai, erow)
+            pin = eg(erow, 'Pincode')
+            if pin:
+                enh_by_pincode.setdefault(pin, []).append(erow)
+
+        alias_cols = ['other_name_pan', 'other_name_gst_legal', 'other_name_gst_trade', 'other_name_fssai']
+
+        def is_associate_sourced(erow):
+            if eg(erow, 'AppSheet_Lead_ID'):
+                return True
+            if eg(erow, 'Assigned_To', 65):
+                return True
+            return eg(erow, 'Place ID', 0).startswith('MANUAL_')
+
+        matches = []       # per Superset row: dict or None
+        for srow in sup_rows:
+            sname = sg(srow, 'business_name')
+            if not sname:
+                matches.append(None)
+                continue
+            span = sg(srow, 'pan_number').upper()
+            sgst = sg(srow, 'gstin_number').upper()
+            sfssai = sg(srow, 'fssai_number')
+
+            erow, method, via, score = None, None, 'primary', 1.0
+            if span and span in enh_by_pan:
+                erow, method = enh_by_pan[span], 'exact_pan'
+            elif sgst and sgst in enh_by_gst:
+                erow, method = enh_by_gst[sgst], 'exact_gst'
+            elif sfssai and sfssai in enh_by_fssai:
+                erow, method = enh_by_fssai[sfssai], 'exact_fssai'
+            else:
+                pin = sg(srow, 'pin_code')
+                candidates = enh_by_pincode.get(pin, []) if pin else []
+                cand_names = [(sname, 'primary')] + [
+                    (sg(srow, c), 'alias') for c in alias_cols if sg(srow, c)
+                ]
+                best_score, best_row, best_via = 0.0, None, 'primary'
+                for nm, nm_via in cand_names:
+                    s_tok = self._distinctive_name_tokens(nm)
+                    if len(s_tok) < self.SUPERSET_MIN_SHARED_TOKENS:
+                        continue
+                    for cand in candidates:
+                        c_tok = self._distinctive_name_tokens(cand[eh.get('Name', 1)] if eh.get('Name', 1) < len(cand) else '')
+                        shared = len(s_tok & c_tok)
+                        union = len(s_tok | c_tok)
+                        j = shared / union if union else 0.0
+                        if j > best_score and shared >= self.SUPERSET_MIN_SHARED_TOKENS:
+                            best_score, best_row, best_via = j, cand, nm_via
+                if best_row is not None and best_score >= self.SUPERSET_NAME_SIM_THRESHOLD:
+                    erow, method, via, score = best_row, 'name_confident', best_via, best_score
+
+            matches.append(None if erow is None else {
+                'erow': erow, 'method': method, 'via': via, 'score': round(score, 2),
+            })
+
+        # --- Collision demotion: 2+ Superset rows claiming one Enhanced row,
+        # or (equivalently) matches sharing a Place ID — only one can be
+        # right, so trust none of them automatically.
+        pid_claims = {}
+        for m in matches:
+            if m:
+                pid = m['erow'][eh.get('Place ID', 0)]
+                pid_claims[pid] = pid_claims.get(pid, 0) + 1
+        for m in matches:
+            if m and pid_claims[m['erow'][eh.get('Place ID', 0)]] > 1:
+                m['method'] = 'needs_review'
+
+        # --- Roll everything up ---
+        method_counts = {'exact_pan': 0, 'exact_gst': 0, 'exact_fssai': 0,
+                         'name_confident': 0, 'needs_review': 0, 'no_match': 0}
+        agree = over_claim = blind_spot = 0
+        associate_matched = organic_matched = 0
+        over_claims, blind_spots, collisions, organic_candidates = [], [], [], []
+        matched_place_ids = set()
+
+        for srow, m in zip(sup_rows, matches):
+            sname = sg(srow, 'business_name')
+            sstatus = sg(srow, 'status')
+            base = {'superset_name': sname, 'superset_status': sstatus,
+                    'city': sg(srow, 'city') or sg(srow, 'region_name'),
+                    'pin_code': sg(srow, 'pin_code')}
+            if m is None:
+                method_counts['no_match'] += 1
+                organic_candidates.append(base)
+                continue
+            method_counts[m['method']] += 1
+            detail = {**base, 'enhanced_name': eg(m['erow'], 'Name', 1),
+                      'place_id': eg(m['erow'], 'Place ID', 0),
+                      'our_status': eg(m['erow'], 'Outreach_Status', 53),
+                      'method': m['method'], 'via': m['via'], 'score': m['score']}
+            if m['method'] == 'needs_review':
+                collisions.append(detail)
+                continue
+            matched_place_ids.add(detail['place_id'])
+            if is_associate_sourced(m['erow']):
+                associate_matched += 1
+            else:
+                organic_matched += 1
+            ours_claimed = detail['our_status'] == 'OB Form Filled'
+            if sstatus == 'ACTIVE' and ours_claimed:
+                agree += 1
+            elif sstatus != 'ACTIVE' and ours_claimed:
+                over_claim += 1
+                over_claims.append(detail)
+            elif sstatus == 'ACTIVE' and not ours_claimed:
+                blind_spot += 1
+                blind_spots.append(detail)
+
+        # Our OB-Filled rows with no Superset match at all = over-claims too
+        # (we say onboarded; the system of record has never heard of them).
+        for erow in enh_rows:
+            if eg(erow, 'Outreach_Status', 53) == 'OB Form Filled' \
+                    and eg(erow, 'Place ID', 0) not in matched_place_ids:
+                over_claims.append({
+                    'superset_name': '(no Superset record)', 'superset_status': '-',
+                    'enhanced_name': eg(erow, 'Name', 1),
+                    'place_id': eg(erow, 'Place ID', 0),
+                    'our_status': 'OB Form Filled',
+                    'method': 'no_match', 'via': '-', 'score': 0,
+                    'city': eg(erow, 'City', 6), 'pin_code': eg(erow, 'Pincode'),
+                })
+
+        # Touch base = every business we've connected with in any way
+        # (any non-blank status counts, per the user's definition).
+        touch_base = sum(1 for r in enh_rows if eg(r, 'Outreach_Status', 53))
+        status_counts = {}
+        for r in enh_rows:
+            st = eg(r, 'Outreach_Status', 53)
+            if st:
+                status_counts[st] = status_counts.get(st, 0) + 1
+
+        active_total = sum(1 for r in sup_rows if sg(r, 'status') == 'ACTIVE')
+        draft_total = sum(1 for r in sup_rows if sg(r, 'status') == 'DRAFT')
+        matched_total = associate_matched + organic_matched
+
+        classification = self._classify_superset_rows(
+            sup_rows, sg, matches, eh, eg, active_total, draft_total)
+
+        result = {
+            'classification': classification,
+            'superset_total': len(sup_rows),
+            'onboarded_active': active_total,
+            'pending_draft': draft_total,
+            'touch_base': touch_base,
+            'total_database': len(enh_rows),
+            'status_counts': status_counts,
+            'conversion_vs_touch_base': round(active_total / touch_base * 100, 1) if touch_base else 0,
+            'conversion_vs_overall': round(active_total / len(enh_rows) * 100, 1) if enh_rows else 0,
+            'matched': matched_total,
+            'associate_matched': associate_matched,
+            'organic_matched': organic_matched,
+            'superset_unmatched': method_counts['no_match'],
+            'agree': agree,
+            'over_claim_count': len(over_claims),
+            'blind_spot_count': blind_spot,
+            'needs_review_count': len(collisions),
+            'method_counts': method_counts,
+            'over_claims': over_claims,
+            'blind_spots': blind_spots,
+            'collisions': collisions,
+            'organic_candidates': organic_candidates,
+        }
+        _superset_validation_cache['data'] = result
+        _superset_validation_cache['expiry'] = now + timedelta(minutes=2)
+        return result
+
+    def _classify_superset_rows(self, sup_rows, sg, matches, eh, eg,
+                                active_total, draft_total):
+        """Classify every Superset business as Organic / Inorganic /
+        QA Review / Onboarding-In-Progress.
+
+        The associate-ID pool is built from BOTH Enhanced (PAN_Number /
+        GST_Number) AND app_sheet (Document_Number classified by
+        _classify_document) — a document captured in the field counts even
+        before it's copied to Enhanced. All IDs are normalized (upper,
+        strip) at read time; nothing is written back to any tab.
+
+        Precedence per row (first hit wins):
+          DRAFT status        -> onboarding_in_progress
+          duplicate PAN/GST inside Superset -> QA (dup queue)
+          PAN or GST in associate pool      -> Inorganic
+          name-only confident match         -> QA (name queue)
+          otherwise                         -> Organic
+
+        Saved decisions from the QA-Decisions tab are overlaid: approved
+        items keep their queue with a badge; disapproved items move to the
+        'disapproved' list (kept visible, flagged). Read-only here.
+        """
+        # --- associate ID pool: Enhanced + app_sheet ---
+        # Alongside membership, remember OUR side's business name (and
+        # status where known) per ID, so every QA/classification row can
+        # show the Ravishing name next to the Superset name.
+        pool_pan, pool_gst = set(), set()
+        our_by_pan, our_by_gst = {}, {}
+        enh_rows_all, enh_headers_all = self._get_horeca_crm_cache()
+        ehp = {hdr: i for i, hdr in enumerate(enh_headers_all)}
+        pan_i, gst_i = ehp.get('PAN_Number'), ehp.get('GST_Number')
+        name_i = ehp.get('Name', 1)
+        stat_i = ehp.get('Outreach_Status', 53)
+        for erow in enh_rows_all:
+            ename = erow[name_i].strip() if name_i < len(erow) else ''
+            estat = erow[stat_i].strip() if stat_i < len(erow) else ''
+            if pan_i is not None and pan_i < len(erow) and erow[pan_i].strip():
+                p = erow[pan_i].strip().upper()
+                pool_pan.add(p)
+                our_by_pan.setdefault(p, {'name': ename, 'status': estat})
+            if gst_i is not None and gst_i < len(erow) and erow[gst_i].strip():
+                g = erow[gst_i].strip().upper()
+                pool_gst.add(g)
+                our_by_gst.setdefault(g, {'name': ename, 'status': estat})
+
+        app_rows, app_headers = self._get_appsheet_cache()
+        ah = {hdr: i for i, hdr in enumerate(app_headers)}
+
+        def ag(row, col):
+            i = ah.get(col)
+            return row[i].strip() if i is not None and i < len(row) else ''
+
+        google_leads = new_leads = 0
+        for arow in app_rows:
+            # Lead-source KPIs (Google vs everything else non-blank)
+            src = ag(arow, 'Lead Source')
+            if src:
+                if src.strip().lower() == 'google':
+                    google_leads += 1
+                else:
+                    new_leads += 1
+            col_name, num = self._classify_document(
+                ag(arow, 'Document_Type'), ag(arow, 'Document_Number'))
+            if col_name == 'PAN_Number':
+                pool_pan.add(num)
+                our_by_pan.setdefault(num, {'name': ag(arow, 'HoReCa Name'), 'status': ag(arow, 'Lead Stage')})
+            elif col_name == 'GST_Number':
+                pool_gst.add(num)
+                our_by_gst.setdefault(num, {'name': ag(arow, 'HoReCa Name'), 'status': ag(arow, 'Lead Stage')})
+
+        # --- duplicates WITHIN Superset ---
+        pan_counts, gst_counts, name_counts = {}, {}, {}
+        for srow in sup_rows:
+            p = sg(srow, 'pan_number').upper()
+            g = sg(srow, 'gstin_number').upper()
+            n = self._normalize_horeca_name(sg(srow, 'business_name'))
+            if p:
+                pan_counts[p] = pan_counts.get(p, 0) + 1
+            if g:
+                gst_counts[g] = gst_counts.get(g, 0) + 1
+            if n:
+                name_counts[n] = name_counts.get(n, 0) + 1
+        dup_pans = {p for p, c in pan_counts.items() if c > 1}
+        dup_gsts = {g for g, c in gst_counts.items() if c > 1}
+        dup_names = {n for n, c in name_counts.items() if c > 1}
+
+        decisions = self._read_qa_decisions()
+
+        organic, inorganic = [], []
+        qa_name, qa_dup_pan, qa_dup_gst = [], [], []
+        dup_name_rows, disapproved, in_progress = [], [], []
+
+        for srow, m in zip(sup_rows, matches):
+            sname = sg(srow, 'business_name')
+            span = sg(srow, 'pan_number').upper()
+            sgst = sg(srow, 'gstin_number').upper()
+            sstatus = sg(srow, 'status')
+            norm_name = self._normalize_horeca_name(sname)
+            # Our-side (Ravishing) record for this business, by ID first,
+            # falling back to the name-match result when no ID links it.
+            ours = our_by_pan.get(span) or our_by_gst.get(sgst)
+            if not ours and m is not None:
+                ours = {'name': eg(m['erow'], 'Name', 1),
+                        'status': eg(m['erow'], 'Outreach_Status', 53)}
+            item = {
+                'superset_name': sname,
+                'superset_status': sstatus,
+                'pan': span, 'gst': sgst,
+                'city': sg(srow, 'city') or sg(srow, 'region_name'),
+                'pin_code': sg(srow, 'pin_code'),
+                'matched_name': ours['name'] if ours else '',
+                'matched_status': ours['status'] if ours else '',
+            }
+
+            # Duplicate business names — informational, spans all buckets
+            if norm_name and norm_name in dup_names:
+                dup_name_rows.append({**item, 'queue': 'dup_name',
+                                      'key': f'NAME:{norm_name}|{item["pin_code"]}'})
+
+            if sstatus == 'DRAFT':
+                in_progress.append(item)
+                continue
+
+            def with_decision(it, key, queue):
+                it = {**it, 'key': key, 'queue': queue}
+                dec = decisions.get(key)
+                if dec:
+                    it['decision'] = dec['decision']
+                    it['decided_by'] = dec.get('decided_by', '')
+                return it
+
+            if span and span in dup_pans:
+                it = with_decision(item, f'PAN:{span}', 'dup_pan')
+                (disapproved if it.get('decision') == 'disapproved' else qa_dup_pan).append(it)
+            elif sgst and sgst in dup_gsts:
+                it = with_decision(item, f'GST:{sgst}', 'dup_gst')
+                (disapproved if it.get('decision') == 'disapproved' else qa_dup_gst).append(it)
+            elif (span and span in pool_pan) or (sgst and sgst in pool_gst):
+                inorganic.append({**item,
+                                  'matched_via': 'PAN' if span in pool_pan else 'GST'})
+            elif m is not None:
+                it = with_decision({
+                    **item,
+                    'matched_name': eg(m['erow'], 'Name', 1),
+                    'matched_status': eg(m['erow'], 'Outreach_Status', 53),
+                    'score': m.get('score', 0),
+                }, f'NAME:{norm_name}|{item["pin_code"]}', 'name_match')
+                (disapproved if it.get('decision') == 'disapproved' else qa_name).append(it)
+            else:
+                organic.append(item)
+
+        qa_pending = sum(1 for lst in (qa_name, qa_dup_pan, qa_dup_gst)
+                         for it in lst if not it.get('decision'))
+
+        return {
+            'total_onboarded': active_total,
+            'onboarding_in_progress_count': draft_total,
+            'google_leads': google_leads,
+            'new_leads': new_leads,
+            'organic_count': len(organic),
+            'inorganic_count': len(inorganic),
+            'qa_pending': qa_pending,
+            'organic': organic,
+            'inorganic': inorganic,
+            'qa_name_matches': qa_name,
+            'qa_dup_pan': qa_dup_pan,
+            'qa_dup_gst': qa_dup_gst,
+            'dup_names': dup_name_rows,
+            'disapproved': disapproved,
+            'onboarding_in_progress': in_progress,
+        }
+
+    # ==================== QA decisions (approve / disapprove) ====================
+    QA_DECISIONS_TAB_NAME = 'QA-Decisions'
+    QA_DECISIONS_HEADERS = ['Timestamp', 'Key', 'Queue', 'Business_Name',
+                            'Decision', 'Decided_By']
+
+    def _get_qa_decisions_worksheet(self, create=False):
+        """QA-Decisions tab handle. Lazily created on FIRST WRITE only —
+        reads never create it. This is the sole tab this feature writes to;
+        Enhanced / app_sheet / Superset are never written."""
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        try:
+            return spreadsheet.worksheet(self.QA_DECISIONS_TAB_NAME)
+        except gspread.exceptions.WorksheetNotFound:
+            if not create:
+                return None
+            ws = spreadsheet.add_worksheet(
+                title=self.QA_DECISIONS_TAB_NAME, rows=1000, cols=6)
+            ws.append_row(self.QA_DECISIONS_HEADERS)
+            return ws
+
+    def _read_qa_decisions(self):
+        """Latest decision per key from the append-only QA-Decisions tab
+        (later rows win). Empty dict if the tab doesn't exist yet."""
+        try:
+            ws = self._get_qa_decisions_worksheet(create=False)
+        except Exception:
+            return {}
+        if ws is None:
+            return {}
+        decisions = {}
+        for row in ws.get_all_values()[1:]:
+            if len(row) >= 5 and row[1].strip():
+                decisions[row[1].strip()] = {
+                    'decision': row[4].strip().lower(),
+                    'decided_by': row[5].strip() if len(row) > 5 else '',
+                    'timestamp': row[0],
+                }
+        return decisions
+
+    def record_horeca_qa_decision(self, key, queue, business_name,
+                                  decision, decided_by):
+        """Append one approve/disapprove decision. Append-only audit trail —
+        re-deciding a key appends a new row; the latest row wins on read."""
+        decision = (decision or '').strip().lower()
+        if decision not in ('approved', 'disapproved'):
+            raise ValueError("decision must be 'approved' or 'disapproved'")
+        key = (key or '').strip()
+        if not key:
+            raise ValueError('key is required')
+        ws = self._get_qa_decisions_worksheet(create=True)
+        ws.append_row([
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            key, (queue or '').strip(), (business_name or '').strip(),
+            decision, (decided_by or '').strip(),
+        ], value_input_option='RAW')
+        global _superset_validation_cache
+        _superset_validation_cache['data'] = None
+        _superset_validation_cache['expiry'] = None
+        return {'success': True, 'key': key, 'decision': decision}
+
+    @staticmethod
+    def _parse_latlng(loc_str):
+        try:
+            lat_s, lng_s = loc_str.split(',')
+            return float(lat_s.strip()), float(lng_s.strip())
+        except (ValueError, AttributeError):
+            return None, None
+
+    def _build_enhanced_name_index(self, enh_rows, enh_headers):
+        h = {hdr: i for i, hdr in enumerate(enh_headers)}
+        idx = {}
+        for row in enh_rows:
+            name_i = h.get('Name', 1)
+            name = row[name_i].strip() if name_i < len(row) else ''
+            norm = self._normalize_horeca_name(name)
+            if norm:
+                idx.setdefault(norm, []).append(row)
+        return idx, h
+
+    def get_horeca_appsheet_sync_preview(self, page=1, page_size=25, filter_mode='all'):
+        """Read-only, step-by-step preview of what an app_sheet -> Enhanced
+        sync would do for each app_sheet lead: the matched Enhanced record
+        (if any), each side's current data, and the decision the sync would
+        make. Writes nothing — this exists so the matching/reconciliation
+        logic can be inspected and trusted before it's ever allowed to write.
+        """
+        app_rows, app_headers = self._get_appsheet_cache()
+        ah = {hdr: i for i, hdr in enumerate(app_headers)}
+        enh_rows, enh_headers = self._get_horeca_crm_cache()
+        name_index, eh = self._build_enhanced_name_index(enh_rows, enh_headers)
+
+        def ag(row, col):
+            i = ah.get(col)
+            return row[i].strip() if i is not None and i < len(row) else ''
+
+        def eg(row, col):
+            i = eh.get(col)
+            return row[i].strip() if i is not None and i < len(row) else ''
+
+        results = []
+        for arow in app_rows:
+            name = ag(arow, 'HoReCa Name')
+            if not name:
+                continue
+
+            entry = {
+                'app_sheet_id': ag(arow, 'ID'),
+                'name': name,
+                'lead_source': ag(arow, 'Lead Source'),
+                'lead_stage_raw': ag(arow, 'Lead Stage'),
+                'lead_poc': ag(arow, 'Lead POC'),
+                'last_updated_appsheet': ag(arow, 'Last updated Date'),
+                'match': None,
+                'enhanced': None,
+                'decision': None,
+                'decision_detail': '',
+            }
+
+            norm = self._normalize_horeca_name(name)
+            candidates = name_index.get(norm, [])
+            if not candidates:
+                entry['decision'] = 'no_match'
+                entry['decision_detail'] = 'No Enhanced record with this name — new lead, not yet enriched.'
+                results.append(entry)
+                continue
+
+            a_lat, a_lng = self._parse_latlng(ag(arow, 'Location'))
+            within = []
+            for erow in candidates:
+                dist = self._haversine_meters(a_lat, a_lng, eg(erow, 'Latitude'), eg(erow, 'Longitude'))
+                if dist is not None and dist <= self.APPSHEET_GEO_THRESHOLD_M:
+                    within.append((erow, dist))
+
+            if not within:
+                entry['decision'] = 'no_match'
+                entry['decision_detail'] = f"{len(candidates)} Enhanced record(s) share this name but none are within {self.APPSHEET_GEO_THRESHOLD_M}m — likely a different business with the same name."
+                results.append(entry)
+                continue
+
+            if len(within) > 1:
+                entry['decision'] = 'ambiguous_match'
+                entry['decision_detail'] = f'{len(within)} Enhanced records both match by name and distance — needs manual review, not auto-synced.'
+                results.append(entry)
+                continue
+
+            erow, dist = within[0]
+            entry['match'] = {
+                'place_id': eg(erow, 'Place ID'),
+                'distance_m': round(dist, 1),
+            }
+            entry['enhanced'] = {
+                'outreach_status': eg(erow, 'Outreach_Status'),
+                'assigned_to': eg(erow, 'Assigned_To'),
+                'last_updated': eg(erow, 'Last_Updated'),
+                'updated_by': eg(erow, 'Updated_By'),
+            }
+
+            mapped_status = self.APPSHEET_STATUS_MAP.get(entry['lead_stage_raw'].lower())
+            entry['lead_stage_mapped'] = mapped_status
+            if mapped_status is None:
+                entry['decision'] = 'unmapped_status'
+                entry['decision_detail'] = f"app_sheet Lead Stage \"{entry['lead_stage_raw']}\" has no confident mapping to an Enhanced status — needs review."
+                results.append(entry)
+                continue
+
+            if not mapped_status:
+                entry['decision'] = 'no_change_needed'
+                entry['decision_detail'] = 'app_sheet lead not yet worked (Lead Created) — nothing to sync.'
+                results.append(entry)
+                continue
+
+            if mapped_status == entry['enhanced']['outreach_status']:
+                entry['decision'] = 'no_change_needed'
+                entry['decision_detail'] = 'Enhanced already reflects this status.'
+                results.append(entry)
+                continue
+
+            # Never move a business backward in the pipeline, regardless of what
+            # the timestamps say — a "newer" app_sheet edit to an unrelated
+            # field (contact info, remarks) still bumps its Last Updated Date
+            # even though Lead Stage is stale, and a downgrade from e.g.
+            # "OB Form Filled" back to "Meeting done" would be a real data
+            # loss. Verified against live data: without this guard, "Kentuckee
+            # Seafood Restaurant" (Enhanced: OB Form Filled) would have been
+            # wrongly downgraded to "Meeting done" from a stale app_sheet row.
+            current_rank = self._status_rank(entry['enhanced']['outreach_status'])
+            new_rank = self._status_rank(mapped_status)
+            if current_rank is not None and new_rank is not None and new_rank < current_rank:
+                entry['decision'] = 'no_change_needed'
+                entry['decision_detail'] = f"app_sheet shows an earlier stage (\"{mapped_status}\") than Enhanced already has (\"{entry['enhanced']['outreach_status']}\") — never moving a business backward."
+                results.append(entry)
+                continue
+
+            # Most-recent-timestamp-wins reconciliation. A missing/unparseable
+            # timestamp on either side is NOT treated as "older" — it means we
+            # have no evidence, so the side we can't date never wins.
+            app_dt = self._parse_appsheet_datetime(entry['last_updated_appsheet'])
+            enh_dt = self._parse_enhanced_datetime(entry['enhanced']['last_updated'])
+
+            if enh_dt is None:
+                entry['decision'] = 'would_sync'
+                entry['decision_detail'] = f"Enhanced has no recorded update yet — would set Outreach_Status to \"{mapped_status}\"."
+            elif app_dt is None:
+                entry['decision'] = 'no_change_needed'
+                entry['decision_detail'] = f"Enhanced already has a timestamped status ({entry['enhanced']['last_updated']}) and app_sheet has no parseable update date — can't prove app_sheet is newer, keeping Enhanced as-is."
+            elif app_dt > enh_dt:
+                entry['decision'] = 'would_sync'
+                entry['decision_detail'] = f"app_sheet was updated more recently ({entry['last_updated_appsheet']}) than Enhanced ({entry['enhanced']['last_updated']}) — would set Outreach_Status to \"{mapped_status}\"."
+            else:
+                entry['decision'] = 'enhanced_is_newer'
+                entry['decision_detail'] = f"Enhanced was updated more recently ({entry['enhanced']['last_updated']}) than app_sheet ({entry['last_updated_appsheet']}) — Enhanced wins, no sync."
+
+            results.append(entry)
+
+        if filter_mode and filter_mode != 'all':
+            results = [r for r in results if r['decision'] == filter_mode]
+
+        total = len(results)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = min(max(page, 1), total_pages)
+        start = (page - 1) * page_size
+        page_results = results[start:start + page_size]
+
+        counts = {}
+        for r in results:
+            counts[r['decision']] = counts.get(r['decision'], 0) + 1
+
+        return {
+            'results': page_results,
+            'total': total,
+            'page': page,
+            'total_pages': total_pages,
+            'counts': counts,
+        }
+
+    @staticmethod
+    def _parse_appsheet_datetime(s):
+        if not s:
+            return None
+        for fmt in ('%m/%d/%Y %H:%M:%S', '%m/%d/%Y'):
+            try:
+                return datetime.strptime(s.split(' ')[0] if fmt == '%m/%d/%Y' else s, fmt)
+            except ValueError:
+                continue
+        return None
+
+    @staticmethod
+    def _parse_enhanced_datetime(s):
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s)
+        except ValueError:
+            return None
+
+    def _ensure_enhanced_appsheet_id_column(self):
+        """One-time, idempotent migration: add an AppSheet_Lead_ID column to
+        Enhanced — the crosswalk join key the sync job maintains itself,
+        nobody on the team ever types into it. Deliberately placed on
+        Enhanced, NOT app_sheet: Enhanced is a plain, directly-edited sheet,
+        while app_sheet is driven by a live IMPORTRANGE formula spilling
+        across 29 columns (A:AC) that broke the first time a write landed
+        inside its real (but visually blank) output range. Enhanced carries
+        none of that risk, so this is the safer place for the crosswalk.
+        Still verifies the target column is actually empty first, out of
+        caution. Returns the column's 1-based index either way."""
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.sheet1
+        header_row = worksheet.row_values(1)
+        if 'AppSheet_Lead_ID' in header_row:
+            return header_row.index('AppSheet_Lead_ID') + 1
+
+        col_idx = len(header_row) + 1
+        sample_cells = worksheet.range(2, col_idx, 20, col_idx)
+        if any(c.value for c in sample_cells):
+            raise RuntimeError(
+                f'Column {col_idx} on Enhanced is not empty — refusing to claim it as AppSheet_Lead_ID'
+            )
+
+        if worksheet.col_count < col_idx:
+            worksheet.resize(cols=col_idx)
+        worksheet.update_cell(1, col_idx, 'AppSheet_Lead_ID')
+        global _horeca_crm_cache
+        _horeca_crm_cache['expiry'] = None
+        return col_idx
+
+    def create_horeca_lead_from_appsheet(self, app_row, app_headers):
+        """Create a new Enhanced row for a genuinely-new app_sheet lead,
+        reusing the exact same path as the manual '+ Add Lead' flow
+        (add_horeca_record). Enrichment-only fields — photos, priority
+        score, zone assignment — are left blank, since only the offline
+        Google-Places pipeline can populate those; everything else (CRM
+        list, Board, Overall Daily, Metrics) works fine without them."""
+        ah = {hdr: i for i, hdr in enumerate(app_headers)}
+
+        def ag(col):
+            i = ah.get(col)
+            return app_row[i].strip() if i is not None and i < len(app_row) else ''
+
+        lat, lng = self._parse_latlng(ag('Location'))
+        mapped_status = self.APPSHEET_STATUS_MAP.get(ag('Lead Stage').lower())
+        lead_poc = ag('Lead POC')
+        assignee = self._associate_display_name(lead_poc).split(' ')[0] if '@' in lead_poc else ''
+
+        data = {
+            'name': ag('HoReCa Name'),
+            'type': ag('HoReCa  Type'),
+            'address': ag('Locality'),
+            'city': ag('City'),
+            'pincode': ag('Pincode'),
+            'lat': lat if lat is not None else '',
+            'lng': lng if lng is not None else '',
+            'owner_name': ag('Contact Person Name'),
+            'owner_phone': ag('Contact Number'),
+            'assigned_to': assignee,
+            'note': f"Auto-created from app_sheet lead {ag('ID')} (Lead Source: {ag('Lead Source')})",
+        }
+        if mapped_status:
+            data['status'] = mapped_status
+
+        return self.add_horeca_record(data)
+
+    def sync_new_horeca_leads(self, dry_run=False):
+        """Automatic app_sheet -> Enhanced sync for NEW leads. The crosswalk
+        lives entirely on Enhanced's AppSheet_Lead_ID column (see
+        _ensure_enhanced_appsheet_id_column) — app_sheet is never written
+        to by this job, at all, ever.
+
+        For every app_sheet lead whose ID isn't already recorded in some
+        Enhanced row's AppSheet_Lead_ID:
+          - no name match in Enhanced at all -> genuinely new, create a
+            fresh Enhanced row and crosswalk it.
+          - exactly one Enhanced match within the geo threshold -> link the
+            crosswalk to that existing business, no new row.
+          - zero or multiple candidates within threshold -> ambiguous
+            (same name, wrong distance, or multiple plausible matches) —
+            left unlinked and simply re-evaluated next run rather than
+            auto-created (avoids duplicating a business that already
+            exists under a slightly different name).
+        """
+        app_rows, app_headers = self._get_appsheet_cache()
+        ah = {hdr: i for i, hdr in enumerate(app_headers)}
+        name_idx = ah.get('HoReCa Name')
+        id_idx = ah.get('ID')
+        loc_idx = ah.get('Location')
+
+        enh_rows, enh_headers = self._get_horeca_crm_cache()
+        name_index, eh = self._build_enhanced_name_index(enh_rows, enh_headers)
+        pid_idx = eh.get('Place ID', 0)
+        lat_idx = eh.get('Latitude', 10)
+        lng_idx = eh.get('Longitude', 11)
+        appsheet_id_idx = eh.get('AppSheet_Lead_ID')
+
+        def eg(erow, idx):
+            return erow[idx].strip() if idx is not None and idx < len(erow) else ''
+
+        already_linked_ids = set()
+        if appsheet_id_idx is not None:
+            for erow in enh_rows:
+                val = eg(erow, appsheet_id_idx)
+                if val:
+                    already_linked_ids.add(val)
+
+        created = 0
+        linked_existing = 0
+        ambiguous = 0
+        skipped_already_done = 0
+        errors = []
+        pending_crosswalk = []  # (place_id, app_lead_id)
+
+        for arow in app_rows:
+            name = arow[name_idx].strip() if name_idx is not None and name_idx < len(arow) else ''
+            if not name:
+                continue
+            app_id = arow[id_idx].strip() if id_idx is not None and id_idx < len(arow) else ''
+            if app_id and app_id in already_linked_ids:
+                skipped_already_done += 1
+                continue
+
+            norm = self._normalize_horeca_name(name)
+            candidates = name_index.get(norm, [])
+
+            if not candidates:
+                if dry_run:
+                    created += 1
+                    continue
+                try:
+                    result = self.create_horeca_lead_from_appsheet(arow, app_headers)
+                    pending_crosswalk.append((result['place_id'], app_id))
+                    created += 1
+                except Exception as e:
+                    errors.append(f'{name}: {e}')
+                continue
+
+            raw_loc = arow[loc_idx].strip() if loc_idx is not None and loc_idx < len(arow) else ''
+            a_lat, a_lng = self._parse_latlng(raw_loc)
+            within = []
+            for erow in candidates:
+                dist = self._haversine_meters(a_lat, a_lng, eg(erow, lat_idx), eg(erow, lng_idx))
+                if dist is not None and dist <= self.APPSHEET_GEO_THRESHOLD_M:
+                    within.append(erow)
+
+            if len(within) == 1:
+                linked_existing += 1
+                if not dry_run:
+                    pending_crosswalk.append((eg(within[0], pid_idx), app_id))
+            else:
+                ambiguous += 1
+
+        if pending_crosswalk and not dry_run:
+            appsheet_col_idx = self._ensure_enhanced_appsheet_id_column()
+
+            # Force a fresh read so rows created above (via append_row) are
+            # included when resolving place_id -> row_num — never assume a
+            # specific landing position for a freshly appended row.
+            global _horeca_crm_cache
+            _horeca_crm_cache['expiry'] = None
+            fresh_rows, fresh_headers = self._get_horeca_crm_cache()
+            fresh_pid_idx = {hdr: i for i, hdr in enumerate(fresh_headers)}.get('Place ID', 0)
+            row_num_by_place_id = {
+                row[fresh_pid_idx]: idx + 2
+                for idx, row in enumerate(fresh_rows)
+                if fresh_pid_idx < len(row) and row[fresh_pid_idx]
+            }
+
+            cells_to_write = []
+            for place_id, app_id in pending_crosswalk:
+                row_num = row_num_by_place_id.get(place_id)
+                if row_num:
+                    cells_to_write.append(gspread.Cell(row_num, appsheet_col_idx, app_id))
+                else:
+                    errors.append(f'Could not resolve row for place_id {place_id} (app lead {app_id})')
+
+            spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+            worksheet = spreadsheet.sheet1
+            # Chunk the batch write — a single request covering thousands of
+            # cells (e.g. the first-ever catch-up run) risks the Sheets
+            # API's per-request size limit; chunking keeps each call small
+            # and lets one bad chunk fail without losing the rest.
+            CHUNK_SIZE = 1000
+            for i in range(0, len(cells_to_write), CHUNK_SIZE):
+                chunk = cells_to_write[i:i + CHUNK_SIZE]
+                try:
+                    worksheet.update_cells(chunk)
+                except Exception as e:
+                    errors.append(f'crosswalk batch {i}-{i + len(chunk)}: {e}')
+
+            _horeca_crm_cache['expiry'] = None
+
+        return {
+            'dry_run': dry_run,
+            'created': created,
+            'linked_existing': linked_existing,
+            'ambiguous_skipped': ambiguous,
+            'already_done_skipped': skipped_already_done,
+            'errors': errors,
+        }
+
+    @staticmethod
+    def _classify_document(doc_type, doc_number):
+        """Map an app_sheet Document_Type/Document_Number pair onto the
+        matching Enhanced column. The form holds ONE document per lead —
+        PAN or GST or FSSAI — signalled by Document_Type, with a format
+        sanity-check as backup (PAN=10 alphanumeric, GSTIN=15, FSSAI=14
+        digits) since the type field is free-ish text."""
+        num = (doc_number or '').strip().upper()
+        if not num:
+            return None, None
+        dt = (doc_type or '').strip().upper()
+        if 'FSSAI' in dt or (num.isdigit() and len(num) == 14):
+            return 'FSSAI_Number', num
+        if 'GST' in dt or len(num) == 15:
+            return 'GST_Number', num
+        if 'PAN' in dt or len(num) == 10:
+            return 'PAN_Number', num
+        return None, None
+
+    def sync_appsheet_documents_to_enhanced(self, dry_run=False):
+        """Copy PAN/GST/FSSAI captured in app_sheet (Document_Type +
+        Document_Number) into the matching Enhanced columns, using the
+        AppSheet_Lead_ID crosswalk — deterministic, no matching involved.
+        Only fills BLANK Enhanced cells; never overwrites an existing value
+        (a value already in Enhanced may have been hand-entered via the CRM
+        and should win). Enhanced is the master store, so this is what keeps
+        it complete as associates capture documents in the field."""
+        app_rows, app_headers = self._get_appsheet_cache()
+        ah = {hdr: i for i, hdr in enumerate(app_headers)}
+        id_idx = ah.get('ID')
+        dt_idx = ah.get('Document_Type')
+        dn_idx = ah.get('Document_Number')
+
+        def ag(row, idx):
+            return row[idx].strip() if idx is not None and idx < len(row) else ''
+
+        docs_by_lead = {}
+        for arow in app_rows:
+            app_id = ag(arow, id_idx)
+            if not app_id:
+                continue
+            col_name, num = self._classify_document(ag(arow, dt_idx), ag(arow, dn_idx))
+            if col_name:
+                docs_by_lead[app_id] = (col_name, num)
+
+        enh_rows, enh_headers = self._get_horeca_crm_cache()
+        eh = {hdr: i for i, hdr in enumerate(enh_headers)}
+        appsheet_idx = eh.get('AppSheet_Lead_ID')
+        col_indices = {c: eh.get(c) for c in ('PAN_Number', 'GST_Number', 'FSSAI_Number')}
+
+        would_write = []   # (row_num, col_name, value, business_name)
+        skipped_filled = 0
+        unlinked_docs = 0
+        name_idx = eh.get('Name', 1)
+
+        linked_app_ids = set()
+        for row_pos, erow in enumerate(enh_rows):
+            app_id = erow[appsheet_idx].strip() if appsheet_idx is not None and appsheet_idx < len(erow) else ''
+            if not app_id or app_id not in docs_by_lead:
+                continue
+            linked_app_ids.add(app_id)
+            col_name, num = docs_by_lead[app_id]
+            col_idx = col_indices.get(col_name)
+            existing = erow[col_idx].strip() if col_idx is not None and col_idx < len(erow) else ''
+            if existing:
+                skipped_filled += 1
+                continue
+            bname = erow[name_idx] if name_idx < len(erow) else ''
+            would_write.append((row_pos + 2, col_name, num, bname))
+
+        unlinked_docs = len(set(docs_by_lead) - linked_app_ids)
+
+        result = {
+            'dry_run': dry_run,
+            'would_write' if dry_run else 'written': len(would_write),
+            'already_filled_skipped': skipped_filled,
+            'docs_on_unlinked_leads': unlinked_docs,
+            'sample': [
+                {'row': r, 'column': c, 'value': v, 'business': b}
+                for r, c, v, b in would_write[:20]
+            ],
+            'errors': [],
+        }
+
+        if dry_run or not would_write:
+            return result
+
+        # FSSAI_Number column may not exist yet — provision all three
+        # (idempotent, verify-empty-before-claim) before writing.
+        col_idx_by_name = self._ensure_enhanced_pan_gst_columns()
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.sheet1
+        cells = [
+            gspread.Cell(row_num, col_idx_by_name[col_name], value)
+            for row_num, col_name, value, _ in would_write
+            if col_name in col_idx_by_name
+        ]
+        CHUNK_SIZE = 1000
+        for i in range(0, len(cells), CHUNK_SIZE):
+            try:
+                worksheet.update_cells(cells[i:i + CHUNK_SIZE])
+            except Exception as e:
+                result['errors'].append(f'doc batch {i}: {e}')
+
+        global _horeca_crm_cache
+        _horeca_crm_cache['expiry'] = None
+        return result
+
     def add_horeca_crm_headers(self):
         """One-time migration: add outreach column headers to BB1-BM1
         (originally BI-BT, shifted after deleting 7 micro zone columns)"""
@@ -1972,7 +4098,10 @@ class GoogleSheetsService:
 
 
 # HoReCa CRM cache (process-level, 2-min TTL)
-_horeca_crm_cache = {'data': None, 'headers': None, 'expiry': None}
+_horeca_crm_cache = {'data': None, 'headers': None, 'clusters': None, 'expiry': None}
+_appsheet_cache = {'data': None, 'headers': None, 'expiry': None}
+_superset_cache = {'data': None, 'headers': None, 'expiry': None}
+_superset_validation_cache = {'data': None, 'expiry': None}
 
 # Cache for authorized users
 _authorized_users_cache = {

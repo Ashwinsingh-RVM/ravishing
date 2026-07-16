@@ -114,6 +114,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _apply_no_cache(request: Request, response):
+    """Force the browser to revalidate the frontend files (JS/CSS/HTML) on
+    every load instead of blindly reusing a cached copy. StaticFiles already
+    sends ETag/Last-Modified, so an unchanged file returns a cheap 304 while
+    a changed file is refetched immediately. This is what prevents stale
+    JavaScript running against updated endpoints (the cause of spurious 400s)
+    — it no longer depends on manually bumping the ?v= version string."""
+    p = request.url.path
+    if p == '/' or p.startswith('/Dashboard') or p.startswith('/static') \
+            or p.endswith('.js') or p.endswith('.css') or p.endswith('.html'):
+        response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    return response
+
+
 # Auth middleware — protect all /api/* routes except public paths
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -123,14 +137,14 @@ async def auth_middleware(request: Request, call_next):
             or path.startswith('/static')
             or path.startswith('/api/rl')
             or not path.startswith('/api')):
-        return await call_next(request)
+        return _apply_no_cache(request, await call_next(request))
 
     # Check auth
     user = get_session_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
 
-    return await call_next(request)
+    return _apply_no_cache(request, await call_next(request))
 
 
 # Static files - serve frontend
@@ -1372,9 +1386,26 @@ class HoReCaOutreachUpdate(BaseModel):
     spoc_designation: Optional[str] = None
     outreach_email: Optional[str] = None
     bottles_per_week: Optional[str] = None
+    pan_number: Optional[str] = None
+    gst_number: Optional[str] = None
     note: Optional[str] = None
     follow_up_date: Optional[str] = None
     assigned_to: Optional[str] = None
+    updated_by: str = 'Team'
+
+
+class HoReCaQADecision(BaseModel):
+    """Request model for an approve/disapprove decision on a QA-review item"""
+    key: str
+    queue: str = ''
+    business_name: str = ''
+    decision: str  # 'approved' | 'disapproved'
+
+
+class HoReCaAttemptLog(BaseModel):
+    """Request model for logging a HoReCa contact attempt"""
+    place_id: str
+    note: Optional[str] = None
     updated_by: str = 'Team'
 
 
@@ -1405,7 +1436,7 @@ async def get_horeca_crm(
 
 
 @app.post("/api/horeca/crm/update")
-async def update_horeca_crm(request: HoReCaOutreachUpdate):
+async def update_horeca_crm(payload: HoReCaOutreachUpdate, http_request: Request):
     """Update outreach fields for a HoReCa record"""
     try:
         sheets_service = GoogleSheetsService()
@@ -1413,19 +1444,27 @@ async def update_horeca_crm(request: HoReCaOutreachUpdate):
         updates = {}
         for field in ['outreach_status', 'owner_name', 'owner_number', 'spoc_name',
                        'spoc_number', 'spoc_designation', 'outreach_email',
-                       'bottles_per_week', 'follow_up_date', 'assigned_to']:
-            val = getattr(request, field, None)
+                       'bottles_per_week', 'pan_number', 'gst_number',
+                       'follow_up_date', 'assigned_to']:
+            val = getattr(payload, field, None)
             if val is not None:
                 updates[field] = val
 
         # Note is handled separately in the service
-        if request.note:
-            updates['note'] = request.note
+        if payload.note:
+            updates['note'] = payload.note
+
+        # Prefer the authenticated session identity for DOD attribution over
+        # the free-text updated_by field (which is unreliable — defaults to
+        # 'Team', inconsistent capitalization/typos across the field team).
+        session_user = get_session_user(http_request) or {}
 
         result = sheets_service.update_horeca_outreach(
-            place_id=request.place_id,
+            place_id=payload.place_id,
             updates=updates,
-            author=request.updated_by,
+            author=payload.updated_by,
+            actor_email=session_user.get('email', ''),
+            actor_name=session_user.get('name', ''),
         )
         return result
     except ValueError as e:
@@ -1456,10 +1495,163 @@ async def get_horeca_crm_summary(assigned_to: str = ''):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/horeca/dashboard/associate-snapshot")
+async def get_horeca_associate_snapshot(request: Request):
+    """Current-state per-associate x status counts (live snapshot, not history)"""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_associate_status_snapshot()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/horeca/dashboard/dod-grid")
+async def get_horeca_dod_grid_endpoint(request: Request, start: str, end: str):
+    """Status x date grid for the Overall Daily dashboard's Day-on-Day section"""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_dod_grid(start_date_str=start, end_date_str=end)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/horeca/dashboard/associate-events")
+async def get_horeca_associate_events_endpoint(request: Request, start: str, end: str):
+    """Windowed (date/week/15-day/custom) associate x status counts"""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_associate_events_summary(start_date_str=start, end_date_str=end)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/horeca/superset/list")
+async def get_horeca_superset_list(request: Request, search: str = '', page: int = 1, page_size: int = 50):
+    """Raw viewer for the Superset export tab — no matching logic yet"""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_superset_data(search=search, page=page, page_size=page_size)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/horeca/superset/validation")
+async def get_horeca_superset_validation_endpoint(request: Request):
+    """Superset vs Enhanced validation: KPIs, match tiers, discrepancy audits.
+    Read-only — computes live, writes nothing."""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_superset_validation()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/horeca/overview")
+async def get_horeca_overview_endpoint(request: Request, target: int = 10000):
+    """Overview tab: funnel KPIs, real onboarded (Superset), conversions,
+    run rate/target projection, Day-on-Day and Month-on-Month tables."""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_overview(target=target)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/horeca/qa/decision")
+async def post_horeca_qa_decision(payload: HoReCaQADecision, http_request: Request):
+    """Record an approve/disapprove decision for a Superset QA-review item.
+    Append-only write to the QA-Decisions tab (created lazily on first use)."""
+    require_role(http_request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        session_user = get_session_user(http_request) or {}
+        decided_by = session_user.get('name') or session_user.get('email') or 'Unknown'
+        return sheets_service.record_horeca_qa_decision(
+            key=payload.key,
+            queue=payload.queue,
+            business_name=payload.business_name,
+            decision=payload.decision,
+            decided_by=decided_by,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/horeca/metrics/overview")
+async def get_horeca_metrics_overview_endpoint(request: Request):
+    """Conversion rate, funnel snapshot, stuck-lead count, real cycle-time aggregate"""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_metrics_overview()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/horeca/crm/statuses")
 async def get_horeca_crm_statuses():
     """Get valid outreach status list"""
     return {'statuses': GoogleSheetsService.HORECA_OUTREACH_STATUSES}
+
+
+@app.get("/api/horeca/crm/timeline")
+async def get_horeca_crm_timeline(request: Request, place_id: str):
+    """Dated status-change + attempt timeline for a business (merged across duplicates)"""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_business_timeline(place_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/horeca/crm/attempt")
+async def log_horeca_crm_attempt(payload: HoReCaAttemptLog, http_request: Request):
+    """Log a contact attempt for a HoReCa record (tracked going forward only)"""
+    try:
+        sheets_service = GoogleSheetsService()
+        session_user = get_session_user(http_request) or {}
+        result = sheets_service.log_horeca_attempt(
+            place_id=payload.place_id,
+            note=payload.note or '',
+            author=payload.updated_by,
+            actor_email=session_user.get('email', ''),
+            actor_name=session_user.get('name', ''),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/horeca/sync/preview")
+async def get_horeca_sync_preview(
+    request: Request, page: int = 1, page_size: int = 25, filter: str = 'all',
+):
+    """Read-only preview of the app_sheet -> Enhanced sync: shows the matched
+    Enhanced record and the decision the sync engine would make, without
+    writing anything. Admin-only — this is an internal ops/debug tool."""
+    require_role(request, {'admin'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_appsheet_sync_preview(
+            page=page, page_size=page_size, filter_mode=filter,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/horeca/crm/init")
@@ -1503,6 +1695,8 @@ class HoReCaAddLeadRequest(BaseModel):
     serves_beer: Optional[bool] = False
     serves_wine: Optional[bool] = False
     bottles_per_week: Optional[str] = ''
+    pan_number: Optional[str] = ''
+    gst_number: Optional[str] = ''
     status: Optional[str] = 'Call not answered'
     assigned_to: Optional[str] = ''
     note: Optional[str] = ''

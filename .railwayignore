@@ -7,5 +7,12 @@ scripts/
 .git/
 __pycache__/
 *.pyc
-frontend/data/horeca/
+frontend/data/horeca/horeca_records.json
+frontend/data/horeca/horeca_hex7.geojson
+frontend/data/horeca/horeca_hex8.geojson
 .claude/
+.env
+*.log
+_L1_backup/
+_redesign_backup/
+run_local_server.bat

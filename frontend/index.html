@@ -6,7 +6,7 @@
     <title>Goa DRS Tracker</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='white' stroke='%230b6b4f' stroke-width='2'/%3E%3Ctext x='32' y='30' font-family='DM Sans,Arial,sans-serif' font-size='19' font-weight='700' fill='%230b6b4f' text-anchor='middle'%3EGOA%3C/text%3E%3Ctext x='32' y='51' font-family='DM Sans,Arial,sans-serif' font-size='19' font-weight='700' fill='%230b6b4f' text-anchor='middle'%3EDRS%3C/text%3E%3C/svg%3E">
     <meta name="theme-color" content="#1e6b5c">
-    <link rel="stylesheet" href="/static/styles.css?v=75">
+    <link rel="stylesheet" href="/static/styles.css?v=76">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -627,10 +627,89 @@
                     </div>
                 </div>
 
-                <!-- HoReCa Dashboard -->
+                <!-- HoReCa Dashboard (nested sub-tabs: Overview | Overall Daily | Metrics | Superset) -->
                 <div id="dash-horeca" class="dash-content">
-                    <div id="dash-horeca-content">
-                        <div class="hcrm-dash-loading">Loading HoReCa dashboard...</div>
+                    <div class="hdep-subtab-strip">
+                        <button class="hdep-subtab active" data-horeca-dash-tab="overview">Overview</button>
+                        <button class="hdep-subtab" data-horeca-dash-tab="superset">Insights</button>
+                        <button class="hdep-subtab" data-horeca-dash-tab="map">Map</button>
+                    </div>
+
+                    <!-- Overview -->
+                    <div id="horeca-dash-overview-view">
+                        <div id="dash-horeca-content">
+                            <div class="hcrm-dash-loading">Loading HoReCa dashboard...</div>
+                        </div>
+                    </div>
+
+
+                    <!-- Superset Validation (KPIs + match tiers + audits + raw export) -->
+                    <div id="horeca-dash-superset-view" style="display:none;">
+                        <div id="hsv-kpis" class="hdod-grid" style="margin-bottom: 16px;">
+                            <div class="hcrm-dash-loading">Loading validation...</div>
+                        </div>
+
+                        <div class="card" style="margin-bottom: 16px;">
+                            <h3 class="section-title" style="margin-bottom: 12px;">How matches were made <span class="profile-hint">(exact IDs grow as PAN/GST/FSSAI get captured)</span></h3>
+                            <div id="hsv-method-bar">
+                                <div class="hcrm-dash-loading">Loading...</div>
+                            </div>
+                        </div>
+
+                        <div class="card" style="margin-bottom: 16px;">
+                            <h3 class="section-title" style="margin-bottom: 4px;">QA Review &amp; Classification</h3>
+                            <div class="hdaily-filter-bar" id="hsv-audit-pills" style="margin-bottom: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-outline btn-small hsv-pill active" data-audit="qa_name_matches" onclick="switchHsvAudit('qa_name_matches')">Name matches</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="qa_dup_pan" onclick="switchHsvAudit('qa_dup_pan')">Duplicate PAN</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="qa_dup_gst" onclick="switchHsvAudit('qa_dup_gst')">Duplicate GST</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="dup_names" onclick="switchHsvAudit('dup_names')">Duplicate names</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="disapproved" onclick="switchHsvAudit('disapproved')">Disapproved</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="organic" onclick="switchHsvAudit('organic')">Organic</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="inorganic" onclick="switchHsvAudit('inorganic')">Inorganic</button>
+                                <input type="text" id="hsv-audit-search" class="input" placeholder="Filter by name..." style="max-width:220px;" onkeyup="renderHsvAuditTable()">
+                            </div>
+                            <p id="hsv-audit-hint" class="hint" style="margin-bottom: 8px;"></p>
+                            <div id="hsv-audit-table" style="overflow-x: auto; max-height: 420px; overflow-y: auto;">
+                                <div class="hcrm-dash-loading">Loading...</div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div onclick="toggleHsvRaw()" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                                <h3 class="section-title">Raw Superset export</h3>
+                                <span class="profile-hint" id="hsv-raw-toggle-hint">Show</span>
+                            </div>
+                            <div id="hsv-raw-section" style="display:none; margin-top:12px;">
+                                <div class="horeca-crm-master-header" style="margin-bottom:12px;">
+                                    <input type="text" id="hsuperset-search" class="input" placeholder="Search business name..." onkeyup="if(event.key==='Enter') loadHSupersetList(1)">
+                                    <button class="btn btn-secondary btn-small" onclick="loadHSupersetList(1)">Search</button>
+                                    <span id="hsuperset-count-line" class="profile-hint" style="margin-left: 12px;"></span>
+                                </div>
+                                <div id="hsuperset-table" style="overflow-x: auto;">
+                                    <div class="hcrm-dash-loading">Loading...</div>
+                                </div>
+                                <div class="horeca-crm-pagination" id="hsuperset-pagination"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Map (pins from live CRM data) -->
+                    <div id="horeca-dash-map-view" style="display:none;">
+                        <div class="card">
+                            <div class="hdaily-filter-bar" style="margin-bottom:10px;">
+                                <select id="hmap-block" class="select" onchange="hovMapGoBlock(this.value)">
+                                    <option value="">All Blocks (Goa)</option>
+                                </select>
+                                <label class="checkbox-label" style="margin:0;"><input type="checkbox" id="hmap-heat-toggle" onchange="hovMapToggleHeat(this.checked)"> Heatmap</label>
+                                <span class="hov-pill hov-pill-hi">● Onboarded</span>
+                                <span class="hov-pill hov-pill-mid">● Pipeline</span>
+                                <span class="hov-pill hov-pill-lo">● Unreached</span>
+                                <span id="hmap-counts" class="profile-hint" style="margin-left:8px;"></span>
+                            </div>
+                            <div id="hmap-container" style="width:100%; height:calc(100vh - 240px); min-height:520px; border-radius:12px; overflow:hidden;">
+                                <div class="hcrm-dash-loading">Loading map...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -671,7 +750,7 @@
                                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
                                         </div>
                                         <div style="min-width:0">
-                                            <h2 class="dep-hero-title">RVM Deployment Dashboard</h2>
+                                            <h2 class="dep-hero-title">RVM Deploy Dashboard</h2>
                                             <span id="dep-header-subtitle" class="dep-hero-sub">301 Collection Points &middot; Goa DRS 2026</span>
                                         </div>
                                     </div>
@@ -768,6 +847,7 @@
                                                 <th>Electrical</th>
                                                 <th>Internet</th>
                                                 <th>CCTV</th>
+                                                <th>Delivered</th>
                                                 <th>Installed</th>
                                                 <th>Install Date</th>
                                                 <th>Live</th>
@@ -788,6 +868,11 @@
                                     <div id="depmap-loading" class="hcrm-dash-loading">Loading map...</div>
                                     <div class="depmap-layout" style="display:none">
                                         <aside class="depmap-side">
+                                            <div class="depmap-sec">
+                                                <div class="depmap-sec-title">Locate</div>
+                                                <select id="depmap-locate-block" class="depmap-locate-select"><option value="">All Blocks</option></select>
+                                                <select id="depmap-locate-loc" class="depmap-locate-select" style="margin-top:6px"><option value="">Jump to collection point / panchayat…</option></select>
+                                            </div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Stage Layer</div><div id="depmap-stages"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Show Pins</div><div id="depmap-showopts"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">CP Type</div><div id="depmap-cptypes"></div></div>
@@ -795,9 +880,9 @@
                                             <div class="depmap-sec"><div class="depmap-sec-title">Boundaries</div><div id="depmap-bounds"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Taluka Overlay</div><div id="depmap-overlays"></div></div>
                                             <div class="depmap-sec"><div class="depmap-sec-title">Heatmap</div><div id="depmap-heat"></div></div>
-                                            <div class="depmap-sec"><div class="depmap-sec-title">HoReCa</div><div id="depmap-horeca"></div></div>
                                         </aside>
                                         <div class="depmap-main">
+                                            <div id="depmap-top-kpi"></div>
                                             <div id="depmap-legend"></div>
                                             <div id="dep-map"></div>
                                         </div>
@@ -995,6 +1080,7 @@
                                     <div class="hcrm-badges">
                                         <span id="hcrm-type-badge" class="hcrm-type-badge">Type</span>
                                         <span id="hcrm-status-badge" class="hcrm-status-badge">Status</span>
+                                        <span id="hcrm-merged-badge" class="hcrm-status-badge hcrm-status-none" style="display:none;"></span>
                                     </div>
                                 </div>
 
@@ -1054,6 +1140,10 @@
                                             </div>
                                         </div>
                                         <button class="btn btn-primary" onclick="submitHorecaStatusUpdate()">Update Status</button>
+                                        <div class="hcrm-attempt-row">
+                                            <button class="btn btn-outline btn-small" onclick="logHorecaAttempt()">+ Log Attempt</button>
+                                            <span id="hcrm-attempt-count" class="profile-hint">0 attempts logged</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1125,6 +1215,24 @@
                                     </div>
                                 </div>
 
+                                <!-- SECTION 3b: History (collapsible) -->
+                                <div id="hcrm-history-section" class="collapsible collapsed">
+                                    <div class="collapsible-header" onclick="toggleHorecaSection('history')">
+                                        <div class="collapsible-title">
+                                            <h4 class="section-title">History</h4>
+                                            <span class="profile-hint">Status changes by day</span>
+                                        </div>
+                                        <svg class="collapse-icon" viewBox="0 0 24 24" width="24" height="24">
+                                            <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                                        </svg>
+                                    </div>
+                                    <div class="collapsible-content">
+                                        <div id="hcrm-history-timeline" class="hcrm-notes-timeline">
+                                            <p class="hint">No tracked activity yet</p>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- SECTION 4: Contact Details (collapsible) -->
                                 <div id="hcrm-contacts-section" class="collapsible collapsed">
                                     <div class="collapsible-header" onclick="toggleHorecaSection('contacts')">
@@ -1170,6 +1278,16 @@
                                         <div class="form-group">
                                             <label>Bottles/Week (estimated)</label>
                                             <input type="number" id="hcrm-bottles" class="input" placeholder="0" min="0">
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group half">
+                                                <label>PAN Number</label>
+                                                <input type="text" id="hcrm-pan" class="input" placeholder="ABCDE1234F" maxlength="10" style="text-transform:uppercase;">
+                                            </div>
+                                            <div class="form-group half">
+                                                <label>GST Number</label>
+                                                <input type="text" id="hcrm-gst" class="input" placeholder="22ABCDE1234F1Z5" maxlength="15" style="text-transform:uppercase;">
+                                            </div>
                                         </div>
                                         <button class="btn btn-secondary" onclick="saveHorecaContacts()">Save Contacts</button>
                                     </div>
@@ -1446,6 +1564,10 @@
                                     <input type="text" id="add-lead-lng" class="input" placeholder="Longitude">
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <button type="button" class="btn btn-outline btn-small" onclick="captureAddLeadLocation()">📍 Capture Live Location</button>
+                                <span id="add-lead-location-status" class="profile-hint" style="margin-left: 8px;"></span>
+                            </div>
                         </div>
                     </div>
 
@@ -1501,6 +1623,16 @@
                             <div class="form-group">
                                 <label>Estimated Bottles/Week</label>
                                 <input type="number" id="add-lead-bottles" class="input" placeholder="0" min="0">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group half">
+                                    <label>PAN Number</label>
+                                    <input type="text" id="add-lead-pan" class="input" placeholder="ABCDE1234F" maxlength="10" style="text-transform:uppercase;">
+                                </div>
+                                <div class="form-group half">
+                                    <label>GST Number</label>
+                                    <input type="text" id="add-lead-gst" class="input" placeholder="22ABCDE1234F1Z5" maxlength="15" style="text-transform:uppercase;">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1590,6 +1722,18 @@
             </div>
         </div>
 
+        <div id="depmap-cp-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Collection Points <span id="depmap-cp-modal-count"></span></h3>
+                    <button class="modal-close" onclick="depMapCloseCPModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="depmap-cp-modal-list" class="vp-modal-list"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast Notification -->
         <div id="toast" class="toast hidden">
             <span id="toast-message"></span>
@@ -1601,6 +1745,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=113"></script>
+    <script src="/static/app.js?v=135"></script>
 </body>
 </html>
