@@ -2841,24 +2841,11 @@ class GoogleSheetsService:
             if r >= reached_bar:
                 add_reached(wd)
 
-        # ONBOARDED (headline) = app_sheet 'OB Form filled' — the LIVE source
-        # that moves the moment an associate updates. Dated by each row's
-        # 'Last updated Date'. Superset stays a secondary confirmed figure.
-        ob_list = self._get_appsheet_onboarded()
-        onboarded_reported = len(ob_list)
-        for o in ob_list:
-            d = o['date']
-            if d is None:
-                undated_onboarded += 1
-                continue
-            if first_onboard_date is None or d < first_onboard_date:
-                first_onboard_date = d
-            dk, wk, mk = d.isoformat(), (d - timedelta(days=d.weekday())).isoformat(), d.strftime('%Y-%m')
-            for store, key in ((dod, dk), (wow, wk), (mom, mk)):
-                bucket(store, key)['onboarded'] += 1
-
-        # Superset = secondary confirmed reference; its created_day still
-        # drives the 'started onboarding' movement column.
+        # ONBOARDED (headline) = Superset ACTIVE — the system of record for
+        # confirmed onboardings. Each ACTIVE business is dated by its Superset
+        # 'updated_day' (the onboarding/update date) so the weekly & monthly
+        # onboarding buckets are driven straight off Superset. 'created_day'
+        # still drives the 'started onboarding' movement column.
         superset_active = 0
         try:
             sup_rows, sup_headers = self._get_superset_cache()
@@ -2876,11 +2863,28 @@ class GoogleSheetsService:
                         bucket(store, key)['started'] += 1
                 if sup(srow, 'status').upper() == 'ACTIVE':
                     superset_active += 1
+                    # Date each onboarded business by updated_day (fallback created_day)
+                    d = parse_work_date(sup(srow, 'updated_day')) or created
+                    if d is None:
+                        undated_onboarded += 1
+                        continue
+                    if first_onboard_date is None or d < first_onboard_date:
+                        first_onboard_date = d
+                    dk, wk, mk = d.isoformat(), (d - timedelta(days=d.weekday())).isoformat(), d.strftime('%Y-%m')
+                    for store, key in ((dod, dk), (wow, wk), (mom, mk)):
+                        bucket(store, key)['onboarded'] += 1
         except Exception:
             pass
 
-        onboarded_real = onboarded_reported           # live headline (app_sheet OB Form filled)
-        superset_confirmed = superset_active          # secondary confirmed reference
+        # app_sheet OB-Filled kept only as a secondary "reported by associates"
+        # reference figure — no longer the headline or the bucket driver.
+        try:
+            onboarded_reported = len(self._get_appsheet_onboarded())
+        except Exception:
+            onboarded_reported = 0
+
+        onboarded_real = superset_active              # headline = Superset ACTIVE
+        superset_confirmed = superset_active          # same figure (kept for compat)
 
         # Run rate: total onboarded ÷ days since onboarding first began.
         # first_onboard_date comes from the earliest "Updated Date" among
