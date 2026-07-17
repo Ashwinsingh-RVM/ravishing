@@ -2686,6 +2686,44 @@ class GoogleSheetsService:
             'cycle_time': self.get_horeca_cycle_time_overview(),
         }
 
+    def _get_appsheet_onboarded(self):
+        """Businesses associates have marked 'OB Form filled' in app_sheet —
+        the LIVE onboarded source (moves within the ~2-min cache the moment
+        an associate updates, no Superset paste needed). One entry per row:
+        name, id, lat, lng (parsed from Location, may be None), date (from
+        'Last updated Date', may be None), pan, gst."""
+        out = []
+        try:
+            app_rows, app_headers = self._get_appsheet_cache()
+            ai = {hd: i for i, hd in enumerate(app_headers)}
+
+            def ag(row, col):
+                i = ai.get(col)
+                return row[i].strip() if i is not None and i < len(row) else ''
+
+            for arow in app_rows:
+                if ag(arow, 'Lead Stage').lower().strip() != 'ob form filled':
+                    continue
+                lat, lng = self._parse_latlng(ag(arow, 'Location'))
+                d = None
+                try:
+                    v = ag(arow, 'Last updated Date')
+                    if v:
+                        d = datetime.fromisoformat(v.strip()[:10]).date()
+                except ValueError:
+                    d = None
+                dt = ag(arow, 'Document_Type').upper()
+                dn = ag(arow, 'Document_Number').upper()
+                out.append({
+                    'name': ag(arow, 'HoReCa Name'), 'id': ag(arow, 'ID'),
+                    'lat': lat, 'lng': lng, 'date': d,
+                    'city': ag(arow, 'City'), 'poc': ag(arow, 'Lead POC'),
+                    'pan': dn if 'PAN' in dt else '', 'gst': dn if 'GST' in dt else '',
+                })
+        except Exception:
+            pass
+        return out
+
     def get_horeca_overview(self, target=10000, run_rate_window_days=30):
         """Overview tab: funnel KPIs (cumulative, from Enhanced), the REAL
         onboarded count (Superset ACTIVE) shown alongside our self-reported
@@ -2710,6 +2748,10 @@ class GoogleSheetsService:
         notes_idx = h.get('Outreach_Notes', 61)
         pid_idx = h.get('Place ID', 0)
         name_idx = h.get('Name', 1)
+        appid_idx = h.get('AppSheet_Lead_ID')
+        pan_idx = h.get('PAN_Number')
+        gst_idx = h.get('GST_Number')
+        lastupd_idx = h.get('Last_Updated', 63)
 
         def parse_work_date(val):
             if not val:
@@ -2766,19 +2808,22 @@ class GoogleSheetsService:
             if status == 'OB Form Filled':
                 ob_filled += 1
 
-            # Enhanced contributes only the "reached" movement; started/
-            # onboarded movement comes from Superset below.
-            # REAL status-change history first: every logged transition to a
-            # 'Meeting done'-or-beyond status counts on ITS OWN day — so a
-            # business reached on the 1st, 3rd and 5th shows on all three
-            # days. Businesses with no tracked history (predates logging)
-            # fall back to current-status-at-"Updated Date" as before.
-            def add_reached(wd):
+            # Enhanced contributes only the "reached" movement; started &
+            # onboarded movement come from Superset below (the accurate,
+            # deduped system of record). REAL status-change history first:
+            # every logged transition to 'Meeting done'-or-beyond counts on
+            # ITS OWN day (a business reached on the 1st, 3rd and 5th shows on
+            # all three); rows with no tracked history fall back to
+            # current-status-at-"Updated Date".
+            def add_movement(wd, field):
                 day_key = wd.isoformat()
                 week_key = (wd - timedelta(days=wd.weekday())).isoformat()  # Monday of that week
                 month_key = wd.strftime('%Y-%m')
                 for store, key in ((dod, day_key), (wow, week_key), (mom, month_key)):
-                    bucket(store, key)['reached'] += 1
+                    bucket(store, key)[field] += 1
+
+            def add_reached(wd):
+                add_movement(wd, 'reached')
 
             notes = row[notes_idx] if notes_idx < len(row) else ''
             real_events = self._parse_horeca_status_changes(notes) if notes else []
@@ -2796,9 +2841,24 @@ class GoogleSheetsService:
             if r >= reached_bar:
                 add_reached(wd)
 
-        # Superset (the backend system of record) drives onboarding truth AND
-        # its dates: created_day = onboarding started, updated_day = the
-        # onboarding date (per the team: use updated date only).
+        # ONBOARDED (headline) = app_sheet 'OB Form filled' — the LIVE source
+        # that moves the moment an associate updates. Dated by each row's
+        # 'Last updated Date'. Superset stays a secondary confirmed figure.
+        ob_list = self._get_appsheet_onboarded()
+        onboarded_reported = len(ob_list)
+        for o in ob_list:
+            d = o['date']
+            if d is None:
+                undated_onboarded += 1
+                continue
+            if first_onboard_date is None or d < first_onboard_date:
+                first_onboard_date = d
+            dk, wk, mk = d.isoformat(), (d - timedelta(days=d.weekday())).isoformat(), d.strftime('%Y-%m')
+            for store, key in ((dod, dk), (wow, wk), (mom, mk)):
+                bucket(store, key)['onboarded'] += 1
+
+        # Superset = secondary confirmed reference; its created_day still
+        # drives the 'started onboarding' movement column.
         superset_active = 0
         try:
             sup_rows, sup_headers = self._get_superset_cache()
@@ -2809,27 +2869,18 @@ class GoogleSheetsService:
                 return row[i].strip() if i is not None and i < len(row) else ''
 
             for srow in sup_rows:
-                sstatus = sup(srow, 'status').upper()
                 created = parse_work_date(sup(srow, 'created_day'))
-                updated = parse_work_date(sup(srow, 'updated_day'))
                 if created:
                     dk, wk, mk = created.isoformat(), (created - timedelta(days=created.weekday())).isoformat(), created.strftime('%Y-%m')
                     for store, key in ((dod, dk), (wow, wk), (mom, mk)):
                         bucket(store, key)['started'] += 1
-                if sstatus == 'ACTIVE':
+                if sup(srow, 'status').upper() == 'ACTIVE':
                     superset_active += 1
-                    if updated is None:
-                        undated_onboarded += 1
-                        continue
-                    if first_onboard_date is None or updated < first_onboard_date:
-                        first_onboard_date = updated
-                    dk, wk, mk = updated.isoformat(), (updated - timedelta(days=updated.weekday())).isoformat(), updated.strftime('%Y-%m')
-                    for store, key in ((dod, dk), (wow, wk), (mom, mk)):
-                        bucket(store, key)['onboarded'] += 1
         except Exception:
             pass
 
-        onboarded_real = superset_active or ob_filled
+        onboarded_real = onboarded_reported           # live headline (app_sheet OB Form filled)
+        superset_confirmed = superset_active          # secondary confirmed reference
 
         # Run rate: total onboarded ÷ days since onboarding first began.
         # first_onboard_date comes from the earliest "Updated Date" among
@@ -2873,6 +2924,8 @@ class GoogleSheetsService:
             'ob_opened': ob_opened,
             'ob_filled': ob_filled,
             'onboarded_real': onboarded_real,
+            'superset_confirmed': superset_confirmed,
+            'onboarded_reported': onboarded_reported,
             'touch_base': touch_base,
             'conversion_vs_touch_base': round(onboarded_real / touch_base * 100, 1) if touch_base else 0,
             'conversion_vs_overall': round(onboarded_real / total_db * 100, 1) if total_db else 0,

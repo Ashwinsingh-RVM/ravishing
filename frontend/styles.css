@@ -6451,6 +6451,14 @@ details.learning-collapsible[open] > .learning-collapsible-header::before {
     border-color: var(--primary);
 }
 
+.hmap-seg-sub {
+    display: flex;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--gray-400);
+    padding: 2px 0 6px 22px;
+}
+
 /* ---- HoReCa Overview KPI board ---- */
 .hov-kpi-grid {
     display: grid;

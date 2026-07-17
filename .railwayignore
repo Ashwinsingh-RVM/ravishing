@@ -16,3 +16,5 @@ frontend/data/horeca/horeca_hex8.geojson
 _L1_backup/
 _redesign_backup/
 run_local_server.bat
+app/
+.venv/

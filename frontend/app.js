@@ -3731,15 +3731,25 @@ function hovMapRenderSidebar() {
     if (segEl) {
         segEl.innerHTML = ['onboarded', 'pipeline', 'unreached'].map(k => {
             const on = hovMapSegOn[k];
-            const sub = (k === 'unreached' && on) ? `
-                <div class="hmap-sub-toggle" onclick="event.stopPropagation();">
+            // Onboarded headline = full total (plottable + no-location);
+            // the count shown on the row is that total, with the split below.
+            const noc = hovMapCounts.onboarded_nocoord || 0;
+            const displayCount = k === 'onboarded'
+                ? (hovMapCounts.onboarded + noc) : hovMapCounts[k];
+            let sub = '';
+            if (k === 'unreached' && on) {
+                sub = `<div class="hmap-sub-toggle" onclick="event.stopPropagation();">
                     <button class="${hovMapUnreachedMode === 'heat' ? 'active' : ''}" onclick="hovMapSetUnreachedMode('heat')">Heat</button>
                     <button class="${hovMapUnreachedMode === 'dots' ? 'active' : ''}" onclick="hovMapSetUnreachedMode('dots')">Dots</button>
-                </div>` : '';
+                </div>`;
+            } else if (k === 'onboarded') {
+                sub = `<div class="hmap-seg-sub"><span>${hovMapCounts.onboarded.toLocaleString()} on map</span>` +
+                    (noc ? `<span>&middot; ${noc.toLocaleString()} without location</span>` : '') + `</div>`;
+            }
             return `<div class="hmap-seg-row ${on ? 'on' : 'off'}" onclick="hovMapSegToggle('${k}')">
                 <span class="hmap-seg-dot" style="background:${HOV_SEG_META[k].color};"></span>
                 <span class="hmap-seg-label">${HOV_SEG_META[k].label}</span>
-                <span class="hmap-seg-count">${hovMapCounts[k].toLocaleString()}</span>
+                <span class="hmap-seg-count">${displayCount.toLocaleString()}</span>
                 <span class="hmap-seg-state">${on ? 'ON' : 'OFF'}</span>
             </div>${sub}`;
         }).join('');
@@ -4181,6 +4191,8 @@ function renderHovOverview(container) {
         </div>
 
         <p class="hint" style="margin-top:8px;">Run rate: ${rrSub.replace(/&rarr;/g, '→').replace(/&middot;/g, '·')}</p>
+
+        <p class="hint" style="margin-top:4px;">Onboarded = <strong>${d.onboarded_real.toLocaleString()}</strong> confirmed (Superset) &middot; ${(d.onboarded_reported || 0).toLocaleString()} reported by associates in app_sheet (live)${d.onboarded_reported && d.onboarded_reported !== d.onboarded_real ? ` — ${Math.abs(d.onboarded_real - d.onboarded_reported)} ${d.onboarded_real > d.onboarded_reported ? 'confirmed but not yet marked in app_sheet' : 'reported but not yet Superset-confirmed'}` : ''}</p>
 
     </div>`;
 
