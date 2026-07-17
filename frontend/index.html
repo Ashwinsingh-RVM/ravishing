@@ -6,7 +6,7 @@
     <title>Goa DRS Tracker</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='white' stroke='%230b6b4f' stroke-width='2'/%3E%3Ctext x='32' y='30' font-family='DM Sans,Arial,sans-serif' font-size='19' font-weight='700' fill='%230b6b4f' text-anchor='middle'%3EGOA%3C/text%3E%3Ctext x='32' y='51' font-family='DM Sans,Arial,sans-serif' font-size='19' font-weight='700' fill='%230b6b4f' text-anchor='middle'%3EDRS%3C/text%3E%3C/svg%3E">
     <meta name="theme-color" content="#1e6b5c">
-    <link rel="stylesheet" href="/static/styles.css?v=76">
+    <link rel="stylesheet" href="/static/styles.css?v=77">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -633,6 +633,7 @@
                         <button class="hdep-subtab active" data-horeca-dash-tab="overview">Overview</button>
                         <button class="hdep-subtab" data-horeca-dash-tab="superset">Insights</button>
                         <button class="hdep-subtab" data-horeca-dash-tab="map">Map</button>
+                        <button class="hdep-subtab" data-horeca-dash-tab="associates">Associates</button>
                     </div>
 
                     <!-- Overview -->
@@ -659,16 +660,19 @@
                         <div class="card" style="margin-bottom: 16px;">
                             <h3 class="section-title" style="margin-bottom: 4px;">QA Review &amp; Classification</h3>
                             <div class="hdaily-filter-bar" id="hsv-audit-pills" style="margin-bottom: 8px; flex-wrap: wrap;">
-                                <button class="btn btn-outline btn-small hsv-pill active" data-audit="qa_name_matches" onclick="switchHsvAudit('qa_name_matches')">Name matches</button>
-                                <button class="btn btn-outline btn-small hsv-pill" data-audit="qa_dup_pan" onclick="switchHsvAudit('qa_dup_pan')">Duplicate PAN</button>
+                                <button class="btn btn-outline btn-small hsv-pill active" data-audit="qa_dup_pan" onclick="switchHsvAudit('qa_dup_pan')">Duplicate PAN</button>
                                 <button class="btn btn-outline btn-small hsv-pill" data-audit="qa_dup_gst" onclick="switchHsvAudit('qa_dup_gst')">Duplicate GST</button>
-                                <button class="btn btn-outline btn-small hsv-pill" data-audit="dup_names" onclick="switchHsvAudit('dup_names')">Duplicate names</button>
-                                <button class="btn btn-outline btn-small hsv-pill" data-audit="disapproved" onclick="switchHsvAudit('disapproved')">Disapproved</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="qa_dup_fssai" onclick="switchHsvAudit('qa_dup_fssai')">Duplicate FSSAI</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="dup_names" onclick="switchHsvAudit('dup_names')">Dup names (Superset)</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="dup_names_ravishing" onclick="switchHsvAudit('dup_names_ravishing')">Dup names (Ravishing)</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="new_leads_list" onclick="switchHsvAudit('new_leads_list')">New Leads</button>
                                 <button class="btn btn-outline btn-small hsv-pill" data-audit="organic" onclick="switchHsvAudit('organic')">Organic</button>
                                 <button class="btn btn-outline btn-small hsv-pill" data-audit="inorganic" onclick="switchHsvAudit('inorganic')">Inorganic</button>
+                                <button class="btn btn-outline btn-small hsv-pill" data-audit="offboarded" onclick="switchHsvAudit('offboarded')">Offboarded</button>
                                 <input type="text" id="hsv-audit-search" class="input" placeholder="Filter by name..." style="max-width:220px;" onkeyup="renderHsvAuditTable()">
                             </div>
                             <p id="hsv-audit-hint" class="hint" style="margin-bottom: 8px;"></p>
+                            <div id="hsv-group-counts" style="margin-bottom: 8px;"></div>
                             <div id="hsv-audit-table" style="overflow-x: auto; max-height: 420px; overflow-y: auto;">
                                 <div class="hcrm-dash-loading">Loading...</div>
                             </div>
@@ -693,21 +697,41 @@
                         </div>
                     </div>
 
-                    <!-- Map (pins from live CRM data) -->
+                    <!-- Map (pins from live CRM data) — ops-console layout -->
                     <div id="horeca-dash-map-view" style="display:none;">
-                        <div class="card">
-                            <div class="hdaily-filter-bar" style="margin-bottom:10px;">
-                                <select id="hmap-block" class="select" onchange="hovMapGoBlock(this.value)">
-                                    <option value="">All Blocks (Goa)</option>
-                                </select>
-                                <label class="checkbox-label" style="margin:0;"><input type="checkbox" id="hmap-heat-toggle" onchange="hovMapToggleHeat(this.checked)"> Heatmap</label>
-                                <span class="hov-pill hov-pill-hi">● Onboarded</span>
-                                <span class="hov-pill hov-pill-mid">● Pipeline</span>
-                                <span class="hov-pill hov-pill-lo">● Unreached</span>
-                                <span id="hmap-counts" class="profile-hint" style="margin-left:8px;"></span>
+                        <div class="card" style="padding:12px;">
+                            <div class="hmap-shell">
+                                <aside class="hmap-sidebar">
+                                    <div id="hmap-summary" class="hmap-summary"></div>
+                                    <div id="hmap-seg-rows" class="hmap-seg-rows"></div>
+                                    <div class="hmap-side-title">Blocks <span class="profile-hint">by onboarded</span></div>
+                                    <div id="hmap-block-list" class="hmap-block-list"></div>
+                                    <div id="hmap-focus-row"></div>
+                                </aside>
+                                <div class="hmap-map-wrap">
+                                    <div id="hmap-container">
+                                        <div class="hcrm-dash-loading">Loading map...</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div id="hmap-container" style="width:100%; height:calc(100vh - 240px); min-height:520px; border-radius:12px; overflow:hidden;">
-                                <div class="hcrm-dash-loading">Loading map...</div>
+                        </div>
+                    </div>
+
+                    <!-- Associates (reached + onboarded per associate per period) -->
+                    <div id="horeca-dash-associates-view" style="display:none;">
+                        <div id="hassoc-summary" class="hov-kpi-grid-auto" style="margin-bottom:16px;">
+                            <div class="hcrm-dash-loading">Loading associate performance...</div>
+                        </div>
+                        <div class="card">
+                            <div class="hdaily-filter-bar" style="margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+                                <h3 class="section-title" style="margin:0 12px 0 0;">Reached / Onboarded by period</h3>
+                                <button class="btn btn-outline btn-small hassoc-gran" data-gran="day" onclick="hovAssocSetGran('day')">Day</button>
+                                <button class="btn btn-outline btn-small hassoc-gran" data-gran="week" onclick="hovAssocSetGran('week')">Week</button>
+                                <button class="btn btn-outline btn-small hassoc-gran active" data-gran="month" onclick="hovAssocSetGran('month')">Month</button>
+                            </div>
+                            <p class="hint" style="margin-bottom:8px;">Each cell is <strong>reached / onboarded</strong>. Reached = real tracked status changes at "Meeting done" or beyond. Onboarded = Superset ACTIVE (system of record), dated by its updated date.</p>
+                            <div id="hassoc-matrix" style="overflow:auto; max-height:480px;">
+                                <div class="hcrm-dash-loading">Loading...</div>
                             </div>
                         </div>
                     </div>
@@ -1745,6 +1769,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=135"></script>
+    <script src="/static/app.js?v=136"></script>
 </body>
 </html>

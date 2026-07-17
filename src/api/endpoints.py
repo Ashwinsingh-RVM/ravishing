@@ -195,6 +195,83 @@ async def health():
     return {"status": "healthy", "service": "Goa DRS VP CP Mapping"}
 
 
+# ==================== Automatic HoReCa sync scheduler ====================
+# Runs the two existing app_sheet -> Enhanced sync jobs on a fixed interval.
+# WRITES to the Enhanced tab ONLY (both jobs are built that way); app_sheet
+# and Superset are never written. Failures never kill the thread.
+AUTO_SYNC_ENABLED = os.getenv('AUTO_SYNC_ENABLED', '1') == '1'
+AUTO_SYNC_INTERVAL_HOURS = float(os.getenv('AUTO_SYNC_INTERVAL_HOURS', '6'))
+AUTO_SYNC_INITIAL_DELAY_SEC = float(os.getenv('AUTO_SYNC_INITIAL_DELAY_SEC', '900'))
+
+_auto_sync_log: list = []   # last 20 runs, newest first
+_auto_sync_thread = None
+
+
+def _auto_sync_run_once():
+    """One scheduled sync pass: documents copy first, then new-lead mirror."""
+    entry = {'started_at': datetime.now().isoformat(timespec='seconds')}
+    try:
+        svc = GoogleSheetsService()
+        docs = svc.sync_appsheet_documents_to_enhanced(dry_run=False)
+        leads = svc.sync_new_horeca_leads(dry_run=False)
+        entry['documents'] = {
+            'written': docs.get('written', docs.get('would_write', 0)),
+            'already_filled_skipped': docs.get('already_filled_skipped', 0),
+            'errors': docs.get('errors', []),
+        }
+        entry['new_leads'] = {
+            'created': leads.get('created', 0),
+            'linked_existing': leads.get('linked_existing', 0),
+            'ambiguous_skipped': leads.get('ambiguous_skipped', 0),
+            'already_done_skipped': leads.get('already_done_skipped', 0),
+            'errors': leads.get('errors', []),
+        }
+        entry['status'] = 'ok'
+    except Exception as e:
+        entry['status'] = 'error'
+        entry['error'] = str(e)
+    entry['finished_at'] = datetime.now().isoformat(timespec='seconds')
+    _auto_sync_log.insert(0, entry)
+    del _auto_sync_log[20:]
+    print(f"[auto-sync] run finished: {entry}")
+
+
+def _auto_sync_loop():
+    time.sleep(AUTO_SYNC_INITIAL_DELAY_SEC)
+    while True:
+        _auto_sync_run_once()
+        time.sleep(AUTO_SYNC_INTERVAL_HOURS * 3600)
+
+
+@app.on_event("startup")
+async def _start_auto_sync():
+    global _auto_sync_thread
+    if not AUTO_SYNC_ENABLED:
+        print("[auto-sync] disabled via AUTO_SYNC_ENABLED")
+        return
+    if _auto_sync_thread and _auto_sync_thread.is_alive():
+        return
+    import threading
+    _auto_sync_thread = threading.Thread(target=_auto_sync_loop, daemon=True,
+                                         name='horeca-auto-sync')
+    _auto_sync_thread.start()
+    print(f"[auto-sync] scheduled, first run in {int(AUTO_SYNC_INITIAL_DELAY_SEC)}s, "
+          f"then every {AUTO_SYNC_INTERVAL_HOURS}h (writes Enhanced tab only)")
+
+
+@app.get("/api/horeca/sync/status")
+async def get_horeca_sync_status(request: Request):
+    """Auto-sync scheduler status + last runs (admin only)"""
+    require_role(request, {'admin'})
+    return {
+        'enabled': AUTO_SYNC_ENABLED,
+        'interval_hours': AUTO_SYNC_INTERVAL_HOURS,
+        'initial_delay_sec': AUTO_SYNC_INITIAL_DELAY_SEC,
+        'thread_alive': bool(_auto_sync_thread and _auto_sync_thread.is_alive()),
+        'runs': _auto_sync_log,
+    }
+
+
 @app.get("/blocks")
 async def get_blocks():
     """Get list of all blocks in Goa"""
@@ -1535,7 +1612,7 @@ async def get_horeca_associate_events_endpoint(request: Request, start: str, end
 @app.get("/api/horeca/superset/list")
 async def get_horeca_superset_list(request: Request, search: str = '', page: int = 1, page_size: int = 50):
     """Raw viewer for the Superset export tab — no matching logic yet"""
-    require_role(request, {'admin', 'horeca'})
+    require_role(request, {'admin'})
     try:
         sheets_service = GoogleSheetsService()
         return sheets_service.get_horeca_superset_data(search=search, page=page, page_size=page_size)
@@ -1546,8 +1623,9 @@ async def get_horeca_superset_list(request: Request, search: str = '', page: int
 @app.get("/api/horeca/superset/validation")
 async def get_horeca_superset_validation_endpoint(request: Request):
     """Superset vs Enhanced validation: KPIs, match tiers, discrepancy audits.
-    Read-only — computes live, writes nothing."""
-    require_role(request, {'admin', 'horeca'})
+    Read-only — computes live, writes nothing. Admin-only: associates must
+    not see or influence the QA/insights layer."""
+    require_role(request, {'admin'})
     try:
         sheets_service = GoogleSheetsService()
         return sheets_service.get_horeca_superset_validation()
@@ -1567,11 +1645,28 @@ async def get_horeca_overview_endpoint(request: Request, target: int = 10000):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/horeca/associates/performance")
+async def get_horeca_associates_performance_endpoint(
+        request: Request, granularity: str = 'month',
+        start: str = '', end: str = ''):
+    """Associates tab: reached + onboarded per associate per period"""
+    require_role(request, {'admin', 'horeca'})
+    try:
+        sheets_service = GoogleSheetsService()
+        return sheets_service.get_horeca_associate_performance(
+            granularity=granularity, start=start or None, end=end or None)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/horeca/qa/decision")
 async def post_horeca_qa_decision(payload: HoReCaQADecision, http_request: Request):
     """Record an approve/disapprove decision for a Superset QA-review item.
-    Append-only write to the QA-Decisions tab (created lazily on first use)."""
-    require_role(http_request, {'admin', 'horeca'})
+    Append-only write to the QA-Decisions tab (created lazily on first use).
+    Admin-only: QA decisions change the official onboarded numbers."""
+    require_role(http_request, {'admin'})
     try:
         sheets_service = GoogleSheetsService()
         session_user = get_session_user(http_request) or {}

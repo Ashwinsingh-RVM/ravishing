@@ -1900,16 +1900,25 @@ class GoogleSheetsService:
     def get_horeca_map_data(self) -> dict:
         """Compact HoReCa dataset for the deployment map.
 
-        pins  = outlets with an Outreach_Status (onboarded/pipeline), full detail
+        pins  = outlets with an Outreach_Status OR a Superset-ACTIVE link
+                (onboarded/pipeline), full detail
         heat  = [lat, lng] pairs for not-yet-contacted outlets (density heatmap)
         De-listed, duplicate and temporarily-closed rows are excluded.
+
+        Onboarded truth comes from Superset (the system of record): a pin is
+        onboarded if its Enhanced row is linked to a Superset ACTIVE record
+        (AppSheet_Lead_ID / PAN / GST / FSSAI), with Outreach_Status ==
+        'OB Form Filled' kept as a fallback for self-reported-but-unmatched
+        rows. Superset-ACTIVE businesses with no Enhanced pin get their own
+        pin from app_sheet's Location column when available; the remainder
+        is counted in counts.onboarded_nocoord.
         """
         rows, headers = self._get_horeca_crm_cache()
         h = {hdr: i for i, hdr in enumerate(headers)}
 
-        def val(row, name, default_idx):
+        def val(row, name, default_idx=None):
             idx = h.get(name, default_idx)
-            return row[idx].strip() if idx < len(row) else ''
+            return row[idx].strip() if idx is not None and idx < len(row) else ''
 
         def fnum(s):
             try:
@@ -1920,33 +1929,131 @@ class GoogleSheetsService:
 
         rows, _ = self._collapse_horeca_duplicates(rows, headers)
 
+        # --- Superset-ACTIVE link sets from the (cached) classification ---
+        active_items = []
+        try:
+            validation = self.get_horeca_superset_validation() or {}
+            cls = validation.get('classification') or {}
+            active_items = (cls.get('organic') or []) + (cls.get('inorganic') or [])
+        except Exception:
+            pass
+
+        # Map each link key -> the Superset business (item index) it belongs
+        # to, so onboarded can be counted as DISTINCT Superset businesses
+        # (not per-Enhanced-row — duplicate PAN rows must not inflate it).
+        linked = {'A': {}, 'P': {}, 'G': {}, 'F': {}}  # id -> onboarded_date
+        key_to_item = {}   # (tag, id) -> item index
+        item_keys = []     # parallel to active_items: list of link keys per item
+        item_has_coord = [False] * len(active_items)
+        for idx, it in enumerate(active_items):
+            keys = []
+            for tag, field in (('A', 'appsheet_id'), ('P', 'pan'),
+                               ('G', 'gst'), ('F', 'fssai')):
+                v = (it.get(field) or '').strip()
+                if v:
+                    linked[tag].setdefault(v, it.get('onboarded_date') or '')
+                    key_to_item.setdefault((tag, v), idx)
+                    keys.append((tag, v))
+            item_keys.append(keys)
+
+        # app_sheet ID -> "lat,lng" for the no-Enhanced-coords fallback pins
+        app_loc_by_id = {}
+        try:
+            app_rows, app_headers = self._get_appsheet_cache()
+            ah = {hdr: i for i, hdr in enumerate(app_headers)}
+            aid_i, aloc_i = ah.get('ID'), ah.get('Location')
+            for arow in app_rows:
+                aid = arow[aid_i].strip() if aid_i is not None and aid_i < len(arow) else ''
+                aloc = arow[aloc_i].strip() if aloc_i is not None and aloc_i < len(arow) else ''
+                if aid and aloc:
+                    app_loc_by_id[aid] = aloc
+        except Exception:
+            pass
+
         pins, heat = [], []
-        counts = {'onboarded': 0, 'pipeline': 0, 'unreached': 0}
+        counts = {'onboarded': 0, 'pipeline': 0, 'unreached': 0,
+                  'onboarded_nocoord': 0}
+        consumed = set()  # (tag, id) link keys already represented by a pin
         for row in rows:
             lat = fnum(val(row, 'Latitude', 10))
             lng = fnum(val(row, 'Longitude', 11))
-            if lat is None or lng is None:
-                continue
             status = val(row, 'Outreach_Status', 53)
             if status == 'De-listed':
                 continue
-            if status:
-                onboarded = status == 'OB Form Filled'
-                counts['onboarded' if onboarded else 'pipeline'] += 1
+
+            # Is this Enhanced row linked to a Superset ACTIVE record?
+            row_keys = []
+            for tag, v in (('A', val(row, 'AppSheet_Lead_ID')),
+                           ('P', val(row, 'PAN_Number').upper()),
+                           ('G', val(row, 'GST_Number').upper()),
+                           ('F', val(row, 'FSSAI_Number'))):
+                if v and v in linked[tag]:
+                    row_keys.append((tag, v))
+            is_linked = bool(row_keys)
+
+            if lat is None or lng is None:
+                continue  # no coords: superset link (if any) handled below
+
+            if status or is_linked:
+                # Onboarded = confirmed by Superset (system of record) ONLY,
+                # and counted per DISTINCT Superset business — so the map
+                # total ties to Superset's ACTIVE figure (~1,112), never
+                # inflated by self-reported claims or duplicate Enhanced rows.
+                onboarded = is_linked
+                if not onboarded:
+                    counts['pipeline'] += 1
+                ob_date = ''
+                for tag, v in row_keys:
+                    consumed.add((tag, v))
+                    item_idx = key_to_item.get((tag, v))
+                    if item_idx is not None:
+                        item_has_coord[item_idx] = True  # this business has a real location
+                    if not ob_date:
+                        ob_date = linked[tag].get(v, '')
                 pins.append({
                     'name': val(row, 'Name', 1),
                     'type': val(row, 'HoReCa_Type', 34) or val(row, 'Primary Type', 3),
                     'city': val(row, 'City', 6),
                     'lat': round(lat, 5),
                     'lng': round(lng, 5),
-                    'status': status,
+                    'status': status or 'Onboarded (Superset)',
                     'onboarded': onboarded,
+                    'ob_date': ob_date,
+                    'source': 'enhanced',
                 })
             else:
                 if val(row, 'Business Status', 28) == 'CLOSED_TEMPORARILY':
                     continue
                 counts['unreached'] += 1
                 heat.append([round(lat, 5), round(lng, 5)])
+
+        # --- Superset-ACTIVE businesses not represented by any Enhanced pin:
+        # draw them from app_sheet Location where available.
+        for idx, (it, keys) in enumerate(zip(active_items, item_keys)):
+            if item_has_coord[idx] or any(k in consumed for k in keys):
+                continue
+            for k in keys:
+                consumed.add(k)
+            appid = (it.get('appsheet_id') or '').strip()
+            a_lat = a_lng = None
+            if appid and appid in app_loc_by_id:
+                a_lat, a_lng = self._parse_latlng(app_loc_by_id[appid])
+            if a_lat is not None and a_lng is not None:
+                item_has_coord[idx] = True
+                pins.append({
+                    'name': it.get('superset_name') or '',
+                    'type': '', 'city': it.get('city') or '',
+                    'lat': round(a_lat, 5), 'lng': round(a_lng, 5),
+                    'status': 'Onboarded (Superset)',
+                    'onboarded': True,
+                    'ob_date': it.get('onboarded_date') or '',
+                    'source': 'appsheet-coords',
+                })
+
+        # Onboarded counts are per DISTINCT Superset business → tie to ACTIVE.
+        counts['onboarded'] = sum(1 for v in item_has_coord if v)
+        counts['onboarded_nocoord'] = len(active_items) - counts['onboarded']
+
         return {'pins': pins, 'heat': heat, 'counts': counts}
 
     def get_horeca_crm_data(self, search='', status='', htype='',
@@ -2600,6 +2707,9 @@ class GoogleSheetsService:
         # by any edit (incl. bulk sync/backfill ops), which produced impossible
         # single-day spikes. "Updated Date" reflects when work actually happened.
         updated_date_idx = h.get('Updated Date')
+        notes_idx = h.get('Outreach_Notes', 61)
+        pid_idx = h.get('Place ID', 0)
+        name_idx = h.get('Name', 1)
 
         def parse_work_date(val):
             if not val:
@@ -2656,17 +2766,35 @@ class GoogleSheetsService:
             if status == 'OB Form Filled':
                 ob_filled += 1
 
-            # Enhanced contributes only the "reached" movement (field work
-            # dates); started/onboarded movement comes from Superset below.
-            wd = parse_work_date(row[updated_date_idx]) if updated_date_idx is not None and updated_date_idx < len(row) else None
-            if wd is None:
-                continue
-            if r >= reached_bar:
+            # Enhanced contributes only the "reached" movement; started/
+            # onboarded movement comes from Superset below.
+            # REAL status-change history first: every logged transition to a
+            # 'Meeting done'-or-beyond status counts on ITS OWN day — so a
+            # business reached on the 1st, 3rd and 5th shows on all three
+            # days. Businesses with no tracked history (predates logging)
+            # fall back to current-status-at-"Updated Date" as before.
+            def add_reached(wd):
                 day_key = wd.isoformat()
                 week_key = (wd - timedelta(days=wd.weekday())).isoformat()  # Monday of that week
                 month_key = wd.strftime('%Y-%m')
                 for store, key in ((dod, day_key), (wow, week_key), (mom, month_key)):
                     bucket(store, key)['reached'] += 1
+
+            notes = row[notes_idx] if notes_idx < len(row) else ''
+            real_events = self._parse_horeca_status_changes(notes) if notes else []
+            if real_events:
+                for ev in real_events:
+                    if rank(ev['to_status']) >= reached_bar:
+                        ev_wd = parse_work_date(ev['date'])
+                        if ev_wd is not None:
+                            add_reached(ev_wd)
+                continue
+
+            wd = parse_work_date(row[updated_date_idx]) if updated_date_idx is not None and updated_date_idx < len(row) else None
+            if wd is None:
+                continue
+            if r >= reached_bar:
+                add_reached(wd)
 
         # Superset (the backend system of record) drives onboarding truth AND
         # its dates: created_day = onboarding started, updated_day = the
@@ -2757,6 +2885,14 @@ class GoogleSheetsService:
                 'days_to_target': days_to_target,
             },
             'undated_onboarded': undated_onboarded,
+            'totals': {k: (lambda s: {
+                'reached': sum(b['reached'] for b in s.values()),
+                'started': sum(b['started'] for b in s.values()),
+                'onboarded': sum(b['onboarded'] for b in s.values()),
+                'conv': round(
+                    sum(b['onboarded'] for b in s.values())
+                    / max(1, sum(b['reached'] for b in s.values())) * 100, 1),
+            })(store) for k, store in (('dod', dod), ('wow', wow), ('mom', mom))},
             'dod': rowify(dod),
             'wow': rowify(wow),
             'mom': rowify(mom),
@@ -2890,6 +3026,194 @@ class GoogleSheetsService:
                 for email, bucket in by_associate.items()
             },
             'unmapped_count': unmapped_count,
+        }
+
+    def get_horeca_associate_performance(self, granularity='month',
+                                         start=None, end=None):
+        """Associates tab: reached + onboarded per associate per period.
+
+        Reached  = real (approximate==False) STATUS_CHANGE events whose
+                   to_status ranks at or beyond 'Meeting done', attributed
+                   via _resolve_associate_email; unresolved -> 'Other'.
+        Onboarded = Superset ACTIVE rows (post-QA classification), dated by
+                   updated_day, attributed via the matched our-side record:
+                   app_sheet Lead POC email first, else Enhanced Assigned_To
+                   (both resolved through the whitelist/aliases);
+                   unresolved -> 'Other'.
+        Read-only; nothing is written to any sheet."""
+        if granularity not in ('day', 'week', 'month'):
+            raise ValueError("granularity must be 'day', 'week' or 'month'")
+
+        def parse_d(s):
+            if not s:
+                return None
+            try:
+                return datetime.fromisoformat(str(s).strip()[:10]).date()
+            except ValueError:
+                return None
+
+        start_d, end_d = parse_d(start), parse_d(end)
+
+        def period_key(d):
+            if granularity == 'day':
+                return d.isoformat()
+            if granularity == 'week':
+                return (d - timedelta(days=d.weekday())).isoformat()
+            return d.strftime('%Y-%m')
+
+        wl = set(self.HORECA_ASSOCIATE_WHITELIST)
+
+        def resolve(raw):
+            if not raw:
+                return None
+            r = raw.strip().lower()
+            if r in wl:
+                return r
+            return self._resolve_associate_email(raw)
+
+        order = self.HORECA_OUTREACH_STATUSES
+        reached_bar = order.index('Meeting done')
+
+        def rank(status):
+            try:
+                return order.index(status)
+            except ValueError:
+                return -1
+
+        data = {}     # period -> email/'Other' -> {'reached','onboarded'}
+        alltime = {}  # email/'Other' -> {'reached','onboarded'}
+
+        def bump(d, raw_email, field):
+            if start_d and d < start_d:
+                return
+            if end_d and d > end_d:
+                return
+            email = raw_email or 'Other'
+            p = period_key(d)
+            data.setdefault(p, {}).setdefault(
+                email, {'reached': 0, 'onboarded': 0})[field] += 1
+            alltime.setdefault(email, {'reached': 0, 'onboarded': 0})[field] += 1
+
+        # --- Reached: real tracked events preferred; if the sheet has NO
+        # real STATUS_CHANGE history at all yet (verified live 2026-07:
+        # zero real events), fall back to the approximate events (current
+        # status @ Last_Updated) — same fallback the Overview uses.
+        all_events = self._collect_horeca_status_events()
+        real_events = [e for e in all_events if not e.get('approximate')]
+        reached_source = 'real'
+        events = real_events
+        if not real_events:
+            events = all_events
+            reached_source = 'approximate_fallback'
+        for ev in events:
+            if rank(ev.get('to_status', '')) < reached_bar:
+                continue
+            d = parse_d(ev.get('date'))
+            if d is None:
+                continue
+            bump(d, resolve(ev.get('associate')), 'reached')
+
+        # --- Onboarded: Superset ACTIVE via classification ---
+        active_items = []
+        try:
+            validation = self.get_horeca_superset_validation() or {}
+            cls = validation.get('classification') or {}
+            active_items = (cls.get('organic') or []) + (cls.get('inorganic') or [])
+        except Exception:
+            pass
+
+        # Attribution maps
+        app_poc_by_id = {}
+        try:
+            app_rows, app_headers = self._get_appsheet_cache()
+            ah = {hdr: i for i, hdr in enumerate(app_headers)}
+            aid_i, apoc_i = ah.get('ID'), ah.get('Lead POC')
+            for arow in app_rows:
+                aid = arow[aid_i].strip() if aid_i is not None and aid_i < len(arow) else ''
+                poc = arow[apoc_i].strip() if apoc_i is not None and apoc_i < len(arow) else ''
+                if aid and poc:
+                    app_poc_by_id[aid] = poc
+        except Exception:
+            pass
+
+        assigned_by_key = {}  # ('A'|'P'|'G'|'F', id) -> Assigned_To
+        try:
+            enh_rows, enh_headers = self._get_horeca_crm_cache()
+            eh = {hdr: i for i, hdr in enumerate(enh_headers)}
+
+            def ev_(row, col, dflt=None):
+                i = eh.get(col, dflt)
+                return row[i].strip() if i is not None and i < len(row) else ''
+
+            for erow in enh_rows:
+                assignee = ev_(erow, 'Assigned_To', 65)
+                if not assignee:
+                    continue
+                for tag, v in (('A', ev_(erow, 'AppSheet_Lead_ID')),
+                               ('P', ev_(erow, 'PAN_Number').upper()),
+                               ('G', ev_(erow, 'GST_Number').upper()),
+                               ('F', ev_(erow, 'FSSAI_Number'))):
+                    if v:
+                        assigned_by_key.setdefault((tag, v), assignee)
+        except Exception:
+            pass
+
+        for it in active_items:
+            d = parse_d(it.get('onboarded_date'))
+            if d is None:
+                continue
+            appid = (it.get('appsheet_id') or '').strip()
+            email = resolve(app_poc_by_id.get(appid)) if appid else None
+            if not email:
+                for tag, field in (('A', 'appsheet_id'), ('P', 'pan'),
+                                   ('G', 'gst'), ('F', 'fssai')):
+                    v = (it.get(field) or '').strip()
+                    if v and (tag, v) in assigned_by_key:
+                        email = resolve(assigned_by_key[(tag, v)])
+                        if email:
+                            break
+            bump(d, email, 'onboarded')
+
+        # --- Shape the response ---
+        display = {email: self._associate_display_name(email)
+                   for email in self.HORECA_ASSOCIATE_WHITELIST}
+        associates = [display[e] for e in self.HORECA_ASSOCIATE_WHITELIST] + ['Other']
+
+        def named(bucket):
+            out = {}
+            for email in self.HORECA_ASSOCIATE_WHITELIST:
+                out[display[email]] = bucket.get(email, {'reached': 0, 'onboarded': 0})
+            out['Other'] = bucket.get('Other', {'reached': 0, 'onboarded': 0})
+            return out
+
+        matrix = []
+        for p in sorted(data.keys(), reverse=True):
+            per = named(data[p])
+            matrix.append({
+                'period': p,
+                'associates': per,
+                'totals': {
+                    'reached': sum(v['reached'] for v in per.values()),
+                    'onboarded': sum(v['onboarded'] for v in per.values()),
+                },
+            })
+
+        summary = []
+        for name, v in named(alltime).items():
+            conv = round(v['onboarded'] / v['reached'] * 100, 1) if v['reached'] else 0
+            summary.append({'name': name, 'reached': v['reached'],
+                            'onboarded': v['onboarded'], 'conversion': conv})
+        summary.sort(key=lambda s: (-s['onboarded'], -s['reached']))
+
+        return {
+            'granularity': granularity,
+            'reached_source': reached_source,
+            'start': start_d.isoformat() if start_d else None,
+            'end': end_d.isoformat() if end_d else None,
+            'periods': sorted(data.keys(), reverse=True),
+            'associates': associates,
+            'matrix': matrix,
+            'summary': summary,
         }
 
     # ==================== HoReCa app_sheet -> Enhanced sync (preview only) ====================
@@ -3332,48 +3656,66 @@ class GoogleSheetsService:
 
     def _classify_superset_rows(self, sup_rows, sg, matches, eh, eg,
                                 active_total, draft_total):
-        """Classify every Superset business as Organic / Inorganic /
-        QA Review / Onboarding-In-Progress.
+        """Classify every Superset business.
 
-        The associate-ID pool is built from BOTH Enhanced (PAN_Number /
-        GST_Number) AND app_sheet (Document_Number classified by
-        _classify_document) — a document captured in the field counts even
-        before it's copied to Enhanced. All IDs are normalized (upper,
-        strip) at read time; nothing is written back to any tab.
+        Universe = Superset rows. DRAFT -> onboarding_in_progress.
+        Every ACTIVE business is EXACTLY ONE of:
+          Inorganic — its PAN or GST (normalized upper/strip) exists in the
+            associate pool (Enhanced PAN_Number/GST_Number + app_sheet
+            Document_Number via _classify_document): captured on BOTH sides.
+          Organic — everything else.
 
-        Precedence per row (first hit wins):
-          DRAFT status        -> onboarding_in_progress
-          duplicate PAN/GST inside Superset -> QA (dup queue)
-          PAN or GST in associate pool      -> Inorganic
-          name-only confident match         -> QA (name queue)
-          otherwise                         -> Organic
+        QA queues are OVERLAYS — a row keeps its organic/inorganic bucket
+        AND appears in any queue it qualifies for:
+          qa_dup_pan / qa_dup_gst / qa_dup_fssai — the ID is shared by 2+
+            Superset rows.
+          qa_name_both — the Superset business_name confidently matches an
+            Enhanced or app_sheet name (_distinctive_name_tokens matching).
 
-        Saved decisions from the QA-Decisions tab are overlaid: approved
-        items keep their queue with a badge; disapproved items move to the
-        'disapproved' list (kept visible, flagged). Read-only here.
+        Decisions affect counts: a disapproved row is OFFBOARDED — dropped
+        from organic/inorganic and collected in 'offboarded';
+        onboarded_after_qa = ACTIVE - offboarded. Approved rows stay
+        counted and leave qa_pending. Read-only; nothing is written back.
         """
         # --- associate ID pool: Enhanced + app_sheet ---
-        # Alongside membership, remember OUR side's business name (and
-        # status where known) per ID, so every QA/classification row can
-        # show the Ravishing name next to the Superset name.
+        # Alongside membership, remember OUR side's record per ID:
+        # app_sheet ID, business name and status — so every row can show
+        # the Ravishing record next to the Superset one.
         pool_pan, pool_gst = set(), set()
-        our_by_pan, our_by_gst = {}, {}
+        our_by_pan, our_by_gst, our_by_fssai = {}, {}, {}
         enh_rows_all, enh_headers_all = self._get_horeca_crm_cache()
         ehp = {hdr: i for i, hdr in enumerate(enh_headers_all)}
         pan_i, gst_i = ehp.get('PAN_Number'), ehp.get('GST_Number')
+        fssai_i = ehp.get('FSSAI_Number')
         name_i = ehp.get('Name', 1)
         stat_i = ehp.get('Outreach_Status', 53)
+        appid_i = ehp.get('AppSheet_Lead_ID')
+
+        def _ev(erow, i):
+            return erow[i].strip() if i is not None and i < len(erow) else ''
+
+        # Name index over Enhanced + app_sheet for the qa_name_both overlay
+        name_pool = []  # (tokens, appsheet_id, name, status)
+
         for erow in enh_rows_all:
-            ename = erow[name_i].strip() if name_i < len(erow) else ''
-            estat = erow[stat_i].strip() if stat_i < len(erow) else ''
-            if pan_i is not None and pan_i < len(erow) and erow[pan_i].strip():
-                p = erow[pan_i].strip().upper()
+            ename = _ev(erow, name_i)
+            estat = _ev(erow, stat_i)
+            eappid = _ev(erow, appid_i)
+            rec = {'appsheet_id': eappid, 'name': ename, 'status': estat}
+            p = _ev(erow, pan_i).upper()
+            g = _ev(erow, gst_i).upper()
+            f = _ev(erow, fssai_i)
+            if p:
                 pool_pan.add(p)
-                our_by_pan.setdefault(p, {'name': ename, 'status': estat})
-            if gst_i is not None and gst_i < len(erow) and erow[gst_i].strip():
-                g = erow[gst_i].strip().upper()
+                our_by_pan.setdefault(p, rec)
+            if g:
                 pool_gst.add(g)
-                our_by_gst.setdefault(g, {'name': ename, 'status': estat})
+                our_by_gst.setdefault(g, rec)
+            if f:
+                our_by_fssai.setdefault(f, rec)
+            toks = self._distinctive_name_tokens(ename)
+            if len(toks) >= self.SUPERSET_MIN_SHARED_TOKENS:
+                name_pool.append((toks, eappid, ename, estat))
 
         app_rows, app_headers = self._get_appsheet_cache()
         ah = {hdr: i for i, hdr in enumerate(app_headers)}
@@ -3383,6 +3725,7 @@ class GoogleSheetsService:
             return row[i].strip() if i is not None and i < len(row) else ''
 
         google_leads = new_leads = 0
+        new_leads_list = []
         for arow in app_rows:
             # Lead-source KPIs (Google vs everything else non-blank)
             src = ag(arow, 'Lead Source')
@@ -3391,115 +3734,290 @@ class GoogleSheetsService:
                     google_leads += 1
                 else:
                     new_leads += 1
+                    new_leads_list.append({
+                        'appsheet_id': ag(arow, 'ID'),
+                        'superset_name': ag(arow, 'HoReCa Name'),
+                        'source': src,
+                        'matched_status': ag(arow, 'Lead Stage'),
+                        'poc': ag(arow, 'Lead POC'),
+                        'onboarded_date': ag(arow, 'Last updated Date'),
+                        'queue': 'new_lead',
+                    })
+            aname = ag(arow, 'HoReCa Name')
+            arec = {'appsheet_id': ag(arow, 'ID'), 'name': aname,
+                    'status': ag(arow, 'Lead Stage')}
             col_name, num = self._classify_document(
                 ag(arow, 'Document_Type'), ag(arow, 'Document_Number'))
             if col_name == 'PAN_Number':
                 pool_pan.add(num)
-                our_by_pan.setdefault(num, {'name': ag(arow, 'HoReCa Name'), 'status': ag(arow, 'Lead Stage')})
+                our_by_pan.setdefault(num, arec)
             elif col_name == 'GST_Number':
                 pool_gst.add(num)
-                our_by_gst.setdefault(num, {'name': ag(arow, 'HoReCa Name'), 'status': ag(arow, 'Lead Stage')})
+                our_by_gst.setdefault(num, arec)
+            elif col_name == 'FSSAI_Number':
+                our_by_fssai.setdefault(num, arec)
+            toks = self._distinctive_name_tokens(aname)
+            if len(toks) >= self.SUPERSET_MIN_SHARED_TOKENS:
+                name_pool.append((toks, arec['appsheet_id'], aname, arec['status']))
+
+        def best_name_match(sname):
+            """Confident our-side name match (same thresholds as the
+            validation engine): >=2 shared distinctive tokens AND
+            Jaccard >= SUPERSET_NAME_SIM_THRESHOLD."""
+            s_tok = self._distinctive_name_tokens(sname)
+            if len(s_tok) < self.SUPERSET_MIN_SHARED_TOKENS:
+                return None
+            best, best_j = None, 0.0
+            for toks, appid, nm, st in name_pool:
+                shared = len(s_tok & toks)
+                if shared < self.SUPERSET_MIN_SHARED_TOKENS:
+                    continue
+                union = len(s_tok | toks)
+                j = shared / union if union else 0.0
+                if j > best_j:
+                    best_j, best = j, {'appsheet_id': appid, 'name': nm, 'status': st}
+            if best is not None and best_j >= self.SUPERSET_NAME_SIM_THRESHOLD:
+                return best
+            return None
 
         # --- duplicates WITHIN Superset ---
-        pan_counts, gst_counts, name_counts = {}, {}, {}
+        pan_counts, gst_counts, fssai_counts, name_counts = {}, {}, {}, {}
         for srow in sup_rows:
             p = sg(srow, 'pan_number').upper()
             g = sg(srow, 'gstin_number').upper()
+            f = sg(srow, 'fssai_number')
             n = self._normalize_horeca_name(sg(srow, 'business_name'))
             if p:
                 pan_counts[p] = pan_counts.get(p, 0) + 1
             if g:
                 gst_counts[g] = gst_counts.get(g, 0) + 1
+            if f:
+                fssai_counts[f] = fssai_counts.get(f, 0) + 1
             if n:
                 name_counts[n] = name_counts.get(n, 0) + 1
         dup_pans = {p for p, c in pan_counts.items() if c > 1}
         dup_gsts = {g for g, c in gst_counts.items() if c > 1}
+        dup_fssais = {f for f, c in fssai_counts.items() if c > 1}
         dup_names = {n for n, c in name_counts.items() if c > 1}
 
         decisions = self._read_qa_decisions()
 
-        organic, inorganic = [], []
-        qa_name, qa_dup_pan, qa_dup_gst = [], [], []
-        dup_name_rows, disapproved, in_progress = [], [], []
+        # --- duplicate names WITHIN Enhanced (Ravishing), restricted to
+        # rows already claimed as onboarded (OB Form Filled). Decidable via
+        # RNAME:<norm> keys; informational for classification counts. ---
+        rav_city_i, rav_pin_i = ehp.get('City'), ehp.get('Pincode')
+        rav_upd_i = ehp.get('Updated Date')
+        rav_name_counts, rav_candidates = {}, []
+        for erow in enh_rows_all:
+            if _ev(erow, stat_i) != 'OB Form Filled':
+                continue
+            nm = _ev(erow, name_i)
+            norm = self._normalize_horeca_name(nm)
+            if not norm:
+                continue
+            rav_name_counts[norm] = rav_name_counts.get(norm, 0) + 1
+            rav_candidates.append((norm, erow))
+        rav_dup_norms = {n for n, c in rav_name_counts.items() if c > 1}
+        dup_names_ravishing = []
+        for norm, erow in rav_candidates:
+            if norm not in rav_dup_norms:
+                continue
+            key = f'RNAME:{norm}'
+            it = {
+                'superset_name': _ev(erow, name_i),
+                'superset_status': '',
+                'appsheet_id': _ev(erow, appid_i),
+                'pan': _ev(erow, pan_i).upper(),
+                'gst': _ev(erow, gst_i).upper(),
+                'fssai': _ev(erow, fssai_i),
+                'city': _ev(erow, rav_city_i),
+                'pin_code': _ev(erow, rav_pin_i),
+                'matched_name': _ev(erow, name_i),
+                'matched_status': 'OB Form Filled',
+                'onboarded_date': _ev(erow, rav_upd_i),
+                'key': key, 'queue': 'dup_name_rav',
+            }
+            dec = decisions.get(key)
+            if dec:
+                it['decision'] = dec['decision']
+                it['decided_by'] = dec.get('decided_by', '')
+            dup_names_ravishing.append(it)
 
-        for srow, m in zip(sup_rows, matches):
+        organic, inorganic = [], []
+        qa_name_both, qa_dup_pan, qa_dup_gst, qa_dup_fssai = [], [], [], []
+        dup_name_rows, offboarded, in_progress = [], [], []
+        # Unique-undecided tracking (by Superset row id) for the three
+        # duplicate-ID queues only — name queues are NOT counted (B3).
+        pending_ids = {'dup_pan': set(), 'dup_gst': set(), 'dup_fssai': set()}
+
+        for row_idx, (srow, m) in enumerate(zip(sup_rows, matches)):
             sname = sg(srow, 'business_name')
             span = sg(srow, 'pan_number').upper()
             sgst = sg(srow, 'gstin_number').upper()
+            sfssai = sg(srow, 'fssai_number')
             sstatus = sg(srow, 'status')
             norm_name = self._normalize_horeca_name(sname)
-            # Our-side (Ravishing) record for this business, by ID first,
-            # falling back to the name-match result when no ID links it.
-            ours = our_by_pan.get(span) or our_by_gst.get(sgst)
-            if not ours and m is not None:
-                ours = {'name': eg(m['erow'], 'Name', 1),
-                        'status': eg(m['erow'], 'Outreach_Status', 53)}
+
+            # Our-side (Ravishing) record: by ID first, then confident name.
+            ours = (our_by_pan.get(span) or our_by_gst.get(sgst)
+                    or our_by_fssai.get(sfssai))
+            name_hit = None
+            if m is not None and m.get('method') in ('name_confident', 'needs_review'):
+                erow = m['erow']
+                name_hit = {'appsheet_id': eg(erow, 'AppSheet_Lead_ID'),
+                            'name': eg(erow, 'Name', 1),
+                            'status': eg(erow, 'Outreach_Status', 53)}
+            if name_hit is None:
+                name_hit = best_name_match(sname)
+            if not ours:
+                ours = name_hit
+
+            row_id = sg(srow, 'id') or f'row-{row_idx}'
+
             item = {
+                'row_id': row_id,
                 'superset_name': sname,
                 'superset_status': sstatus,
-                'pan': span, 'gst': sgst,
+                'appsheet_id': (ours or {}).get('appsheet_id', '') or '',
+                'pan': span, 'gst': sgst, 'fssai': sfssai,
                 'city': sg(srow, 'city') or sg(srow, 'region_name'),
                 'pin_code': sg(srow, 'pin_code'),
-                'matched_name': ours['name'] if ours else '',
-                'matched_status': ours['status'] if ours else '',
+                'matched_name': (ours or {}).get('name', '') or '',
+                'matched_status': (ours or {}).get('status', '') or '',
+                # Superset updated_day = the onboarding date (team convention)
+                'onboarded_date': sg(srow, 'updated_day'),
             }
 
-            # Duplicate business names — informational, spans all buckets
-            if norm_name and norm_name in dup_names:
+            # Duplicate business names — informational; onboarded-only
+            # (Superset ACTIVE), matching dup_names_ravishing's OB-only rule.
+            if norm_name and norm_name in dup_names and sstatus == 'ACTIVE':
                 dup_name_rows.append({**item, 'queue': 'dup_name',
                                       'key': f'NAME:{norm_name}|{item["pin_code"]}'})
 
             if sstatus == 'DRAFT':
                 in_progress.append(item)
                 continue
+            if sstatus != 'ACTIVE':
+                continue
 
-            def with_decision(it, key, queue):
-                it = {**it, 'key': key, 'queue': queue}
-                dec = decisions.get(key)
-                if dec:
-                    it['decision'] = dec['decision']
-                    it['decided_by'] = dec.get('decided_by', '')
-                return it
-
+            # Every queue this row qualifies for (overlays, not tiers)
+            queue_keys = []
             if span and span in dup_pans:
-                it = with_decision(item, f'PAN:{span}', 'dup_pan')
-                (disapproved if it.get('decision') == 'disapproved' else qa_dup_pan).append(it)
-            elif sgst and sgst in dup_gsts:
-                it = with_decision(item, f'GST:{sgst}', 'dup_gst')
-                (disapproved if it.get('decision') == 'disapproved' else qa_dup_gst).append(it)
-            elif (span and span in pool_pan) or (sgst and sgst in pool_gst):
+                queue_keys.append(('dup_pan', f'PAN:{span}'))
+            if sgst and sgst in dup_gsts:
+                queue_keys.append(('dup_gst', f'GST:{sgst}'))
+            if sfssai and sfssai in dup_fssais:
+                queue_keys.append(('dup_fssai', f'FSSAI:{sfssai}'))
+            if name_hit is not None:
+                queue_keys.append(('name_both', f'NAME:{norm_name}|{item["pin_code"]}'))
+
+            # --- Decision cascade (B2): a decision on ANY identity key of
+            # this business (PAN / GST / FSSAI / NAME) propagates to the
+            # whole business. ALL its keys participate, not just the ones
+            # that landed it in a queue — so approving PAN:x decides every
+            # row bearing PAN:x, and their GST/FSSAI groups count those
+            # rows as decided too. Disapproved beats approved.
+            all_keys = []
+            if span:
+                all_keys.append(('PAN', f'PAN:{span}'))
+            if sgst:
+                all_keys.append(('GST', f'GST:{sgst}'))
+            if sfssai:
+                all_keys.append(('FSSAI', f'FSSAI:{sfssai}'))
+            if norm_name:
+                all_keys.append(('NAME', f'NAME:{norm_name}|{item["pin_code"]}'))
+
+            eff_decision = eff_via = eff_key = eff_by = None
+            for want in ('disapproved', 'approved'):
+                for ktype, k in all_keys:
+                    d = decisions.get(k)
+                    if d and d.get('decision') == want:
+                        eff_decision, eff_via, eff_key = want, ktype, k
+                        eff_by = d.get('decided_by', '')
+                        break
+                if eff_decision:
+                    break
+
+            # Effectively disapproved (directly or via cascade) -> offboarded
+            if eff_decision == 'disapproved':
+                off_queue = next((q for q, k in queue_keys if k == eff_key),
+                                 queue_keys[0][0] if queue_keys else 'cascade')
+                offboarded.append({**item, 'queue': off_queue, 'key': eff_key,
+                                   'decision': 'disapproved',
+                                   'decided_via': f'{eff_via} cascade',
+                                   'decided_by': eff_by})
+                continue
+
+            # Base bucket: inorganic (ID on both sides) vs organic
+            if (span and span in pool_pan) or (sgst and sgst in pool_gst):
                 inorganic.append({**item,
-                                  'matched_via': 'PAN' if span in pool_pan else 'GST'})
-            elif m is not None:
-                it = with_decision({
-                    **item,
-                    'matched_name': eg(m['erow'], 'Name', 1),
-                    'matched_status': eg(m['erow'], 'Outreach_Status', 53),
-                    'score': m.get('score', 0),
-                }, f'NAME:{norm_name}|{item["pin_code"]}', 'name_match')
-                (disapproved if it.get('decision') == 'disapproved' else qa_name).append(it)
+                                  'matched_via': 'PAN' if (span and span in pool_pan) else 'GST'})
             else:
                 organic.append(item)
 
-        qa_pending = sum(1 for lst in (qa_name, qa_dup_pan, qa_dup_gst)
-                         for it in lst if not it.get('decision'))
+            # Queue overlays (row also stays in its bucket above)
+            queue_lists = {'dup_pan': qa_dup_pan, 'dup_gst': qa_dup_gst,
+                           'dup_fssai': qa_dup_fssai, 'name_both': qa_name_both}
+            for queue, key in queue_keys:
+                it = {**item, 'key': key, 'queue': queue}
+                dec = decisions.get(key)
+                if dec:
+                    # Direct decision on this exact key
+                    it['decision'] = dec['decision']
+                    it['decided_by'] = dec.get('decided_by', '')
+                    it['decided_via'] = 'direct'
+                elif eff_decision:
+                    # Cascaded from a sibling key of the same business
+                    it['decision'] = eff_decision
+                    it['decided_by'] = eff_by
+                    it['decided_via'] = f'{eff_via} cascade'
+                elif queue in pending_ids:
+                    pending_ids[queue].add(row_id)
+                queue_lists[queue].append(it)
+
+        def group_stats(lst, field):
+            vals = {it[field] for it in lst if it.get(field)}
+            return len(vals), len(lst)
+
+        dup_pan_groups, dup_pan_rows = group_stats(qa_dup_pan, 'pan')
+        dup_gst_groups, dup_gst_rows = group_stats(qa_dup_gst, 'gst')
+        dup_fssai_groups, dup_fssai_rows = group_stats(qa_dup_fssai, 'fssai')
+
+        # qa_pending (B3): UNIQUE undecided businesses (by Superset row id)
+        # appearing in at least one duplicate-ID queue, after the cascade.
+        qa_pending = len(pending_ids['dup_pan'] | pending_ids['dup_gst']
+                         | pending_ids['dup_fssai'])
+        qa_pending_breakdown = {q: len(ids) for q, ids in pending_ids.items()}
 
         return {
             'total_onboarded': active_total,
+            'onboarded_after_qa': active_total - len(offboarded),
+            'offboarded_count': len(offboarded),
             'onboarding_in_progress_count': draft_total,
             'google_leads': google_leads,
             'new_leads': new_leads,
             'organic_count': len(organic),
             'inorganic_count': len(inorganic),
             'qa_pending': qa_pending,
+            'qa_pending_breakdown': qa_pending_breakdown,
+            'dup_names_ravishing': dup_names_ravishing,
+            'new_leads_list': new_leads_list,
             'organic': organic,
             'inorganic': inorganic,
-            'qa_name_matches': qa_name,
+            'qa_name_both': qa_name_both,
+            'qa_name_matches': qa_name_both,  # backward-compat alias
             'qa_dup_pan': qa_dup_pan,
             'qa_dup_gst': qa_dup_gst,
+            'qa_dup_fssai': qa_dup_fssai,
             'dup_names': dup_name_rows,
-            'disapproved': disapproved,
+            'offboarded': offboarded,
+            'disapproved': offboarded,  # backward-compat alias
             'onboarding_in_progress': in_progress,
+            'group_counts': {
+                'dup_pan_groups': dup_pan_groups, 'dup_pan_rows': dup_pan_rows,
+                'dup_gst_groups': dup_gst_groups, 'dup_gst_rows': dup_gst_rows,
+                'dup_fssai_groups': dup_fssai_groups, 'dup_fssai_rows': dup_fssai_rows,
+            },
         }
 
     # ==================== QA decisions (approve / disapprove) ====================

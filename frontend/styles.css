@@ -7153,3 +7153,81 @@ tr.zero-r:hover { opacity: 1; }
 .depmap-cp-kpi:active { transform: scale(0.98); }
 .depmap-cp-kpi-val { font-size: 26px; font-weight: 800; color: #1e6b5c; font-variant-numeric: tabular-nums; }
 .depmap-cp-kpi-label { font-size: 12px; font-weight: 600; color: #16323f; text-align: left; line-height: 1.35; }
+
+/* ==================== HoReCa Map — ops console (two-pane) ==================== */
+.hmap-shell { display: flex; gap: 12px; align-items: stretch; }
+.hmap-sidebar {
+    width: 312px; flex: 0 0 312px; display: flex; flex-direction: column; gap: 10px;
+    max-height: calc(100vh - 240px); min-height: 560px; overflow-y: auto;
+    padding-right: 4px;
+}
+.hmap-map-wrap { flex: 1; min-width: 0; }
+#hmap-container {
+    width: 100%; height: calc(100vh - 240px); min-height: 560px;
+    border-radius: var(--radius-lg, 12px); overflow: hidden;
+    border: 1px solid var(--gray-200);
+}
+@media (max-width: 900px) {
+    .hmap-shell { flex-direction: column; }
+    .hmap-sidebar { width: 100%; flex: none; max-height: none; min-height: 0; }
+    #hmap-container { height: 60vh; min-height: 420px; }
+}
+.hmap-summary {
+    display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+    background: var(--gray-200);
+}
+.hmap-summary-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11.5px; color: #64748b; margin-top: 6px; }
+.hmap-side-title { font-weight: 700; font-size: 13px; margin-top: 4px; }
+.hmap-seg-row, .hmap-focus-toggle {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    border: 1px solid var(--gray-200); border-radius: 10px; cursor: pointer;
+    background: var(--white); user-select: none; transition: all 0.15s cubic-bezier(0.4,0,0.2,1);
+}
+.hmap-seg-row:hover, .hmap-focus-toggle:hover { border-color: #cbd5e1; }
+.hmap-seg-row.off { opacity: 0.55; background: #f8fafc; }
+.hmap-seg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.hmap-seg-label { flex: 1; font-size: 13px; font-weight: 600; }
+.hmap-seg-count { font-size: 12px; color: #64748b; font-variant-numeric: tabular-nums; }
+.hmap-seg-state { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: #94a3b8; }
+.hmap-seg-row.on .hmap-seg-state { color: var(--primary, #1e6b5c); }
+.hmap-sub-toggle { display: flex; gap: 4px; margin: -4px 0 0 30px; }
+.hmap-sub-toggle button {
+    font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--gray-200);
+    background: var(--white); cursor: pointer; color: #64748b;
+}
+.hmap-sub-toggle button.active { background: var(--primary, #1e6b5c); color: #fff; border-color: var(--primary, #1e6b5c); }
+.hmap-block-list { display: flex; flex-direction: column; gap: 4px; }
+.hmap-block-row {
+    padding: 7px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent;
+    transition: all 0.15s cubic-bezier(0.4,0,0.2,1);
+}
+.hmap-block-row:hover { background: #f8fafc; border-color: var(--gray-200); }
+.hmap-block-row.selected { background: #eef6f4; border-color: var(--primary, #1e6b5c); }
+.hmap-block-row-top { display: flex; align-items: baseline; gap: 6px; }
+.hmap-block-name { font-size: 12.5px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hmap-block-pct { font-size: 11.5px; font-weight: 700; color: #059669; font-variant-numeric: tabular-nums; }
+.hmap-block-total { font-size: 11px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.hmap-block-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--gray-200); margin-top: 5px; }
+.hmap-target-badge { font-size: 11px; }
+/* Cluster badges: small round, tinted by dominant status */
+.hmap-cluster {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%; border-radius: 50%;
+    color: #fff; font-weight: 700; font-size: 11px; font-family: 'Inter', sans-serif;
+    border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.hmap-cluster-onb { background: #059669; }
+.hmap-cluster-pip { background: #d97706; }
+/* Block name labels — permanent tooltips, shown only when zoomed in */
+.hmap-block-label {
+    background: none; border: none; box-shadow: none;
+    font-size: 10.5px; font-weight: 700; color: #475569;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+}
+.hmap-popup-card { font-size: 12.5px; min-width: 170px; }
+.hmap-popup-card .hp-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.hmap-popup-card .hp-meta { color: #64748b; margin-bottom: 4px; }
+.hmap-popup-badge {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 700;
+}

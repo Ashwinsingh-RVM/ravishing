@@ -3438,248 +3438,437 @@ function applyHovDodCustom() {
 
 
 
+// ── HoReCa ops map (quick-commerce console style) ──
+// Two-pane: left sidebar (segments + block list + focus) / right map.
+// Design decisions: Positron basemap + Not-Reached OFF by default (heat when
+// on) to kill the 14.5k-grey-dot noise; onboarded/pipeline clustered so the
+// state view reads as a handful of tinted badges instead of 1k overlapping
+// pins; block labels only at zoom >= 10.5 (state view labels overlap badly
+// in Goa's small talukas — hover tooltips cover discovery at low zoom).
+
 let hovMapInstance = null;
-
 let hovMapHeatLayer = null;
-
 let hovMapDotsLayer = null;
-
+let hovMapCluster = null;
+let hovMapSegMarkers = { onboarded: [], pipeline: [] };
 let hovMapTalukas = null;
-
 let hovMapHeatPts = [];
+let hovMapSegOn = { onboarded: true, pipeline: true, unreached: false };
+let hovMapUnreachedMode = 'heat';   // 'heat' | 'dots'
+let hovMapTalukaStats = null;
+let hovMapFocusOn = false;
+let hovMapSelectedBlock = '';
+let hovMapLabelLayer = null;
+let hovMapCounts = { onboarded: 0, pipeline: 0, unreached: 0, onboarded_nocoord: 0 };
+let hovMapTopTargets = [];
+let hovMapStaleCount = 0;
 
+// Ray-casting point-in-polygon over a GeoJSON ring ([lng,lat] pairs)
+function hovPointInRing(lat, lng, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+}
 
+function hovPointInFeature(lat, lng, geom) {
+    if (!geom) return false;
+    const polys = geom.type === 'Polygon' ? [geom.coordinates] : (geom.type === 'MultiPolygon' ? geom.coordinates : []);
+    return polys.some(rings => rings[0] && hovPointInRing(lat, lng, rings[0])
+        && !rings.slice(1).some(hole => hovPointInRing(lat, lng, hole)));
+}
+
+// Popup links: Street View + Directions to the exact pin
+function hovMapPopupLinks(lat, lng) {
+    const btnStyle = 'display:inline-block;padding:3px 10px;border:1.5px solid #1e6b5c;border-radius:8px;' +
+        'color:#1e6b5c;font-size:12px;font-weight:600;text-decoration:none;margin-right:6px;';
+    return `<div style="margin-top:6px;">` +
+        `<a href="https://www.google.com/maps?layer=c&cbll=${lat},${lng}" target="_blank" rel="noopener" style="${btnStyle}">&#128247; Street View</a>` +
+        `<a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" rel="noopener" style="${btnStyle}">&#129517; Directions</a>` +
+        `<div class="hint" style="margin-top:4px;font-size:11px;">&#128247; See the storefront before you visit</div></div>`;
+}
+
+// Onboardings older than this with no fresher Superset update are flagged
+// as possibly "paper onboarding" (stale) on the map.
+const HOV_STALE_DAYS = 60;
+
+function hovMapPinIsStale(p) {
+    if (!p.onboarded || !p.ob_date) return false;
+    const d = new Date(String(p.ob_date).split(' ')[0]);
+    if (isNaN(d)) return false;
+    return (Date.now() - d.getTime()) > HOV_STALE_DAYS * 86400000;
+}
+
+const HOV_SEG_META = {
+    onboarded: { label: 'Onboarded', color: '#059669' },
+    pipeline: { label: 'Pipeline', color: '#d97706' },
+    unreached: { label: 'Not Reached', color: '#a8a29e' },
+};
+
+function hovMapLoadAsset(tag, url) {
+    return new Promise(resolve => {
+        const el = document.createElement(tag);
+        if (tag === 'link') { el.rel = 'stylesheet'; el.href = url; resolve(); }
+        else { el.src = url; el.onload = resolve; el.onerror = resolve; }
+        document.head.appendChild(el);
+    });
+}
 
 function initHovMap() {
-
     if (hovMapInstance) {
-
         setTimeout(() => hovMapInstance.invalidateSize(), 100);
-
         return;
-
     }
-
     loadLeaflet(async () => {
-
-        // leaflet.heat plugin for the heatmap layer
-
-        if (!L.heatLayer) {
-
-            await new Promise(resolve => {
-
-                const s = document.createElement('script');
-
-                s.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
-
-                s.onload = resolve; s.onerror = resolve;
-
-                document.head.appendChild(s);
-
-            });
-
+        // Plugins: leaflet.heat (density) + markercluster (pin grouping)
+        const loads = [];
+        if (!L.heatLayer) loads.push(hovMapLoadAsset('script', 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js'));
+        if (!L.markerClusterGroup) {
+            hovMapLoadAsset('link', 'https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css');
+            loads.push(hovMapLoadAsset('script', 'https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js'));
         }
+        await Promise.all(loads);
 
         const container = document.getElementById('hmap-container');
-
         try {
-
             const [res, geoRes] = await Promise.all([
-
                 fetch(`${API_BASE}/horeca/map`),
-
                 fetch('/static/data/horeca/horeca_taluka.geojson'),
-
             ]);
-
             if (!res.ok) throw new Error('Failed to load map data');
-
             const data = await res.json();
-
             const talukaGeo = geoRes.ok ? await geoRes.json() : null;
-
             container.innerHTML = '';
 
-            // Locked to Goa: can't pan to other states, can't zoom out past
-
-            // the state extent (same idea as the RVM Deploy map).
-
+            // Locked to Goa: can't pan to other states / zoom out past state
             const GOA_BOUNDS = L.latLngBounds([14.85, 73.60], [15.85, 74.45]);
-
             const map = L.map('hmap-container', {
-
                 preferCanvas: true, zoomControl: true,
-
                 maxBounds: GOA_BOUNDS.pad(0.05), maxBoundsViscosity: 1.0,
-
                 minZoom: 9.25, maxZoom: 18, zoomSnap: 0.25,
-
             });
-
             hovMapInstance = map;
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-
+            // Positron: calm, low-contrast basemap — data carries the color
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OSM &copy; CARTO', maxZoom: 19,
-
             }).addTo(map);
-
             map.fitBounds(GOA_BOUNDS);
 
-            // Block (taluka) boundaries + dropdown + outside-Goa mask
-
+            // Outside-Goa mask (soft) + block borders + labels
             if (talukaGeo) {
-
                 hovMapTalukas = {};
-
-                const blockSel = document.getElementById('hmap-block');
-
-                // Mask: a world-sized polygon with every taluka polygon cut
-
-                // out as a hole — everything outside Goa is painted over, so
-
-                // neighbouring states are visually removed.
-
                 const holes = [];
-
                 (talukaGeo.features || []).forEach(f => {
-
                     const g = f.geometry;
-
                     if (!g) return;
-
                     const polys = g.type === 'Polygon' ? [g.coordinates] : (g.type === 'MultiPolygon' ? g.coordinates : []);
-
                     polys.forEach(rings => {
-
                         if (rings[0]) holes.push(rings[0].map(([lng, lat]) => [lat, lng]));
-
                     });
-
                 });
-
                 const worldRing = [[-89, -179], [-89, 179], [89, 179], [89, -179]];
-
                 L.polygon([worldRing, ...holes], {
-
-                    stroke: false, fillColor: '#f6f7f9', fillOpacity: 0.92, interactive: false,
-
+                    stroke: false, fillColor: '#f8f9fa', fillOpacity: 0.95, interactive: false,
                 }).addTo(map);
 
-                // Clear, solid block borders on top of the mask
-
+                hovMapLabelLayer = L.layerGroup();
                 L.geoJSON(talukaGeo, {
-
-                    style: { color: '#334155', weight: 2.5, fillOpacity: 0, opacity: 0.9 },
-
+                    style: { color: '#94a3b8', weight: 1.5, fillOpacity: 0, opacity: 0.9 },
                     onEachFeature: (f, layer) => {
-
                         const nm = (f.properties && (f.properties.name || f.properties.NAME)) || 'Block';
-
-                        layer.bindTooltip(nm, { direction: 'center' });
-
+                        layer.bindTooltip(nm, { direction: 'center', sticky: true });
+                        layer.on('click', () => hovMapSelectBlock(nm));
                         hovMapTalukas[nm] = layer;
-
-                        const opt = document.createElement('option');
-
-                        opt.value = nm; opt.textContent = nm;
-
-                        blockSel.appendChild(opt);
-
+                        // Permanent name label, only mounted at zoom >= 10.5
+                        hovMapLabelLayer.addLayer(L.marker(layer.getBounds().getCenter(), {
+                            interactive: false,
+                            icon: L.divIcon({ className: 'hmap-block-label', html: nm, iconSize: null }),
+                        }));
                     },
-
                 }).addTo(map);
-
+                map.on('zoomend', () => {
+                    const show = map.getZoom() >= 10.5;
+                    if (show && !map.hasLayer(hovMapLabelLayer)) hovMapLabelLayer.addTo(map);
+                    if (!show && map.hasLayer(hovMapLabelLayer)) map.removeLayer(hovMapLabelLayer);
+                });
             }
 
-            // Unreached density: dots layer (default) + heat layer (toggle)
-
+            // Not Reached: heat points + (optional) dot layer, OFF by default
             hovMapHeatPts = (data.heat || []).map(([lat, lng]) => [lat, lng, 0.5]);
-
             hovMapDotsLayer = L.layerGroup((data.heat || []).map(([lat, lng]) =>
-
                 L.circleMarker([lat, lng], { radius: 2, color: '#a8a29e', weight: 0, fillOpacity: 0.35 })
+            ));
 
-            )).addTo(map);
-
-            // Pipeline + onboarded pins (always on top)
-
+            // Onboarded / pipeline pins in ONE cluster group so mixed areas
+            // read as a single badge tinted by the dominant status.
+            hovMapSegMarkers = { onboarded: [], pipeline: [] };
+            hovMapStaleCount = 0;
             (data.pins || []).forEach(p => {
-
-                const color = p.onboarded ? '#059669' : '#d97706';
-
-                L.circleMarker([p.lat, p.lng], { radius: 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.9 })
-
-                    .bindPopup(`<strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.type || '')} &middot; ${escapeHtml(p.city || '')}<br>${escapeHtml(p.status)}`)
-
-                    .addTo(map);
-
+                const onb = !!p.onboarded;
+                const stale = hovMapPinIsStale(p);
+                if (stale) hovMapStaleCount++;
+                const color = onb ? '#059669' : '#d97706';
+                const badgeBg = onb ? '#d1fae5' : '#fef3c7';
+                // Stale onboardings ("paper onboarding" risk): hollow, faded ring
+                const marker = L.circleMarker([p.lat, p.lng], stale ? {
+                    radius: 7, color: '#059669', weight: 2, dashArray: '3,3',
+                    fillColor: '#d1fae5', fillOpacity: 0.35, hovOnboarded: onb,
+                } : {
+                    radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95,
+                    hovOnboarded: onb,
+                }).bindPopup(`<div class="hmap-popup-card">
+                    <div class="hp-name">${escapeHtml(p.name)}</div>
+                    <div class="hp-meta">${escapeHtml(p.type || '')} &middot; ${escapeHtml(p.city || '')}</div>
+                    <span class="hmap-popup-badge" style="background:${badgeBg};color:${color};">${escapeHtml(p.status)}</span>
+                    ${p.ob_date ? `<div class="hint" style="font-size:11px;margin-top:2px;">Onboarded ${escapeHtml(String(p.ob_date).split(' ')[0])}${stale ? ' &middot; <span style="color:#b45309;">stale &gt;' + HOV_STALE_DAYS + 'd</span>' : ''}</div>` : ''}
+                    ${hovMapPopupLinks(p.lat, p.lng)}</div>`);
+                hovMapSegMarkers[onb ? 'onboarded' : 'pipeline'].push(marker);
             });
+            hovMapCluster = (L.markerClusterGroup ? L.markerClusterGroup({
+                maxClusterRadius: 46, showCoverageOnHover: false,
+                spiderfyOnMaxZoom: true, disableClusteringAtZoom: 15,
+                iconCreateFunction: (cluster) => {
+                    const kids = cluster.getAllChildMarkers();
+                    let onb = 0;
+                    kids.forEach(k => { if (k.options.hovOnboarded) onb++; });
+                    const cls = onb * 2 >= kids.length ? 'hmap-cluster-onb' : 'hmap-cluster-pip';
+                    const n = kids.length;
+                    const size = n >= 100 ? 40 : n >= 25 ? 34 : 28;
+                    return L.divIcon({
+                        html: `<div class="hmap-cluster ${cls}">${n}</div>`,
+                        className: '', iconSize: [size, size],
+                    });
+                },
+            }) : L.layerGroup()).addTo(map);
+            hovMapSegOn = { onboarded: true, pipeline: true, unreached: false };
+            hovMapCluster.addLayers
+                ? hovMapCluster.addLayers([...hovMapSegMarkers.onboarded, ...hovMapSegMarkers.pipeline])
+                : [...hovMapSegMarkers.onboarded, ...hovMapSegMarkers.pipeline].forEach(mk => hovMapCluster.addLayer(mk));
 
             const c = data.counts || {};
+            hovMapCounts = {
+                onboarded: c.onboarded || 0,
+                pipeline: c.pipeline || 0,
+                unreached: c.unreached || 0,
+                onboarded_nocoord: c.onboarded_nocoord || 0,
+            };
 
-            const countsEl = document.getElementById('hmap-counts');
+            // Per-taluka stats via point-in-polygon (feeds block list + Focus)
+            if (talukaGeo) {
+                const feats = (talukaGeo.features || []).filter(f => f.geometry);
+                const stats = {};
+                feats.forEach(f => {
+                    const nm = (f.properties && (f.properties.name || f.properties.NAME)) || 'Block';
+                    stats[nm] = { name: nm, unreached: 0, pipeline: 0, onboarded: 0, ob28: 0, obPrev28: 0 };
+                });
+                const assign = (lat, lng, field, pin) => {
+                    for (const f of feats) {
+                        if (hovPointInFeature(lat, lng, f.geometry)) {
+                            const nm = (f.properties && (f.properties.name || f.properties.NAME)) || 'Block';
+                            stats[nm][field] += 1;
+                            // Onboarding velocity: last 4 weeks vs the 4 before
+                            if (pin && pin.onboarded && pin.ob_date) {
+                                const d = new Date(String(pin.ob_date).split(' ')[0]);
+                                if (!isNaN(d)) {
+                                    const age = (Date.now() - d.getTime()) / 86400000;
+                                    if (age <= 28) stats[nm].ob28 += 1;
+                                    else if (age <= 56) stats[nm].obPrev28 += 1;
+                                }
+                            }
+                            return;
+                        }
+                    }
+                };
+                (data.heat || []).forEach(([lat, lng]) => assign(lat, lng, 'unreached'));
+                (data.pins || []).forEach(p => assign(p.lat, p.lng, p.onboarded ? 'onboarded' : 'pipeline', p));
+                Object.values(stats).forEach(s => {
+                    const worked = s.onboarded + s.pipeline;
+                    s.conversion = worked > 0 ? s.onboarded / worked : 0;
+                    s.opportunity = Math.round(s.unreached * (1 - s.conversion));
+                });
+                hovMapTalukaStats = stats;
+                hovMapTopTargets = Object.values(stats)
+                    .sort((a, b) => b.opportunity - a.opportunity)
+                    .slice(0, 3).map(s => s.name);
+            }
 
-            if (countsEl) countsEl.textContent = `${(c.onboarded || 0).toLocaleString()} onboarded · ${(c.pipeline || 0).toLocaleString()} pipeline · ${(c.unreached || 0).toLocaleString()} unreached`;
-
+            hovMapRenderSidebar();
         } catch (e) {
-
             container.innerHTML = `<p class="hint" style="padding:20px;">Could not load map: ${escapeHtml(e.message)}</p>`;
-
         }
-
     });
-
 }
 
+// ── Sidebar (summary strip + segment rows + block list + focus) ──
+function hovMapRenderSidebar() {
+    const total = Math.max(1, hovMapCounts.onboarded + hovMapCounts.pipeline + hovMapCounts.unreached);
+    const pct = k => (hovMapCounts[k] / total * 100);
 
-
-function hovMapToggleHeat(on) {
-
-    if (!hovMapInstance) return;
-
-    if (on) {
-
-        if (hovMapDotsLayer) hovMapInstance.removeLayer(hovMapDotsLayer);
-
-        if (L.heatLayer) {
-
-            hovMapHeatLayer = hovMapHeatLayer || L.heatLayer(hovMapHeatPts, { radius: 18, blur: 22, maxZoom: 13 });
-
-            hovMapHeatLayer.addTo(hovMapInstance);
-
+    const summaryEl = document.getElementById('hmap-summary');
+    if (summaryEl) {
+        summaryEl.innerHTML = ['onboarded', 'pipeline', 'unreached'].map(k =>
+            `<div title="${HOV_SEG_META[k].label}: ${hovMapCounts[k].toLocaleString()} (${pct(k).toFixed(1)}%)" style="width:${pct(k)}%;background:${HOV_SEG_META[k].color};"></div>`
+        ).join('');
+        summaryEl.insertAdjacentHTML('afterend', '');
+        let legend = summaryEl.nextElementSibling;
+        if (!legend || !legend.classList.contains('hmap-summary-legend')) {
+            legend = document.createElement('div');
+            legend.className = 'hmap-summary-legend';
+            summaryEl.after(legend);
         }
-
-    } else {
-
-        if (hovMapHeatLayer) hovMapInstance.removeLayer(hovMapHeatLayer);
-
-        if (hovMapDotsLayer) hovMapDotsLayer.addTo(hovMapInstance);
-
+        legend.innerHTML = ['onboarded', 'pipeline', 'unreached'].map(k =>
+            `<span><span style="color:${HOV_SEG_META[k].color};">&#9679;</span> ${HOV_SEG_META[k].label} ${pct(k).toFixed(1)}%</span>`
+        ).join('') +
+            ((hovMapCounts.onboarded_nocoord || 0) ? `<span class="hint" title="Superset ACTIVE businesses with no coordinates anywhere (Enhanced or app_sheet)">+${hovMapCounts.onboarded_nocoord.toLocaleString()} without location</span>` : '') +
+            (hovMapStaleCount ? `<span class="hint" style="color:#b45309;" title="Onboarded pins whose Superset updated date is older than ${HOV_STALE_DAYS} days — possible paper onboarding, shown as hollow dashed rings">&#9676; ${hovMapStaleCount.toLocaleString()} stale &gt;${HOV_STALE_DAYS}d</span>` : '');
     }
 
+    const segEl = document.getElementById('hmap-seg-rows');
+    if (segEl) {
+        segEl.innerHTML = ['onboarded', 'pipeline', 'unreached'].map(k => {
+            const on = hovMapSegOn[k];
+            const sub = (k === 'unreached' && on) ? `
+                <div class="hmap-sub-toggle" onclick="event.stopPropagation();">
+                    <button class="${hovMapUnreachedMode === 'heat' ? 'active' : ''}" onclick="hovMapSetUnreachedMode('heat')">Heat</button>
+                    <button class="${hovMapUnreachedMode === 'dots' ? 'active' : ''}" onclick="hovMapSetUnreachedMode('dots')">Dots</button>
+                </div>` : '';
+            return `<div class="hmap-seg-row ${on ? 'on' : 'off'}" onclick="hovMapSegToggle('${k}')">
+                <span class="hmap-seg-dot" style="background:${HOV_SEG_META[k].color};"></span>
+                <span class="hmap-seg-label">${HOV_SEG_META[k].label}</span>
+                <span class="hmap-seg-count">${hovMapCounts[k].toLocaleString()}</span>
+                <span class="hmap-seg-state">${on ? 'ON' : 'OFF'}</span>
+            </div>${sub}`;
+        }).join('');
+    }
+
+    const listEl = document.getElementById('hmap-block-list');
+    if (listEl && hovMapTalukaStats) {
+        const blocks = Object.values(hovMapTalukaStats).sort((a, b) => b.onboarded - a.onboarded);
+        const rowHtml = (s) => {
+            const t = Math.max(1, s.onboarded + s.pipeline + s.unreached);
+            const obp = s.onboarded / t * 100, pip = s.pipeline / t * 100, unp = s.unreached / t * 100;
+            const target = hovMapTopTargets.includes(s.name)
+                ? ` <span class="hmap-target-badge" title="Top opportunity: ${s.unreached.toLocaleString()} unreached &times; ${(100 - s.conversion * 100).toFixed(0)}% non-conversion = ${s.opportunity.toLocaleString()}">&#127919;</span>` : '';
+            // Velocity: onboardings in last 4 weeks vs the 4 weeks before
+            const v28 = s.ob28 || 0, vPrev = s.obPrev28 || 0;
+            let vel = '';
+            if (v28 || vPrev) {
+                const up = v28 > vPrev, flat = v28 === vPrev;
+                vel = ` <span title="Onboarding velocity: ${v28} in last 4 weeks vs ${vPrev} in the 4 weeks before" style="font-size:10px;color:${flat ? '#94a3b8' : up ? '#059669' : '#dc2626'};">${flat ? '&#9654;' : up ? '&#9650;' : '&#9660;'}${v28}</span>`;
+            }
+            return `<div class="hmap-block-row ${hovMapSelectedBlock === s.name ? 'selected' : ''}" onclick="hovMapSelectBlock('${escapeHtml(s.name)}')">
+                <div class="hmap-block-row-top">
+                    <span class="hmap-block-name">${escapeHtml(s.name)}${target}${vel}</span>
+                    <span class="hmap-block-pct">${obp.toFixed(1)}%</span>
+                    <span class="hmap-block-total">${(s.onboarded + s.pipeline + s.unreached).toLocaleString()}</span>
+                </div>
+                <div class="hmap-block-bar" title="${s.onboarded} onboarded · ${s.pipeline} pipeline · ${s.unreached.toLocaleString()} not reached">
+                    <div style="width:${obp}%;background:#059669;"></div>
+                    <div style="width:${pip}%;background:#d97706;"></div>
+                    <div style="width:${unp}%;background:#d6d3d1;"></div>
+                </div>
+            </div>`;
+        };
+        listEl.innerHTML = `<div class="hmap-block-row ${hovMapSelectedBlock === '' ? 'selected' : ''}" onclick="hovMapSelectBlock('')">
+            <div class="hmap-block-row-top"><span class="hmap-block-name"><strong>All Goa</strong></span>
+            <span class="hmap-block-total">${(hovMapCounts.onboarded + hovMapCounts.pipeline + hovMapCounts.unreached).toLocaleString()}</span></div>
+        </div>` + blocks.map(rowHtml).join('');
+    }
+
+    const focusEl = document.getElementById('hmap-focus-row');
+    if (focusEl) {
+        focusEl.innerHTML = `<div class="hmap-focus-toggle ${hovMapFocusOn ? 'on' : ''}" onclick="hovMapToggleFocus(!hovMapFocusOn)"
+            title="Shades blocks by opportunity = unreached x (1 - conversion). Darker = bigger opportunity. Top-3 marked with a target badge in the list.">
+            <span class="hmap-seg-dot" style="background:${hovMapFocusOn ? '#dc2626' : '#cbd5e1'};"></span>
+            <span class="hmap-seg-label">Focus mode <span class="profile-hint">— where to target next</span></span>
+            <span class="hmap-seg-state" style="${hovMapFocusOn ? 'color:#dc2626;' : ''}">${hovMapFocusOn ? 'ON' : 'OFF'}</span>
+        </div>`;
+    }
 }
 
+function hovMapApplyUnreached() {
+    if (!hovMapInstance) return;
+    if (hovMapHeatLayer) hovMapInstance.removeLayer(hovMapHeatLayer);
+    if (hovMapDotsLayer) hovMapInstance.removeLayer(hovMapDotsLayer);
+    if (!hovMapSegOn.unreached) return;
+    if (hovMapUnreachedMode === 'heat' && L.heatLayer) {
+        hovMapHeatLayer = hovMapHeatLayer || L.heatLayer(hovMapHeatPts, {
+            radius: 14, blur: 18, maxZoom: 13,
+            gradient: { 0.2: '#0d9488', 0.5: '#f59e0b', 0.8: '#ef4444' },
+        });
+        hovMapHeatLayer.addTo(hovMapInstance);
+    } else if (hovMapDotsLayer) {
+        hovMapDotsLayer.addTo(hovMapInstance);
+    }
+}
 
+function hovMapSetUnreachedMode(mode) {
+    hovMapUnreachedMode = mode;
+    hovMapApplyUnreached();
+    hovMapRenderSidebar();
+}
+
+function hovMapSegToggle(kind) {
+    hovMapSegOn[kind] = !hovMapSegOn[kind];
+    if (kind === 'unreached') {
+        hovMapApplyUnreached();
+    } else if (hovMapCluster) {
+        const mks = hovMapSegMarkers[kind] || [];
+        if (hovMapSegOn[kind]) {
+            hovMapCluster.addLayers ? hovMapCluster.addLayers(mks) : mks.forEach(mk => hovMapCluster.addLayer(mk));
+        } else {
+            hovMapCluster.removeLayers ? hovMapCluster.removeLayers(mks) : mks.forEach(mk => hovMapCluster.removeLayer(mk));
+        }
+    }
+    hovMapRenderSidebar();
+}
+
+// Focus mode: shade talukas by opportunity = unreached x (1 - conversion)
+function hovMapToggleFocus(on) {
+    hovMapFocusOn = !!on;
+    if (hovMapInstance && hovMapTalukas && hovMapTalukaStats) {
+        const stats = Object.values(hovMapTalukaStats);
+        const maxOpp = Math.max(1, ...stats.map(s => s.opportunity));
+        Object.entries(hovMapTalukas).forEach(([nm, layer]) => {
+            if (hovMapFocusOn) {
+                const s = hovMapTalukaStats[nm];
+                const t = s ? s.opportunity / maxOpp : 0;
+                const color = t > 0.66 ? '#dc2626' : t > 0.33 ? '#f59e0b' : '#fcd34d';
+                layer.setStyle({ fillColor: color, fillOpacity: 0.18 + t * 0.35 });
+            } else {
+                layer.setStyle({ fillOpacity: 0 });
+            }
+        });
+    }
+    hovMapRenderSidebar();
+}
+
+function hovMapSelectBlock(name) {
+    hovMapSelectedBlock = name || '';
+    if (hovMapTalukas) {
+        Object.entries(hovMapTalukas).forEach(([nm, layer]) => {
+            layer.setStyle(nm === hovMapSelectedBlock
+                ? { color: '#1e6b5c', weight: 3, opacity: 1 }
+                : { color: '#94a3b8', weight: 1.5, opacity: 0.9 });
+        });
+    }
+    hovMapGoBlock(hovMapSelectedBlock);
+    hovMapRenderSidebar();
+}
 
 function hovMapGoBlock(name) {
-
     if (!hovMapInstance) return;
-
     if (!name) {
-
         hovMapInstance.fitBounds(L.latLngBounds([14.85, 73.60], [15.85, 74.45]));
-
         return;
-
     }
-
     const layer = hovMapTalukas && hovMapTalukas[name];
-
     if (layer) hovMapInstance.fitBounds(layer.getBounds(), { padding: [20, 20] });
-
 }
-
 
 
 function renderHovBarChart(title, rows, kind) {
@@ -3768,7 +3957,7 @@ function renderHovMovementTable(kind, rows, shown, filterBar) {
 
     if (!rows.length) { html += '<p class="hint">No data for this range</p></div>'; return html; }
 
-    const slice = rows.slice(0, shown);
+    const slice = rows;  // render ALL rows — the wrapper scrolls
 
     const maxOnboarded = Math.max(1, ...slice.map(r => r.onboarded));
 
@@ -3818,7 +4007,7 @@ function renderHovMovementTable(kind, rows, shown, filterBar) {
 
     html += `</tbody><tfoot><tr>
 
-        <td>Total (${slice.length} ${kind === 'dod' ? 'days' : 'months'} shown)</td>
+        <td>Total — full range (${slice.length} ${kind === 'dod' ? 'days' : 'months'})</td>
 
         <td>${tot.reached.toLocaleString()}</td>
 
@@ -3830,10 +4019,10 @@ function renderHovMovementTable(kind, rows, shown, filterBar) {
 
     </tr></tfoot></table></div>`;
 
-    if (rows.length > shown) {
-
-        html += `<button class="btn btn-outline btn-small" style="margin-top:10px;" onclick="hovShowMore('${kind}')">Show more (${rows.length - shown} more)</button>`;
-
+    // When a filter narrows the range, also show the overall (unfiltered) totals
+    const allTot = (hovData.totals || {})[kind];
+    if (allTot && slice.length < (hovData[kind] || []).length) {
+        html += `<p class="hint" style="margin-top:8px;">Overall (all time): ${allTot.reached.toLocaleString()} reached · ${allTot.started.toLocaleString()} started · ${allTot.onboarded.toLocaleString()} onboarded · ${allTot.conv}% conv</p>`;
     }
 
     // Onboarded rows are Superset-dated (updated_day); anything without a
@@ -5756,6 +5945,18 @@ function initHorecaDashSubTabs() {
 
     _horecaDashSubTabsReady = true;
 
+    // Insights is admin-only — associates never see the QA/classification
+
+    // layer (the backend enforces this on the APIs too).
+
+    const insightsBtn = document.querySelector('#dash-horeca .hdep-subtab[data-horeca-dash-tab="superset"]');
+
+    if (insightsBtn && (!currentUser || currentUser.role !== 'admin')) {
+
+        insightsBtn.style.display = 'none';
+
+    }
+
     document.querySelectorAll('#dash-horeca .hdep-subtab').forEach(btn => {
 
         btn.addEventListener('click', () => {
@@ -5776,6 +5977,8 @@ function initHorecaDashSubTabs() {
 
             const mapView = document.getElementById('horeca-dash-map-view');
 
+            const assocView = document.getElementById('horeca-dash-associates-view');
+
             if (overviewView) overviewView.style.display = tab === 'overview' ? '' : 'none';
 
             if (dailyView) dailyView.style.display = tab === 'daily' ? '' : 'none';
@@ -5786,9 +5989,13 @@ function initHorecaDashSubTabs() {
 
             if (mapView) mapView.style.display = tab === 'map' ? '' : 'none';
 
+            if (assocView) assocView.style.display = tab === 'associates' ? '' : 'none';
+
             if (tab === 'superset') loadHSupersetValidation();
 
             if (tab === 'map') initHovMap();
+
+            if (tab === 'associates') loadHovAssociates();
 
         });
 
@@ -5796,6 +6003,88 @@ function initHorecaDashSubTabs() {
 
 }
 
+
+
+// ── Associates sub-tab (reached/onboarded per associate per period) ──
+
+let hovAssocGran = 'month';
+let hovAssocData = null;
+
+function hovAssocSetGran(gran) {
+    hovAssocGran = gran;
+    document.querySelectorAll('.hassoc-gran').forEach(b => b.classList.toggle('active', b.dataset.gran === gran));
+    loadHovAssociates(true);
+}
+
+async function loadHovAssociates(force) {
+    const matrixEl = document.getElementById('hassoc-matrix');
+    if (hovAssocData && !force) { renderHovAssociates(); return; }
+    if (matrixEl) matrixEl.innerHTML = '<div class="hcrm-dash-loading">Loading...</div>';
+    try {
+        const res = await fetch(`${API_BASE}/horeca/associates/performance?granularity=${hovAssocGran}`);
+        if (!res.ok) throw new Error('Failed to load associate performance');
+        hovAssocData = await res.json();
+        renderHovAssociates();
+    } catch (e) {
+        if (matrixEl) matrixEl.innerHTML = `<p class="hint">Could not load: ${escapeHtml(e.message)}</p>`;
+    }
+}
+
+function renderHovAssociates() {
+    const d = hovAssocData;
+    if (!d) return;
+
+    // Leaderboard: all-time onboarded per associate (sorted by backend)
+    const sumEl = document.getElementById('hassoc-summary');
+    if (sumEl) {
+        sumEl.innerHTML = (d.summary || [])
+            .filter(s => s.reached > 0 || s.onboarded > 0)
+            .map((s, i) => renderHovKpiCard(
+                `${i < 3 && s.onboarded > 0 ? ['🥇', '🥈', '🥉'][i] + ' ' : ''}${escapeHtml(s.name)}`,
+                s.onboarded.toLocaleString(),
+                `onboarded · ${s.reached.toLocaleString()} reached · ${s.conversion}% conv`,
+                i === 0 ? 'outcome' : undefined))
+            .join('') || '<p class="hint">No associate activity yet</p>';
+    }
+
+    const matrixEl = document.getElementById('hassoc-matrix');
+    if (!matrixEl) return;
+    if (d.reached_source === 'approximate_fallback' && !document.getElementById('hassoc-approx-note')) {
+        matrixEl.insertAdjacentHTML('beforebegin',
+            '<p id="hassoc-approx-note" class="hint" style="margin-bottom:8px;color:#b45309;">Reached counts are approximate (dated from each record\'s last update) — real per-event tracking starts as status changes are logged in the web CRM.</p>');
+    }
+    const rows = d.matrix || [];
+    if (!rows.length) { matrixEl.innerHTML = '<p class="hint">No data for this period</p>'; return; }
+
+    // Keep columns readable: whitelist associates with any activity (max 10) + Other
+    const activity = {};
+    (d.associates || []).forEach(a => { activity[a] = 0; });
+    rows.forEach(r => Object.entries(r.associates || {}).forEach(([a, v]) => {
+        activity[a] = (activity[a] || 0) + v.reached + v.onboarded;
+    }));
+    let cols = (d.associates || []).filter(a => a !== 'Other' && activity[a] > 0).slice(0, 10);
+    if ((activity['Other'] || 0) > 0) cols = cols.concat('Other');
+
+    const fmtPeriod = p => d.granularity === 'month'
+        ? `${HOV_MONTHS[Number(p.split('-')[1]) - 1]} ${p.slice(0, 4)}`
+        : (d.granularity === 'week' ? `wk of ${p.slice(5)}` : p);
+
+    let html = '<table class="hov-mv-table"><thead><tr style="position:sticky;top:0;background:var(--white,#fff);z-index:2;">' +
+        `<th style="text-align:left;">${d.granularity === 'month' ? 'Month' : d.granularity === 'week' ? 'Week' : 'Day'}</th>` +
+        cols.map(a => `<th title="reached / onboarded">${escapeHtml(a.split(' ')[0])}</th>`).join('') +
+        '<th>Total</th></tr></thead><tbody>';
+    rows.forEach(r => {
+        html += `<tr><td style="text-align:left;white-space:nowrap;">${escapeHtml(fmtPeriod(r.period))}</td>`;
+        cols.forEach(a => {
+            const v = (r.associates || {})[a] || { reached: 0, onboarded: 0 };
+            const dim = (v.reached + v.onboarded) === 0;
+            html += `<td style="${dim ? 'color:#cbd5e1;' : ''}white-space:nowrap;">${v.reached} / <strong>${v.onboarded}</strong></td>`;
+        });
+        html += `<td style="white-space:nowrap;"><strong>${r.totals.reached} / ${r.totals.onboarded}</strong></td></tr>`;
+    });
+    html += '</tbody></table>';
+    matrixEl.innerHTML = html;
+}
 
 
 function initHDaily() {
@@ -6424,7 +6713,7 @@ let hsupersetTotalPages = 1;
 
 let hsvData = null;
 
-let hsvActiveAudit = 'qa_name_matches';
+let hsvActiveAudit = 'qa_dup_pan';
 
 
 
@@ -6482,7 +6771,7 @@ function renderHsvKPIs() {
 
     const cards = [
 
-        renderHovKpiCard('Total Onboarded', n(c.total_onboarded ?? d.onboarded_active), 'Superset ACTIVE', 'outcome'),
+        renderHovKpiCard('Onboarded (after QA)', n(c.onboarded_after_qa ?? c.total_onboarded ?? d.onboarded_active), 'Superset ACTIVE &minus; offboarded', 'outcome'),
 
         renderHovKpiCard('Onboarding In Progress', n(c.onboarding_in_progress_count ?? d.pending_draft), 'DRAFT — started, not completed', 'runrate'),
 
@@ -6490,13 +6779,17 @@ function renderHsvKPIs() {
 
         renderHovKpiCard('New Leads', n(c.new_leads), 'Walk-In / Referral / other non-Google'),
 
-        renderHovKpiCard('Organic', n(c.organic_count), 'no ID or name trace — came on their own', 'outcome'),
+        renderHovKpiCard('Organic', n(c.organic_count), 'no PAN/GST captured on our side — came on their own', 'outcome'),
 
-        renderHovKpiCard('Inorganic', n(c.inorganic_count), 'PAN/GST found with us — associate-driven', 'outcome'),
+        renderHovKpiCard('Inorganic', n(c.inorganic_count), 'PAN/GST captured on BOTH sides — associate-driven', 'outcome'),
 
-        renderHovKpiCard('QA Review Pending', n(c.qa_pending), 'uncertain — needs approve / disapprove'),
+        renderHovKpiCard('QA Review Pending', n(c.qa_pending), 'unique businesses with duplicate-ID issues'),
 
     ];
+
+    if ((c.offboarded_count || 0) > 0) {
+        cards.push(renderHovKpiCard('Offboarded', n(c.offboarded_count), 'disapproved in QA — excluded from counts', 'danger'));
+    }
 
     const el = document.getElementById('hsv-kpis');
 
@@ -6514,29 +6807,21 @@ function renderHsvMethodBar() {
 
     const c = hsvData.classification || {};
 
-    // Plain-language composition: every onboarded business in Superset was
+    const afterQa = c.onboarded_after_qa ?? c.total_onboarded ?? 0;
 
-    // looked up in OUR records (Enhanced + app_sheet). This shows how each
-
-    // one was (or wasn't) found — one segment per outcome, summing to 100%.
+    // Composition: every onboarded-after-QA business is EXACTLY ONE of
+    // Inorganic (PAN/GST captured on both sides) or Organic (everything
+    // else). QA queues are overlays and are shown separately below.
 
     const groups = [
 
-        { label: 'Found by PAN / GST', value: (c.inorganic_count || 0), color: '#059669',
+        { label: 'Inorganic — PAN/GST on both sides', value: (c.inorganic_count || 0), color: '#059669',
 
-          desc: 'The tax ID the associate captured matches exactly — proven associate-driven.' },
+          desc: 'The tax ID the associate captured matches the Superset record exactly — proven associate-driven.' },
 
-        { label: 'Found by name only', value: (c.qa_name_matches || []).length, color: 'var(--primary)',
+        { label: 'Organic — everything else', value: (c.organic_count || 0), color: '#a8a29e',
 
-          desc: 'Same name & area in our records, but no tax ID captured yet — needs a quick confirm.' },
-
-        { label: 'Duplicate IDs in Superset', value: (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length, color: '#d97706',
-
-          desc: 'Two or more Superset businesses share one PAN/GST — decide if multi-outlet or duplicate.' },
-
-        { label: 'Not found with us', value: (c.organic_count || 0), color: '#a8a29e',
-
-          desc: 'No ID or name trace in our funnel — likely organic (came on their own).' },
+          desc: 'No PAN/GST link between Superset and our records — likely came on their own.' },
 
     ];
 
@@ -6564,27 +6849,21 @@ function renderHsvMethodBar() {
 
         </div>`).join('');
 
-    // Funnel-style split: Onboarded breaks into Inorganic + Organic + QA,
-
-    // the three always summing back to the onboarded total.
-
-    const qaTotal = (c.qa_name_matches || []).length + (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length;
+    // Funnel-style split: Onboarded (after QA) = Inorganic + Organic.
 
     const splitSteps = [
 
-        { label: 'Onboarded', value: c.total_onboarded || 0, icon: '✅', cls: 'step-installed' },
+        { label: 'Onboarded (after QA)', value: afterQa, icon: '✅', cls: 'step-installed' },
 
         { label: 'Inorganic (associate-driven)', value: c.inorganic_count || 0, icon: '🤝', cls: 'step-unlocked' },
 
         { label: 'Organic (on their own)', value: c.organic_count || 0, icon: '🌱', cls: 'step-vps' },
 
-        { label: 'QA Review', value: qaTotal, icon: '⚠️', cls: 'step-email' },
-
     ];
 
     const splitFunnel = `<div class="holistic-funnel" style="margin-bottom:14px;"><div class="funnel-flow">${splitSteps.map((s, i) => `
 
-        <div class="funnel-step ${s.cls}" title="${i === 0 ? 'total ACTIVE in Superset' : ((s.value / Math.max(1, splitSteps[0].value)) * 100).toFixed(1) + '% of onboarded'}">
+        <div class="funnel-step ${s.cls}" title="${i === 0 ? 'Superset ACTIVE minus offboarded' : ((s.value / Math.max(1, splitSteps[0].value)) * 100).toFixed(1) + '% of onboarded'}">
 
             <div class="funnel-step-icon">${s.icon}</div>
 
@@ -6596,15 +6875,23 @@ function renderHsvMethodBar() {
 
     </div></div>
 
-    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${(c.organic_count || 0).toLocaleString()} + ${qaTotal.toLocaleString()} = ${((c.inorganic_count || 0) + (c.organic_count || 0) + qaTotal).toLocaleString()} — every onboarded business lands in exactly one bucket.</p>`;
+    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${(c.organic_count || 0).toLocaleString()} = ${afterQa.toLocaleString()} — every onboarded business (after QA) is exactly one of the two.</p>`;
+
+    const qaTotal = (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length + (c.qa_dup_fssai || []).length + (c.qa_name_both || c.qa_name_matches || []).length;
+
+    const overlayNote = `<p class="hint" style="margin-bottom:10px;">QA overlays (rows keep their bucket AND appear in a queue): ` +
+
+        `${(c.qa_dup_pan || []).length} dup PAN · ${(c.qa_dup_gst || []).length} dup GST · ${(c.qa_dup_fssai || []).length} dup FSSAI · ` +
+
+        `${(c.qa_name_both || c.qa_name_matches || []).length} name-in-both — ${qaTotal} queue entries, ` +
+        `<strong>${(c.qa_pending || 0)}</strong> unique businesses pending` +
+        (c.qa_pending_breakdown ? ` <span class="hint">(${c.qa_pending_breakdown.dup_pan || 0} PAN · ${c.qa_pending_breakdown.dup_gst || 0} GST · ${c.qa_pending_breakdown.dup_fssai || 0} FSSAI)</span>` : '') +
+
+        ((c.offboarded_count || 0) ? ` · <span style="color:#dc2626;font-weight:600;">${c.offboarded_count} offboarded</span>` : '') + `.</p>`;
 
     document.getElementById('hsv-method-bar').innerHTML =
 
-        splitFunnel +
-
-        `<p class="hint" style="margin-bottom:10px;">Each of the ${total.toLocaleString()} ACTIVE Superset businesses was searched in our records — this is how each one was identified:</p>` +
-
-        bar + legend;
+        splitFunnel + overlayNote + bar + legend;
 
 }
 
@@ -6612,24 +6899,32 @@ function renderHsvMethodBar() {
 
 const HSV_AUDIT_HINTS = {
 
-    qa_name_matches: 'Close name match to one of our records but no PAN/GST link — approve if it is really the same business (counts as ours), disapprove if not.',
+    qa_dup_pan: 'Same PAN appears on 2+ Superset rows — likely one owner onboarding multiple outlets, or a data-entry duplicate. Approve legit rows, disapprove duplicates (disapproved = offboarded).',
 
-    qa_dup_pan: 'Same PAN appears on 2+ Superset rows — likely one owner onboarding multiple outlets, or a data-entry duplicate. Approve legit rows, disapprove duplicates.',
+    qa_dup_gst: 'Same GSTIN appears on 2+ Superset rows — approve legit rows, disapprove duplicates (disapproved = offboarded).',
 
-    qa_dup_gst: 'Same GSTIN appears on 2+ Superset rows — approve legit rows, disapprove duplicates.',
+    qa_dup_fssai: 'Same FSSAI number appears on 2+ Superset rows — approve legit rows, disapprove duplicates (disapproved = offboarded).',
+
+    qa_name_both: 'Superset business name confidently matches an Enhanced/app_sheet name — overlay check; approve if genuinely the same business, disapprove to offboard.',
 
     dup_names: 'Same business name appears more than once inside Superset — informational only, no decision needed.',
 
-    disapproved: 'Items a reviewer disapproved — kept visible for the record, flagged red.',
+    dup_names_ravishing: 'Same business name appears on 2+ Enhanced rows already marked OB Form Filled — possible double-claimed onboarding on our side. Decisions cascade by name.',
 
-    organic: 'Businesses whose PAN/GST appears nowhere in Enhanced or app_sheet and no name match — they came on their own.',
+    new_leads_list: 'app_sheet leads whose Lead Source is filled and is NOT Google — Walk-In / Referral / other genuinely new leads. Informational.',
 
-    inorganic: 'Businesses whose PAN or GST was captured by our associates (Enhanced or app_sheet) — genuine associate-driven leads.',
+    offboarded: 'Disapproved in QA — excluded from onboarded/organic/inorganic counts, kept here for the record.',
+
+    organic: 'No PAN/GST captured on our side (Enhanced or app_sheet) — they came on their own.',
+
+    inorganic: 'PAN or GST captured on BOTH sides — genuine associate-driven onboarding.',
 
 };
 
 const HSV_QUEUE_LABELS = {
-    name_match: 'Name match', dup_pan: 'Duplicate PAN', dup_gst: 'Duplicate GST', dup_name: 'Duplicate name',
+    name_match: 'Name match', name_both: 'Name in both', dup_pan: 'Duplicate PAN',
+    dup_gst: 'Duplicate GST', dup_fssai: 'Duplicate FSSAI', dup_name: 'Duplicate name',
+    dup_name_rav: 'Dup name (Ravishing)', new_lead: 'New lead', cascade: 'Cascade',
 };
 
 
@@ -6650,8 +6945,9 @@ function hsvDecisionCell(r) {
 
     if (r.decision) {
         const color = r.decision === 'approved' ? '#059669' : '#dc2626';
+        const via = (r.decided_via && r.decided_via !== 'direct') ? ` · ${escapeHtml(r.decided_via)}` : '';
         return `<span style="color:${color}; font-weight:600;">${escapeHtml(r.decision)}</span>` +
-            (r.decided_by ? `<div class="hint">${escapeHtml(r.decided_by)}</div>` : '');
+            ((r.decided_by || via) ? `<div class="hint">${escapeHtml(r.decided_by || '')}${via}</div>` : '');
     }
     const args = `'${escapeHtml(r.key)}','${escapeHtml(r.queue)}',this`;
     return `<button class="btn btn-small" data-name="${escapeHtml(r.superset_name)}" style="background:#059669;color:#fff;margin-right:4px;" onclick="submitHsvDecision(${args},'approved')">Approve</button>` +
@@ -6701,10 +6997,45 @@ function renderHsvAuditTable() {
 
     if (filter) {
 
-        rows = rows.filter(r => (r.superset_name || '').toLowerCase().includes(filter)
+        rows = rows.filter(r =>
+            (r.superset_name || '').toLowerCase().includes(filter)
+            || (r.matched_name || '').toLowerCase().includes(filter)
+            || (r.pan || '').toLowerCase().includes(filter)
+            || (r.gst || '').toLowerCase().includes(filter)
+            || (r.fssai || '').toLowerCase().includes(filter)
+            || (r.appsheet_id || '').toLowerCase().includes(filter));
 
-            || (r.matched_name || '').toLowerCase().includes(filter));
+    }
 
+    // Which duplicate-ID field drives this queue (for sorting + grouping)
+    const DUP_ID_FIELD = { qa_dup_pan: 'pan', qa_dup_gst: 'gst', qa_dup_fssai: 'fssai' };
+    const dupField = DUP_ID_FIELD[hsvActiveAudit];
+    if (dupField) {
+        rows = [...rows].sort((a, b) =>
+            (a[dupField] || '').localeCompare(b[dupField] || '')
+            || (a.superset_name || '').localeCompare(b.superset_name || ''));
+    }
+
+    // Group-count KPI cards for the duplicate queues (over the full,
+    // unfiltered queues): "109 PANs → 255 businesses" etc.
+    const gcEl = document.getElementById('hsv-group-counts');
+    if (gcEl) {
+        const gc = c.group_counts || {};
+        if (dupField) {
+            const gcCard = (n, groups, rowsN, hint) =>
+                `<div class="hov-card"><div class="hov-label">${n}</div>` +
+                `<div class="hov-num">${groups.toLocaleString()} <span style="font-size:0.65em;font-weight:500;">&rarr; ${rowsN.toLocaleString()} businesses</span></div>` +
+                `<div class="hov-sub">${hint}</div></div>`;
+            gcEl.className = 'hov-kpi-grid-auto';
+            gcEl.style.marginBottom = '10px';
+            gcEl.innerHTML =
+                gcCard('Duplicate PANs', gc.dup_pan_groups || 0, gc.dup_pan_rows || 0, 'same PAN on 2+ Superset rows') +
+                gcCard('Duplicate GSTs', gc.dup_gst_groups || 0, gc.dup_gst_rows || 0, 'same GSTIN on 2+ Superset rows') +
+                gcCard('Duplicate FSSAIs', gc.dup_fssai_groups || 0, gc.dup_fssai_rows || 0, 'same FSSAI on 2+ Superset rows');
+        } else {
+            gcEl.className = '';
+            gcEl.innerHTML = '';
+        }
     }
 
     if (!rows.length) {
@@ -6715,22 +7046,36 @@ function renderHsvAuditTable() {
 
     }
 
-    const isDisapproved = hsvActiveAudit === 'disapproved';
-    // Ravishing-side columns everywhere except Organic (which by definition
-    // has no record on our side).
-    const showOurs = hsvActiveAudit !== 'organic';
-    // Decision buttons only on the actionable QA queues (dup-names is informational)
-    const hasDecisions = ['qa_name_matches', 'qa_dup_pan', 'qa_dup_gst', 'disapproved'].includes(hsvActiveAudit);
+    // New Leads: its own compact table (app_sheet fields only)
+    if (hsvActiveAudit === 'new_leads_list') {
+        let nlHtml = '<div class="hov-table-wrap"><table class="hov-mv-table"><thead><tr>' +
+            '<th>AppSheet ID</th><th>Business</th><th>Lead Source</th><th>Lead Stage</th><th>POC</th><th>Onboarded Date</th>' +
+            '</tr></thead><tbody>';
+        rows.forEach(r => {
+            nlHtml += `<tr>
+                <td>${escapeHtml(r.appsheet_id || '—')}</td>
+                <td style="text-align:left;">${escapeHtml(r.superset_name || '')}</td>
+                <td>${escapeHtml(r.source || '')}</td>
+                <td>${escapeHtml(r.matched_status || '—')}</td>
+                <td>${escapeHtml(r.poc || '—')}</td>
+                <td>${escapeHtml((r.onboarded_date || '').split(' ')[0] || '—')}</td>
+            </tr>`;
+        });
+        container.innerHTML = nlHtml + '</tbody></table></div>';
+        return;
+    }
 
-    let html = '<table class="hdaily-table"><thead><tr><th>Superset Business</th>';
+    const isOffboarded = hsvActiveAudit === 'offboarded';
+    // Decision buttons only on the actionable QA queues (Superset dup-names is informational)
+    const hasDecisions = ['qa_name_both', 'qa_dup_pan', 'qa_dup_gst', 'qa_dup_fssai', 'dup_names_ravishing', 'offboarded'].includes(hsvActiveAudit);
 
-    if (showOurs) html += '<th>Ravishing Business</th>';
+    let html = '<div class="hov-table-wrap"><table class="hov-mv-table"><thead><tr>' +
+        '<th>PAN</th><th>GST</th><th>FSSAI</th>' +
+        '<th>Superset Business</th><th>AppSheet ID</th><th>Our Business</th>' +
+        '<th>City</th><th>Onboarded Date</th>' +
+        '<th>Superset Status</th><th>Our Status</th>';
 
-    html += '<th>PAN</th><th>GST</th><th>City</th><th>Superset Status</th>';
-
-    if (showOurs) html += '<th>Ravishing Status</th>';
-
-    if (isDisapproved) html += '<th>Queue</th>';
+    if (isOffboarded) html += '<th>Queue</th>';
 
     if (hsvActiveAudit === 'inorganic') html += '<th>Matched via</th>';
 
@@ -6738,21 +7083,40 @@ function renderHsvAuditTable() {
 
     html += '</tr></thead><tbody>';
 
+    let prevDupId = null;
+
     rows.forEach(r => {
 
-        const rowStyle = (isDisapproved || r.decision === 'disapproved') ? ' style="background:#fef2f2;"' : '';
+        // Visual grouping in dup queues: identical IDs are adjacent (sorted
+        // above); repeat rows suppress the ID text, new groups get a border.
+        const dupId = dupField ? (r[dupField] || '') : null;
+        const sameGroup = dupField && prevDupId !== null && dupId === prevDupId;
+        const newGroup = dupField && prevDupId !== null && dupId !== prevDupId;
+        prevDupId = dupId;
 
-        html += `<tr${rowStyle}><td style="text-align:left;">${escapeHtml(r.superset_name)}</td>`;
+        const bg = (isOffboarded || r.decision === 'disapproved') ? 'background:#fef2f2;' : '';
+        const border = newGroup ? 'border-top:2px solid #cbd5e1;' : '';
+        const rowStyle = (bg || border) ? ` style="${bg}${border}"` : '';
 
-        if (showOurs) html += `<td style="text-align:left;">${escapeHtml(r.matched_name || '—')}</td>`;
+        const idCell = (field) => {
+            const v = r[field] || '';
+            if (dupField === field && sameGroup && v) return `<td style="color:#cbd5e1;" title="${escapeHtml(v)}">&#12291;</td>`;
+            return `<td>${escapeHtml(v)}</td>`;
+        };
 
-        html += `<td>${escapeHtml(r.pan || '')}</td><td>${escapeHtml(r.gst || '')}</td>
+        html += `<tr${rowStyle}>
+            ${idCell('pan')}
+            ${idCell('gst')}
+            ${idCell('fssai')}
+            <td style="text-align:left;">${escapeHtml(r.superset_name)}</td>
+            <td>${escapeHtml(r.appsheet_id || '—')}</td>
+            <td>${escapeHtml(r.matched_name || '—')}</td>
+            <td>${escapeHtml(r.city || '')}</td>
+            <td style="white-space:nowrap;">${escapeHtml((r.onboarded_date || '').split(' ')[0].split('T')[0] || '—')}</td>
+            <td>${escapeHtml(r.superset_status || '')}</td>
+            <td>${escapeHtml(r.matched_status || '—')}</td>`;
 
-            <td>${escapeHtml(r.city || '')}</td><td>${escapeHtml(r.superset_status || '')}</td>`;
-
-        if (showOurs) html += `<td>${escapeHtml(r.matched_status || '—')}</td>`;
-
-        if (isDisapproved) html += `<td>${escapeHtml(HSV_QUEUE_LABELS[r.queue] || r.queue || '')}</td>`;
+        if (isOffboarded) html += `<td>${escapeHtml(HSV_QUEUE_LABELS[r.queue] || r.queue || '')}</td>`;
 
         if (hsvActiveAudit === 'inorganic') html += `<td>${escapeHtml(r.matched_via || '')}</td>`;
 
@@ -6762,7 +7126,7 @@ function renderHsvAuditTable() {
 
     });
 
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
 
     container.innerHTML = html;
 
