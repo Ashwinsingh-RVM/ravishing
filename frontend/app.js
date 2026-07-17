@@ -16245,9 +16245,25 @@ let depRvmCpCount = 0;
 
 let depRcCpCount = 0;
 
-function depGetRvmTarget() { return Math.max(depPlanTotal, depRvmCpCount); }
+let depRvmTargetOverride = null;
 
-function depGetRcTarget() { return Math.max(25, depRcCpCount); }
+let depRcTargetOverride = null;
+
+function depGetRvmTarget() { return depRvmTargetOverride != null ? depRvmTargetOverride : Math.max(depPlanTotal, depRvmCpCount); }
+
+function depGetRcTarget() { return depRcTargetOverride != null ? depRcTargetOverride : 25; }
+
+function depSetRvmTarget(v) {
+    const n = parseInt(v, 10);
+    depRvmTargetOverride = (n > 0) ? n : null;
+    depApplyFilters();
+}
+
+function depSetRcTarget(v) {
+    const n = parseInt(v, 10);
+    depRcTargetOverride = (n > 0) ? n : null;
+    depApplyFilters();
+}
 
 let depFilteredLocs = null;
 

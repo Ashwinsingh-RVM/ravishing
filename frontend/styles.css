@@ -7239,3 +7239,10 @@ tr.zero-r:hover { opacity: 1; }
     display: inline-block; padding: 1px 8px; border-radius: 999px;
     font-size: 10.5px; font-weight: 700;
 }
+.depmap-select-all { margin-bottom: 4px; }
+.depmap-select-all a { font-size: 11px; font-weight: 600; color: #1e6b5c; text-decoration: none; }
+.depmap-select-all a:hover { text-decoration: underline; }
+.depmap-locate-select {
+    width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #d8dee5;
+    border-radius: 6px; background: #fff; color: #16323f; font-family: inherit;
+}
