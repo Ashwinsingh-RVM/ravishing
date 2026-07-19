@@ -3045,11 +3045,13 @@ class GoogleSheetsService:
                 return ImageFont.load_default()
 
             S = 2  # supersample for crisp anti-aliasing
-            W, H = 560 * S, 200 * S
-            ml, mr, mt, mb = 46 * S, 16 * S, 18 * S, 34 * S
+            BASE_W, BASE_H = 920, 300
+            W, H = BASE_W * S, BASE_H * S
+            ml, mr, mt, mb = 48 * S, 20 * S, 30 * S, 40 * S  # extra top room for value labels
             img = Image.new('RGB', (W, H), '#ffffff')
             d = ImageDraw.Draw(img)
-            f_sm = load_font(11 * S)
+            f_sm = load_font(12 * S)
+            f_val = load_font(12 * S)
             plot_w = W - ml - mr
             plot_h = H - mt - mb
             vmax = max(vals) or 1
@@ -3065,25 +3067,26 @@ class GoogleSheetsService:
                 y = mt + plot_h - (plot_h * (v / vmax))
                 return (x, y)
             pts = [xy(i, v) for i, v in enumerate(vals)]
-            # area-ish baseline + line
             d.line(pts, fill=TEAL, width=3 * S, joint='curve')
             for (x, y), v in zip(pts, vals):
                 r = 4 * S
                 d.ellipse([x - r, y - r, x + r, y + r], fill=TEAL,
                           outline='#ffffff', width=2 * S)
-            # x labels (first, mid, last to avoid clutter)
-            idxs = sorted(set([0, len(data) // 2, len(data) - 1]))
-            for i in idxs:
+                # value label above each point
+                d.text((x, y - 9 * S), n(v), font=f_val, fill=TEAL, anchor='mb')
+            # x labels: show all if few, else thin out to avoid overlap
+            step = 1 if len(data) <= 16 else 2
+            for i in range(0, len(data), step):
                 x, _ = pts[i]
-                d.text((x, H - mb + 6 * S), esc(label_fn(data[i])),
+                d.text((x, H - mb + 8 * S), esc(label_fn(data[i])),
                        font=f_sm, fill='#777777', anchor='ma')
-            img = img.resize((560, 200), Image.LANCZOS)
+            img = img.resize((BASE_W, BASE_H), Image.LANCZOS)
             import io as _io
             buf = _io.BytesIO()
             img.save(buf, format='PNG')
             images[cid] = buf.getvalue()
-            return (f'<img src="cid:{cid}" width="560" '
-                    f'style="display:block;width:100%;max-width:560px;height:auto;'
+            return (f'<img src="cid:{cid}" width="{BASE_W}" '
+                    f'style="display:block;width:100%;max-width:100%;height:auto;'
                     f'border:1px solid {LINE};border-radius:6px;margin:8px 0 0;" alt="onboarding trend"/>')
 
         def wk_lbl(r):
@@ -3207,7 +3210,6 @@ class GoogleSheetsService:
         body = (
             f'<p style="font-family:{FONT};font-size:15px;color:{INK};margin:0;">Hi Team,</p>'
             + para(lead)
-            + (para(pace_line, mt=12) if pace_line else '')
             + heading("Daily onboarding — last 2 weeks")
             + daily_chart
             + heading("Weekly onboarding")
@@ -3219,7 +3221,8 @@ class GoogleSheetsService:
             + para("Best,<br>Ashwin", color=INK, mt=18)
         )
 
-        html = f'<div style="background:#ffffff;padding:24px 26px;max-width:600px;">{body}</div>'
+        html = (f'<div style="background:#ffffff;padding:24px 26px;width:100%;'
+                f'max-width:960px;margin:0 auto;box-sizing:border-box;">{body}</div>')
         subject = f"RAVISHING · HoReCa Onboarding Update · {today_d.strftime('%A, %d %b %Y')}"
         return subject, html, images
 
