@@ -4559,6 +4559,49 @@ function applyDashboardRBAC() {
 
     }
 
+    // RVM Deployment tab: hidden by default; any admin can reveal/hide it by
+    // triple-clicking the "Goa DRS" header title.
+
+    const ctTab = document.querySelector('.dash-tab-ct');
+
+    if (ctTab) {
+
+        ctTab.style.display = 'none';
+
+        if (role === 'admin' && !window._ctRevealWired) {
+
+            window._ctRevealWired = true;
+
+            const title = document.querySelector('.header h1, .header-title, header h1');
+
+            let clicks = 0, timer = null;
+
+            (title || document).addEventListener('click', (e) => {
+
+                if (!title && !(e.target.closest && e.target.closest('.header'))) return;
+
+                clicks++;
+
+                clearTimeout(timer);
+
+                timer = setTimeout(() => { clicks = 0; }, 600);
+
+                if (clicks >= 3) {
+
+                    clicks = 0;
+
+                    const showing = ctTab.style.display !== 'none';
+
+                    ctTab.style.display = showing ? 'none' : '';
+
+                }
+
+            });
+
+        }
+
+    }
+
 }
 
 
