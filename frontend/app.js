@@ -3302,7 +3302,7 @@ function setupDashboardTabs() {
 
         const dashBtn = document.querySelector(`.dash-tab[data-dash="${savedDash}"]`);
 
-        if (dashBtn && !dashBtn.classList.contains('rbac-hidden')) {
+        if (dashBtn && !dashBtn.classList.contains('rbac-hidden') && dashBtn.style.display !== 'none') {
 
             dashBtn.click();
 
