@@ -2973,11 +2973,11 @@ class GoogleSheetsService:
         }
 
     def build_horeca_digest(self, for_date_str=None):
-        """Plain, letter-style HoReCa ONBOARDING update email. Reads like a
-        written note (not a dashboard): a short intro, then simple Weekly,
-        Monthly and last-2-weeks Daily onboarding tables, and today's meetings
-        only if any exist. Onboarding only (no 'reached'). Read-only.
-        Returns (subject, html_body)."""
+        """Personal, letter-style HoReCa ONBOARDING update — written in the
+        first person, with a couple of inline line graphs (daily + weekly
+        onboarding trend) and a simple monthly table. Onboarding only.
+        Read-only. Returns (subject, html_body, inline_images) where
+        inline_images is {content_id: png_bytes} for cid: <img> references."""
         def esc(v):
             return (str(v).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
 
@@ -2990,6 +2990,7 @@ class GoogleSheetsService:
         INK = "#1a1a1a"
         MUTED = "#555555"
         LINE = "#dddddd"
+        TEAL = "#1e6b5c"
         FONT = "Arial,Helvetica,sans-serif"
 
         ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
@@ -3003,6 +3004,7 @@ class GoogleSheetsService:
         mom = ov.get('mom') or []
         rr = ov.get('run_rate') or {}
         total_onb = ov.get('onboarded_real')
+        images = {}
 
         def parse_d(s):
             try:
@@ -3019,87 +3021,123 @@ class GoogleSheetsService:
             except (ValueError, TypeError):
                 return 0
 
-        # ---------- intro copy ----------
+        # ---------- inline line-graph (PIL -> PNG bytes, referenced via cid:) ----------
+        def line_png(rows, label_fn, cid, limit=None, oldest_first=True):
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+            except Exception:
+                return None
+            data = list(rows)[:limit] if limit else list(rows)
+            if oldest_first:
+                data = list(reversed(data))
+            vals = [onb(r) for r in data]
+            if len(vals) < 2:
+                return None
+
+            def load_font(sz):
+                for p in ('DejaVuSans.ttf',
+                          '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                          'C:\\Windows\\Fonts\\arial.ttf'):
+                    try:
+                        return ImageFont.truetype(p, sz)
+                    except Exception:
+                        continue
+                return ImageFont.load_default()
+
+            S = 2  # supersample for crisp anti-aliasing
+            W, H = 560 * S, 200 * S
+            ml, mr, mt, mb = 46 * S, 16 * S, 18 * S, 34 * S
+            img = Image.new('RGB', (W, H), '#ffffff')
+            d = ImageDraw.Draw(img)
+            f_sm = load_font(11 * S)
+            plot_w = W - ml - mr
+            plot_h = H - mt - mb
+            vmax = max(vals) or 1
+            # gridlines + y labels (0, mid, max)
+            for frac in (0.0, 0.5, 1.0):
+                y = mt + plot_h - frac * plot_h
+                d.line([(ml, y), (W - mr, y)], fill='#eeeeee', width=1 * S)
+                lbl = n(round(vmax * frac))
+                d.text((ml - 8 * S, y), lbl, font=f_sm, fill='#999999', anchor='rm')
+            # points
+            def xy(i, v):
+                x = ml + (plot_w * (i / (len(vals) - 1)))
+                y = mt + plot_h - (plot_h * (v / vmax))
+                return (x, y)
+            pts = [xy(i, v) for i, v in enumerate(vals)]
+            # area-ish baseline + line
+            d.line(pts, fill=TEAL, width=3 * S, joint='curve')
+            for (x, y), v in zip(pts, vals):
+                r = 4 * S
+                d.ellipse([x - r, y - r, x + r, y + r], fill=TEAL,
+                          outline='#ffffff', width=2 * S)
+            # x labels (first, mid, last to avoid clutter)
+            idxs = sorted(set([0, len(data) // 2, len(data) - 1]))
+            for i in idxs:
+                x, _ = pts[i]
+                d.text((x, H - mb + 6 * S), esc(label_fn(data[i])),
+                       font=f_sm, fill='#777777', anchor='ma')
+            img = img.resize((560, 200), Image.LANCZOS)
+            import io as _io
+            buf = _io.BytesIO()
+            img.save(buf, format='PNG')
+            images[cid] = buf.getvalue()
+            return (f'<img src="cid:{cid}" width="560" '
+                    f'style="display:block;width:100%;max-width:560px;height:auto;'
+                    f'border:1px solid {LINE};border-radius:6px;margin:8px 0 0;" alt="onboarding trend"/>')
+
+        def wk_lbl(r):
+            d = parse_d(r.get('period'))
+            return d.strftime('%d %b') if d else str(r.get('period'))
+
+        def mo_lbl(r):
+            try:
+                return datetime.strptime(str(r.get('period')), '%Y-%m').strftime('%b %y')
+            except (ValueError, TypeError):
+                return str(r.get('period'))
+
+        def day_lbl(r):
+            d = parse_d(r.get('period'))
+            return d.strftime('%d %b') if d else str(r.get('period'))
+
+        # ---------- first-person intro ----------
         if is_monday:
             lw_mon = (today_d - timedelta(days=7))
             lw_mon = lw_mon - timedelta(days=lw_mon.weekday())
             lw = find(wow, lw_mon.isoformat())
             span = f"{lw_mon.strftime('%d %b')}–{(lw_mon + timedelta(days=6)).strftime('%d %b')}"
             if lw and onb(lw):
-                lead = (f"Here's how HoReCa onboarding went last week ({span}) — "
-                        f"we onboarded <b>{n(onb(lw))}</b> businesses.")
+                lead = (f"Sharing where we landed on HoReCa onboarding last week ({span}) — "
+                        f"we brought on <b>{n(onb(lw))}</b> businesses.")
             else:
-                lead = f"Here's the HoReCa onboarding update for last week ({span})."
+                lead = f"Sharing our HoReCa onboarding numbers for last week ({span})."
         else:
             y = find(dod, yesterday_d.isoformat())
             if y and onb(y):
-                lead = (f"Here's the HoReCa onboarding update for {yesterday_d.strftime('%d %b')} — "
-                        f"we onboarded <b>{n(onb(y))}</b> businesses yesterday.")
+                lead = (f"Quick HoReCa onboarding update — we added "
+                        f"<b>{n(onb(y))}</b> businesses yesterday ({yesterday_d.strftime('%d %b')}).")
             else:
-                lead = f"Here's the HoReCa onboarding update for {yesterday_d.strftime('%d %b')}."
+                lead = f"Quick HoReCa onboarding update for {yesterday_d.strftime('%d %b')}."
 
         if len(wow) >= 2:
             tw, lw2 = onb(wow[0]), onb(wow[1])
             if lw2:
-                arrow = "up" if tw > lw2 else ("down" if tw < lw2 else "steady")
-                lead += (f" Week to date we're at <b>{n(tw)}</b> "
-                         f"({arrow} from {n(lw2)} the week before).")
+                arrow = "up" if tw > lw2 else ("down" if tw < lw2 else "about the same")
+                lead += (f" We're at <b>{n(tw)}</b> so far this week "
+                         f"({arrow} vs {n(lw2)} the week before).")
 
         pace_line = ""
         target, remaining, pace = rr.get('target'), rr.get('remaining'), rr.get('daily_rate')
         if total_onb is not None and target:
-            bits = [f"We're at <b>{n(total_onb)}</b> of {n(target)} onboarded"]
+            bits = [f"Overall we've onboarded <b>{n(total_onb)}</b> of {n(target)}"]
             if remaining is not None:
                 bits.append(f"{n(remaining)} to go")
             if pace:
                 try:
-                    bits.append(f"about {float(pace):.0f} a day lately")
+                    bits.append(f"running about {float(pace):.0f} a day")
                 except (ValueError, TypeError):
                     pass
             pace_line = ", ".join(bits) + "."
-
-        # ---------- simple, letter-style table ----------
-        def simple_table(rows, label_fn, limit=None, oldest_first=True):
-            data = list(rows)[:limit] if limit else list(rows)
-            if oldest_first:
-                data = list(reversed(data))
-            if not data:
-                return (f'<p style="font-family:{FONT};font-size:14px;color:{MUTED};margin:6px 0 0;">'
-                        f'No data yet.</p>')
-            trs = ''
-            for r in data:
-                trs += (
-                    f'<tr>'
-                    f'<td style="font-family:{FONT};font-size:14px;color:{INK};padding:5px 0;'
-                    f'border-bottom:1px solid {LINE};">{esc(label_fn(r))}</td>'
-                    f'<td style="font-family:{FONT};font-size:14px;color:{INK};padding:5px 0;'
-                    f'border-bottom:1px solid {LINE};text-align:right;font-weight:bold;">{n(onb(r))}</td>'
-                    f'</tr>')
-            return (
-                f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
-                f'width="320" style="width:320px;max-width:100%;border-collapse:collapse;margin:6px 0 0;">'
-                f'<tr>'
-                f'<td style="font-family:{FONT};font-size:12px;color:{MUTED};padding:0 0 4px;'
-                f'border-bottom:2px solid {LINE};">Period</td>'
-                f'<td style="font-family:{FONT};font-size:12px;color:{MUTED};padding:0 0 4px;'
-                f'border-bottom:2px solid {LINE};text-align:right;">Onboarded</td>'
-                f'</tr>{trs}</table>')
-
-        def wk_lbl(r):
-            d = parse_d(r.get('period'))
-            if d:
-                return f"Week of {d.strftime('%d %b')}"
-            return esc(r.get('period'))
-
-        def mo_lbl(r):
-            try:
-                return datetime.strptime(str(r.get('period')), '%Y-%m').strftime('%B %Y')
-            except (ValueError, TypeError):
-                return esc(r.get('period'))
-
-        def day_lbl(r):
-            d = parse_d(r.get('period'))
-            return d.strftime('%a, %d %b') if d else esc(r.get('period'))
 
         def heading(text):
             return (f'<p style="font-family:{FONT};font-size:15px;font-weight:bold;color:{INK};'
@@ -3108,6 +3146,32 @@ class GoogleSheetsService:
         def para(html_text, color=INK, size=14, mt=14):
             return (f'<p style="font-family:{FONT};font-size:{size}px;line-height:1.6;'
                     f'color:{color};margin:{mt}px 0 0;">{html_text}</p>')
+
+        # charts (fallback to a tiny note if PIL/data unavailable)
+        daily_chart = line_png(dod, day_lbl, 'chart_daily', limit=14) or \
+            para("(Daily trend unavailable.)", color=MUTED, mt=6)
+        weekly_chart = line_png(wow, wk_lbl, 'chart_weekly') or \
+            para("(Weekly trend unavailable.)", color=MUTED, mt=6)
+
+        # monthly stays a small text table
+        def month_table(rows):
+            if not rows:
+                return para("No monthly data yet.", color=MUTED, mt=6)
+            trs = ''
+            for r in reversed(list(rows)):
+                trs += (
+                    f'<tr>'
+                    f'<td style="font-family:{FONT};font-size:14px;color:{INK};padding:5px 0;'
+                    f'border-bottom:1px solid {LINE};">{esc(mo_lbl(r))}</td>'
+                    f'<td style="font-family:{FONT};font-size:14px;color:{INK};padding:5px 0;'
+                    f'border-bottom:1px solid {LINE};text-align:right;font-weight:bold;">{n(onb(r))}</td>'
+                    f'</tr>')
+            return (f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="300" '
+                    f'style="width:300px;max-width:100%;border-collapse:collapse;margin:6px 0 0;">'
+                    f'<tr><td style="font-family:{FONT};font-size:12px;color:{MUTED};padding:0 0 4px;'
+                    f'border-bottom:2px solid {LINE};">Month</td>'
+                    f'<td style="font-family:{FONT};font-size:12px;color:{MUTED};padding:0 0 4px;'
+                    f'border-bottom:2px solid {LINE};text-align:right;">Onboarded</td></tr>{trs}</table>')
 
         # ---------- today's meetings (only if any) ----------
         meetings_html = ''
@@ -3136,33 +3200,28 @@ class GoogleSheetsService:
                     f'<li style="font-family:{FONT};font-size:14px;line-height:1.6;color:{INK};margin:2px 0;">'
                     f'{esc(tm + " — " if tm else "")}<b>{esc(who)}</b> ({esc(typ)}), '
                     f'{"HoReCa" if is_hor else "VP"} · owner {esc(owner)}</li>')
-            meetings_html = (
-                heading("Meetings scheduled for today")
-                + f'<ul style="margin:4px 0 0;padding-left:20px;">{items}</ul>')
+            meetings_html = (heading("A few meetings on today")
+                             + f'<ul style="margin:4px 0 0;padding-left:20px;">{items}</ul>')
 
-        # ---------- assemble (plain letter) ----------
+        # ---------- assemble (personal letter) ----------
         body = (
             f'<p style="font-family:{FONT};font-size:15px;color:{INK};margin:0;">Hi Team,</p>'
             + para(lead)
             + (para(pace_line, mt=12) if pace_line else '')
+            + heading("Daily onboarding — last 2 weeks")
+            + daily_chart
             + heading("Weekly onboarding")
-            + simple_table(wow, wk_lbl)
+            + weekly_chart
             + heading("Monthly onboarding")
-            + simple_table(mom, mo_lbl)
-            + heading("Daily — last 2 weeks")
-            + simple_table(dod, day_lbl, limit=14)
+            + month_table(mom)
             + meetings_html
-            + para("Regards,<br>Ravishing Dashboard — HoReCa", color=MUTED, mt=28)
-            + f'<p style="font-family:{FONT};font-size:11px;color:{MUTED};margin:22px 0 0;'
-              f'border-top:1px solid {LINE};padding-top:10px;">Automated onboarding update · '
-              f'figures reflect the live data at send time.</p>'
+            + para("Keep it going 💪", mt=22)
+            + para("Best,<br>Ashwin", color=INK, mt=18)
         )
 
-        html = (
-            f'<div style="background:#ffffff;padding:24px 26px;max-width:560px;">{body}</div>')
-
+        html = f'<div style="background:#ffffff;padding:24px 26px;max-width:600px;">{body}</div>'
         subject = f"RAVISHING · HoReCa Onboarding Update · {today_d.strftime('%A, %d %b %Y')}"
-        return subject, html
+        return subject, html, images
 
     def _collect_horeca_status_events(self):
         """Flat list of every status-reached event across all (collapsed)
@@ -5010,7 +5069,8 @@ class GmailService:
         subject: str,
         body: str,
         cc: List[str] = None,
-        attachments: List[str] = None
+        attachments: List[str] = None,
+        inline_images: dict = None
     ) -> str:
         """
         Send an email
@@ -5021,6 +5081,9 @@ class GmailService:
             body: Email body (HTML supported)
             cc: CC recipients
             attachments: List of file paths to attach
+            inline_images: {content_id: png_bytes} referenced in HTML as
+                           <img src="cid:content_id"> — rendered inline by
+                           Gmail (unlike data: URIs, which Gmail strips).
 
         Returns:
             Message ID
@@ -5029,9 +5092,10 @@ class GmailService:
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
         from email.mime.base import MIMEBase
+        from email.mime.image import MIMEImage
         from email import encoders
 
-        message = MIMEMultipart()
+        message = MIMEMultipart('related') if inline_images else MIMEMultipart()
         message['to'] = to
         message['subject'] = subject
 
@@ -5039,6 +5103,14 @@ class GmailService:
             message['cc'] = ', '.join(cc)
 
         message.attach(MIMEText(body, 'html'))
+
+        if inline_images:
+            for cid, png_bytes in inline_images.items():
+                img = MIMEImage(png_bytes, _subtype='png')
+                img.add_header('Content-ID', f'<{cid}>')
+                img.add_header('Content-Disposition', 'inline',
+                               filename=f'{cid}.png')
+                message.attach(img)
 
         if attachments:
             for file_path in attachments:
