@@ -2886,6 +2886,18 @@ class GoogleSheetsService:
         onboarded_real = superset_active              # headline = Superset ACTIVE
         superset_confirmed = superset_active          # same figure (kept for compat)
 
+        # Keep the funnel monotonic. Onboarded comes from Superset (the system
+        # of record), while reached / OB-opened / OB-filled / touch_base come
+        # from Enhanced statuses — which associates DON'T always update (they
+        # work app_sheet/Superset), so the upstream stages under-count and can
+        # fall below onboarded. But every onboarded business logically passed
+        # through each earlier stage, so floor each stage at the one below it:
+        # touch_base >= reached >= ob_opened >= ob_filled >= onboarded.
+        ob_filled = max(ob_filled, onboarded_real)
+        ob_opened = max(ob_opened, ob_filled)
+        reached = max(reached, ob_opened)
+        touch_base = max(touch_base, reached)
+
         # Run rate: total onboarded ÷ days since onboarding first began.
         # first_onboard_date comes from the earliest "Updated Date" among
         # OB-Filled rows; days_active is inclusive of today.
@@ -2954,6 +2966,131 @@ class GoogleSheetsService:
             'wow': rowify(wow),
             'mom': rowify(mom),
         }
+
+    def build_horeca_digest(self, for_date_str=None):
+        """Build the daily HoReCa snapshot email as (subject, html_body).
+
+        Read-only: pulls get_horeca_overview() + get_horeca_associate_performance()
+        and formats them into an email-safe (inline-styled, table-based) HTML
+        body. Nothing is written to any sheet."""
+        ov = self.get_horeca_overview()
+        try:
+            perf = self.get_horeca_associate_performance(granularity='month')
+        except Exception:
+            perf = {'summary': []}
+
+        def esc(v):
+            return (str(v).replace('&', '&amp;').replace('<', '&lt;')
+                    .replace('>', '&gt;'))
+
+        def n(v):
+            try:
+                return f"{int(round(float(v))):,}"
+            except (ValueError, TypeError):
+                return esc(v)
+
+        BRAND = '#1e6b5c'
+        INK = '#16323f'
+        MUTED = '#64748b'
+        LINE = '#e2e8f0'
+        date_lbl = for_date_str or datetime.now().strftime('%d %b %Y')
+
+        def kpi_card(label, value, sub=''):
+            sub_html = (f'<div style="font-size:11px;color:{MUTED};margin-top:2px;">{esc(sub)}</div>'
+                        if sub else '')
+            return (
+                f'<td style="padding:6px;" valign="top" width="25%">'
+                f'<div style="border:1px solid {LINE};border-radius:10px;padding:12px 14px;background:#f8fafc;">'
+                f'<div style="font-size:11px;font-weight:600;color:{MUTED};text-transform:uppercase;letter-spacing:.04em;">{esc(label)}</div>'
+                f'<div style="font-size:24px;font-weight:800;color:{BRAND};font-family:Arial,sans-serif;margin-top:4px;">{value}</div>'
+                f'{sub_html}</div></td>')
+
+        rr = ov.get('run_rate') or {}
+        cards = [
+            kpi_card('Onboarded', n(ov.get('onboarded_real')),
+                     f"{n(ov.get('onboarded_reported'))} reported by associates"),
+            kpi_card('Reached (Touch Base)', n(ov.get('touch_base'))),
+            kpi_card('OB Form Filled', n(ov.get('ob_filled'))),
+            kpi_card('Conv. vs Touch Base', f"{ov.get('conversion_vs_touch_base', 0)}%"),
+            kpi_card('OB Form Opened', n(ov.get('ob_opened'))),
+            kpi_card('Total Database', n(ov.get('total_database'))),
+            kpi_card('No Status', n(ov.get('no_status'))),
+            kpi_card('De-listed', n(ov.get('delisted'))),
+        ]
+        card_rows = ''
+        for i in range(0, len(cards), 4):
+            card_rows += '<tr>' + ''.join(cards[i:i + 4]) + '</tr>'
+
+        rr_line = ''
+        if rr.get('first_onboard_date'):
+            rr_line = (
+                f'<p style="font-size:13px;color:{INK};margin:4px 0 18px;">'
+                f'<strong>Run rate:</strong> {rr.get("daily_rate")}/day over {rr.get("days_active")} days '
+                f'(since {esc(rr.get("first_onboard_date"))}) &middot; '
+                f'{n(rr.get("remaining"))} to go to {n(rr.get("target"))}'
+                + (f' &middot; ~{n(rr.get("days_to_target"))} days to target' if rr.get('days_to_target') else '')
+                + '</p>')
+
+        def table(title, rows, cols, limit=None):
+            if not rows:
+                return (f'<h3 style="font-size:15px;color:{INK};margin:22px 0 8px;">{esc(title)}</h3>'
+                        f'<p style="font-size:12px;color:{MUTED};">No data.</p>')
+            if limit:
+                rows = rows[:limit]
+            head = ''.join(
+                f'<th style="text-align:{a};padding:8px 10px;font-size:11px;color:{MUTED};'
+                f'text-transform:uppercase;letter-spacing:.03em;border-bottom:2px solid {LINE};">{esc(h)}</th>'
+                for h, _, a in cols)
+            body = ''
+            for idx, r in enumerate(rows):
+                bg = '#ffffff' if idx % 2 == 0 else '#f8fafc'
+                tds = ''.join(
+                    f'<td style="text-align:{a};padding:7px 10px;font-size:13px;color:{INK};'
+                    f'border-bottom:1px solid {LINE};">{f(r)}</td>'
+                    for _, f, a in cols)
+                body += f'<tr style="background:{bg};">{tds}</tr>'
+            return (
+                f'<h3 style="font-size:15px;color:{INK};margin:22px 0 8px;">{esc(title)}</h3>'
+                f'<table cellpadding="0" cellspacing="0" width="100%" '
+                f'style="border-collapse:collapse;border:1px solid {LINE};border-radius:8px;overflow:hidden;">'
+                f'<tr>{head}</tr>{body}</table>')
+
+        movement_cols = [
+            ('Period', lambda r: esc(r.get('period')), 'left'),
+            ('Reached', lambda r: n(r.get('reached')), 'right'),
+            ('Onboarded', lambda r: n(r.get('onboarded')), 'right'),
+            ('Cumulative', lambda r: n(r.get('cumulative_onboarded')), 'right'),
+            ('Conv %', lambda r: f"{r.get('conv_day', 0)}%", 'right'),
+        ]
+        assoc_cols = [
+            ('Associate', lambda r: esc(r.get('name')), 'left'),
+            ('Reached', lambda r: n(r.get('reached')), 'right'),
+            ('Onboarded', lambda r: n(r.get('onboarded')), 'right'),
+            ('Conv %', lambda r: f"{r.get('conversion', 0)}%", 'right'),
+        ]
+
+        html = (
+            f'<div style="font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:0 auto;color:{INK};">'
+            f'<div style="background:{BRAND};padding:18px 22px;border-radius:12px 12px 0 0;">'
+            f'<div style="color:#fff;font-size:20px;font-weight:800;">HoReCa Daily Snapshot</div>'
+            f'<div style="color:#cdeae2;font-size:13px;margin-top:2px;">{esc(date_lbl)} &middot; Onboarded from Superset (ACTIVE)</div>'
+            f'</div>'
+            f'<div style="padding:18px 12px 6px;">'
+            f'<table cellpadding="0" cellspacing="0" width="100%">{card_rows}</table>'
+            f'</div>'
+            f'<div style="padding:0 12px 24px;">'
+            f'{rr_line}'
+            f'{table("Day on Day (last 14 days)", ov.get("dod"), movement_cols, limit=14)}'
+            f'{table("Week on Week", ov.get("wow"), movement_cols)}'
+            f'{table("Month on Month", ov.get("mom"), movement_cols)}'
+            f'{table("Associate-wise (all-time)", perf.get("summary"), assoc_cols)}'
+            f'<p style="font-size:11px;color:{MUTED};margin-top:22px;border-top:1px solid {LINE};padding-top:10px;">'
+            f'Automated daily digest from the Ravishing Dashboard. Numbers reflect the live Google Sheet at send time.</p>'
+            f'</div></div>')
+
+        subject = (f"HoReCa Daily Snapshot — {n(ov.get('onboarded_real'))} onboarded "
+                   f"({date_lbl})")
+        return subject, html
 
     def _collect_horeca_status_events(self):
         """Flat list of every status-reached event across all (collapsed)
