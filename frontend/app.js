@@ -4516,89 +4516,53 @@ function applyDashboardRBAC() {
 
     }
 
-    // Activity tab: superadmin only, and hidden even for them until revealed —
-    // triple-click the "Goa DRS Tracker" header title to toggle it.
+    // Hidden-by-default sub-tabs, revealed by triple-clicking the "Goa DRS"
+    // header title:
+    //   - Any admin: RVM + Cost
+    //   - ashwin only: additionally Activity
+    // RVM Deployment (ct) is a normal, always-visible tab for admins.
 
+    const rvmTab = document.querySelector('.dash-tab[data-dash="rvm"]');
+    const costTab = document.querySelector('.dash-tab[data-dash="cost"]');
     const activityTab = document.querySelector('.dash-tab-activity');
+    const isSuper = currentUser.email === 'ashwin.singh@recykal.com';
 
-    if (activityTab) {
+    // Keep these hidden on (re)load
+    [rvmTab, costTab, activityTab].forEach(t => { if (t) t.style.display = 'none'; });
 
-        activityTab.style.display = 'none';
+    if (role === 'admin' && !window._secretRevealWired) {
 
-        if (currentUser.email === 'ashwin.singh@recykal.com' && !window._actRevealWired) {
+        window._secretRevealWired = true;
 
-            window._actRevealWired = true;
+        const title = document.querySelector('.header h1, .header-title, header h1');
 
-            const title = document.querySelector('.header h1, .header-title, header h1');
+        let clicks = 0, timer = null;
 
-            let clicks = 0, timer = null;
+        (title || document).addEventListener('click', (e) => {
 
-            (title || document).addEventListener('click', (e) => {
+            if (!title && !(e.target.closest && e.target.closest('.header'))) return;
 
-                if (!title && !(e.target.closest && e.target.closest('.header'))) return;
+            clicks++;
 
-                clicks++;
+            clearTimeout(timer);
 
-                clearTimeout(timer);
+            timer = setTimeout(() => { clicks = 0; }, 600);
 
-                timer = setTimeout(() => { clicks = 0; }, 600);
+            if (clicks >= 3) {
 
-                if (clicks >= 3) {
+                clicks = 0;
 
-                    clicks = 0;
+                // Toggle based on RVM's current state so RVM+Cost stay in sync
+                const showing = rvmTab && rvmTab.style.display !== 'none';
+                const next = showing ? 'none' : '';
 
-                    const showing = activityTab.style.display !== 'none';
+                if (rvmTab) rvmTab.style.display = next;
+                if (costTab) costTab.style.display = next;
+                if (isSuper && activityTab) activityTab.style.display = next;
 
-                    activityTab.style.display = showing ? 'none' : '';
+            }
 
-                }
-
-            });
-
-        }
-
-    }
-
-    // RVM Deployment tab: hidden by default; any admin can reveal/hide it by
-    // triple-clicking the "Goa DRS" header title.
-
-    const ctTab = document.querySelector('.dash-tab-ct');
-
-    if (ctTab) {
-
-        ctTab.style.display = 'none';
-
-        if (role === 'admin' && !window._ctRevealWired) {
-
-            window._ctRevealWired = true;
-
-            const title = document.querySelector('.header h1, .header-title, header h1');
-
-            let clicks = 0, timer = null;
-
-            (title || document).addEventListener('click', (e) => {
-
-                if (!title && !(e.target.closest && e.target.closest('.header'))) return;
-
-                clicks++;
-
-                clearTimeout(timer);
-
-                timer = setTimeout(() => { clicks = 0; }, 600);
-
-                if (clicks >= 3) {
-
-                    clicks = 0;
-
-                    const showing = ctTab.style.display !== 'none';
-
-                    ctTab.style.display = showing ? 'none' : '';
-
-                }
-
-            });
-
-        }
+        });
 
     }
 
