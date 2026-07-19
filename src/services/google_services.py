@@ -3227,6 +3227,157 @@ class GoogleSheetsService:
         subject = f"RAVISHING · HoReCa Onboarding Update · {today_d.strftime('%A, %d %b %Y')}"
         return subject, html, images
 
+    def build_rvm_digest(self, for_date_str=None):
+        """Personal, letter-style RVM DEPLOYMENT update. RVM data has no
+        install dates, so instead of a time trend this shows the deployment
+        funnel and block-wise deployed counts as horizontal bar charts.
+        Read-only. Returns (subject, html_body, inline_images)."""
+        def esc(v):
+            return (str(v).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+        def n(v):
+            try:
+                return f"{int(round(float(v))):,}"
+            except (ValueError, TypeError):
+                return esc(v)
+
+        INK = "#1a1a1a"
+        MUTED = "#555555"
+        LINE = "#dddddd"
+        TEAL = "#1e6b5c"
+        FONT = "Arial,Helvetica,sans-serif"
+
+        ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        today_d = ist_now.date()
+        images = {}
+
+        # ---------- pull + aggregate ----------
+        locs = self.get_deployment_data() or []
+        try:
+            plan_total = self.get_planned_rvms_total() or 0
+        except Exception:
+            plan_total = 0
+
+        def done(k, vals=('Yes', 'Done')):
+            return sum(1 for l in locs if str(l.get(k, '')).strip() in vals)
+
+        total_loc = len(locs)
+        noc = done('nocReceived')
+        agr = done('agreementSigned')
+        shed = done('shedStatus')
+        delivered = done('rvmDelivery')
+        deployed = done('rvmDeployed')
+        electrical = done('electricalDone')
+        internet = done('internetStatus')
+        live = done('machineLive')
+
+        from collections import Counter
+        by_block = Counter(l.get('block', '') or '—'
+                           for l in locs if str(l.get('rvmDeployed', '')).strip() in ('Yes', 'Done'))
+
+        # ---------- horizontal bar chart (PNG via PIL, referenced by cid:) ----------
+        def hbar_png(pairs, cid, ref=None):
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+            except Exception:
+                return None
+            pairs = [(str(a), int(b)) for a, b in pairs]
+            if not pairs:
+                return None
+
+            def load_font(sz):
+                for p in ('DejaVuSans.ttf',
+                          '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                          'C:\\Windows\\Fonts\\arial.ttf'):
+                    try:
+                        return ImageFont.truetype(p, sz)
+                    except Exception:
+                        continue
+                return ImageFont.load_default()
+
+            S = 2
+            row_h = 34
+            BASE_W = 920
+            BASE_H = 24 + row_h * len(pairs) + 12
+            W, H = BASE_W * S, BASE_H * S
+            lblw = 190 * S            # left label column
+            valw = 70 * S             # right value column
+            ml, mr, mt = 12 * S, 12 * S, 12 * S
+            img = Image.new('RGB', (W, H), '#ffffff')
+            d = ImageDraw.Draw(img)
+            f = load_font(13 * S)
+            f_b = load_font(13 * S)
+            peak = max([v for _, v in pairs] + ([ref] if ref else []) + [1])
+            bar_x0 = ml + lblw
+            bar_x1 = W - mr - valw
+            bar_area = bar_x1 - bar_x0
+            for i, (label, val) in enumerate(pairs):
+                cy = mt + row_h * S * i + (row_h * S) // 2
+                d.text((ml, cy), label, font=f, fill='#333333', anchor='lm')
+                bh = 16 * S
+                d.rounded_rectangle([bar_x0, cy - bh // 2, bar_x1, cy + bh // 2],
+                                    radius=4 * S, fill='#eef2f1')
+                w = int(bar_area * (val / peak)) if peak else 0
+                if w > 0:
+                    d.rounded_rectangle([bar_x0, cy - bh // 2, bar_x0 + w, cy + bh // 2],
+                                        radius=4 * S, fill=TEAL)
+                d.text((W - mr, cy), n(val), font=f_b, fill=INK, anchor='rm')
+            img = img.resize((BASE_W, BASE_H), Image.LANCZOS)
+            import io as _io
+            buf = _io.BytesIO()
+            img.save(buf, format='PNG')
+            images[cid] = buf.getvalue()
+            return (f'<div style="text-align:center;margin:8px 0 0;">'
+                    f'<img src="cid:{cid}" width="{BASE_W}" '
+                    f'style="display:inline-block;width:100%;max-width:{BASE_W}px;height:auto;'
+                    f'border:1px solid {LINE};border-radius:6px;" alt="rvm chart"/></div>')
+
+        funnel = [
+            ("Locations identified", total_loc),
+            ("NOC received", noc),
+            ("Agreement signed", agr),
+            ("Shed ready", shed),
+            ("RVM delivered", delivered),
+            ("RVM deployed", deployed),
+        ]
+        funnel_chart = hbar_png(funnel, 'rvm_funnel', ref=plan_total)
+        block_pairs = by_block.most_common()
+        block_chart = hbar_png(block_pairs, 'rvm_blocks') if block_pairs else None
+
+        def heading(text):
+            return (f'<p style="font-family:{FONT};font-size:15px;font-weight:bold;color:{INK};'
+                    f'margin:26px 0 2px;">{esc(text)}</p>')
+
+        def para(html_text, color=INK, size=14, mt=14):
+            return (f'<p style="font-family:{FONT};font-size:{size}px;line-height:1.6;'
+                    f'color:{color};margin:{mt}px 0 0;">{html_text}</p>')
+
+        lead = (f"Quick RVM deployment update — we've deployed <b>{n(deployed)}</b> "
+                f"machines of {n(plan_total)} planned, across {n(total_loc)} identified "
+                f"locations. {n(delivered)} machines are delivered and {n(shed)} sheds are ready.")
+
+        readiness = (f"Still to close: electrical done at {n(electrical)} sites, "
+                     f"internet at {n(internet)}, and {n(live)} machines have cleared the "
+                     f"final live check so far.")
+
+        body = (
+            f'<p style="font-family:{FONT};font-size:15px;color:{INK};margin:0;">Hi Team,</p>'
+            + para(lead)
+            + heading("Deployment funnel")
+            + (funnel_chart or para("(Funnel chart unavailable.)", color=MUTED, mt=6))
+            + heading("Deployed by block")
+            + (block_chart or para("No machines deployed yet.", color=MUTED, mt=6))
+            + heading("Readiness")
+            + para(readiness, mt=6)
+            + para("Best,<br>Ashwin", color=INK, mt=22)
+        )
+
+        html = (f'<div style="background:#ffffff;padding:24px 26px;width:100%;'
+                f'max-width:960px;margin:0;text-align:left;box-sizing:border-box;">{body}</div>')
+        subject = (f"RAVISHING · RVM Deployment Update · {today_d.strftime('%A, %d %b %Y')} "
+                   f"· {n(deployed)} deployed")
+        return subject, html, images
+
     def _collect_horeca_status_events(self):
         """Flat list of every status-reached event across all (collapsed)
         Enhanced businesses: real auto-logged STATUS_CHANGE entries where

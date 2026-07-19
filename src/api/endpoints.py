@@ -1,7 +1,7 @@
 """
 FastAPI endpoints for the Goa DRS VP CP Mapping system
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import time
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, Response, Depends
@@ -19,7 +19,7 @@ from itsdangerous import TimestampSigner, BadSignature, SignatureExpired
 
 from ..config.settings import DeploymentStage, GOA_BLOCKS, STAGE_LABELS, Settings
 from ..services.tracker import VPTracker
-from ..services.google_services import GoogleSheetsService, AuthService
+from ..services.google_services import GoogleSheetsService, AuthService, GmailService
 from ..models.entities import MeetingUpdate
 
 settings = Settings()
@@ -257,6 +257,94 @@ async def _start_auto_sync():
     _auto_sync_thread.start()
     print(f"[auto-sync] scheduled, first run in {int(AUTO_SYNC_INITIAL_DELAY_SEC)}s, "
           f"then every {AUTO_SYNC_INTERVAL_HOURS}h (writes Enhanced tab only)")
+
+
+# ==================== Daily digest email scheduler ====================
+# Sends the HoReCa + RVM onboarding/deployment digests once a day, at a fixed
+# IST hour, to DIGEST_TO. Read-only (no sheet writes). Failures never kill the
+# thread. Uses inline-image (cid) charts so Gmail renders them.
+DIGEST_ENABLED = os.getenv('DIGEST_ENABLED', '1') == '1'
+DIGEST_HOUR_IST = int(os.getenv('DIGEST_HOUR_IST', '10'))       # 10 => 10:00 AM IST
+DIGEST_TO = os.getenv('DIGEST_TO', 'ashwin.singh@recykal.com')
+_digest_log: list = []
+_digest_thread = None
+
+
+def _send_digests_once():
+    entry = {'started_at': datetime.now().isoformat(timespec='seconds'), 'sent': []}
+    try:
+        svc = GoogleSheetsService()
+        gmail = GmailService()
+        recipients = [e.strip() for e in DIGEST_TO.split(',') if e.strip()]
+        for name, builder in (('horeca', svc.build_horeca_digest),
+                              ('rvm', svc.build_rvm_digest)):
+            try:
+                subject, html, images = builder()
+                for to in recipients:
+                    mid = gmail.send_email(to, subject, html, inline_images=images)
+                entry['sent'].append({'digest': name, 'message_id': mid})
+            except Exception as e:
+                entry['sent'].append({'digest': name, 'error': str(e)})
+        entry['status'] = 'ok'
+    except Exception as e:
+        entry['status'] = 'error'
+        entry['error'] = str(e)
+    entry['finished_at'] = datetime.now().isoformat(timespec='seconds')
+    _digest_log.insert(0, entry)
+    del _digest_log[20:]
+    print(f"[digest] run finished: {entry}")
+
+
+def _seconds_until_ist_hour(hour):
+    """Seconds from now until the next HH:00 IST (UTC+5:30)."""
+    ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    target = ist_now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if target <= ist_now:
+        target = target + timedelta(days=1)
+    return max(1, (target - ist_now).total_seconds())
+
+
+def _digest_loop():
+    while True:
+        time.sleep(_seconds_until_ist_hour(DIGEST_HOUR_IST))
+        _send_digests_once()
+        time.sleep(60)  # avoid double-fire within the same minute
+
+
+@app.on_event("startup")
+async def _start_digest_scheduler():
+    global _digest_thread
+    if not DIGEST_ENABLED:
+        print("[digest] disabled via DIGEST_ENABLED")
+        return
+    if _digest_thread and _digest_thread.is_alive():
+        return
+    import threading
+    _digest_thread = threading.Thread(target=_digest_loop, daemon=True,
+                                      name='daily-digest')
+    _digest_thread.start()
+    print(f"[digest] scheduled daily at {DIGEST_HOUR_IST:02d}:00 IST to {DIGEST_TO}")
+
+
+@app.post("/api/digest/send-now")
+async def digest_send_now(request: Request):
+    """Admin-only: send the daily digests immediately (for testing)."""
+    require_role(request, {'admin'})
+    _send_digests_once()
+    return {'ok': True, 'last_run': _digest_log[0] if _digest_log else None}
+
+
+@app.get("/api/digest/status")
+async def digest_status(request: Request):
+    """Admin-only: digest scheduler config + recent run log."""
+    require_role(request, {'admin'})
+    return {
+        'enabled': DIGEST_ENABLED,
+        'hour_ist': DIGEST_HOUR_IST,
+        'recipients': DIGEST_TO,
+        'next_run_in_sec': int(_seconds_until_ist_hour(DIGEST_HOUR_IST)),
+        'recent_runs': _digest_log,
+    }
 
 
 @app.get("/api/horeca/sync/status")
