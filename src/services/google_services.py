@@ -3085,9 +3085,10 @@ class GoogleSheetsService:
             buf = _io.BytesIO()
             img.save(buf, format='PNG')
             images[cid] = buf.getvalue()
-            return (f'<img src="cid:{cid}" width="{BASE_W}" '
-                    f'style="display:block;width:100%;max-width:100%;height:auto;'
-                    f'border:1px solid {LINE};border-radius:6px;margin:8px 0 0;" alt="onboarding trend"/>')
+            return (f'<div style="text-align:center;margin:8px 0 0;">'
+                    f'<img src="cid:{cid}" width="{BASE_W}" '
+                    f'style="display:inline-block;width:100%;max-width:{BASE_W}px;height:auto;'
+                    f'border:1px solid {LINE};border-radius:6px;" alt="onboarding trend"/></div>')
 
         def wk_lbl(r):
             d = parse_d(r.get('period'))
@@ -3222,7 +3223,7 @@ class GoogleSheetsService:
         )
 
         html = (f'<div style="background:#ffffff;padding:24px 26px;width:100%;'
-                f'max-width:960px;margin:0 auto;box-sizing:border-box;">{body}</div>')
+                f'max-width:960px;margin:0;text-align:left;box-sizing:border-box;">{body}</div>')
         subject = f"RAVISHING · HoReCa Onboarding Update · {today_d.strftime('%A, %d %b %Y')}"
         return subject, html, images
 
