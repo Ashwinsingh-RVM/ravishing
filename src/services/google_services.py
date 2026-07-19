@@ -2973,10 +2973,11 @@ class GoogleSheetsService:
         }
 
     def build_horeca_digest(self, for_date_str=None):
-        """Daily/weekly HoReCa ONBOARDING update, written like an email — a
-        short human intro, then Weekly, Monthly and last-2-weeks Daily
-        onboarding. Read-only; onboarding only (no 'reached'). Returns
-        (subject, html_body)."""
+        """Plain, letter-style HoReCa ONBOARDING update email. Reads like a
+        written note (not a dashboard): a short intro, then simple Weekly,
+        Monthly and last-2-weeks Daily onboarding tables, and today's meetings
+        only if any exist. Onboarding only (no 'reached'). Read-only.
+        Returns (subject, html_body)."""
         def esc(v):
             return (str(v).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
 
@@ -2986,14 +2987,9 @@ class GoogleSheetsService:
             except (ValueError, TypeError):
                 return esc(v)
 
-        TEAL = "#1e6b5c"
-        TEAL_DARK = "#16544a"
-        TEAL_TINT = "#eef6f4"
-        INK = "#16323f"
-        MUTED = "#64748b"
-        HAIR = "#e6ebe9"
-        WHITE = "#ffffff"
-        PAGE_BG = "#f4f6f5"
+        INK = "#1a1a1a"
+        MUTED = "#555555"
+        LINE = "#dddddd"
         FONT = "Arial,Helvetica,sans-serif"
 
         ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
@@ -3002,9 +2998,9 @@ class GoogleSheetsService:
         is_monday = today_d.weekday() == 0
 
         ov = self.get_horeca_overview() or {}
-        dod = ov.get('dod') or []      # newest first, per day
-        wow = ov.get('wow') or []      # newest first, per week (period = Monday ISO)
-        mom = ov.get('mom') or []      # newest first, per month (period = YYYY-MM)
+        dod = ov.get('dod') or []
+        wow = ov.get('wow') or []
+        mom = ov.get('mom') or []
         rr = ov.get('run_rate') or {}
         total_onb = ov.get('onboarded_real')
 
@@ -3030,123 +3026,88 @@ class GoogleSheetsService:
             lw = find(wow, lw_mon.isoformat())
             span = f"{lw_mon.strftime('%d %b')}–{(lw_mon + timedelta(days=6)).strftime('%d %b')}"
             if lw and onb(lw):
-                lead = (f"Here's how HoReCa onboarding went <b>last week ({span})</b> — "
+                lead = (f"Here's how HoReCa onboarding went last week ({span}) — "
                         f"we onboarded <b>{n(onb(lw))}</b> businesses.")
             else:
                 lead = f"Here's the HoReCa onboarding update for last week ({span})."
-            period_word = "week"
         else:
             y = find(dod, yesterday_d.isoformat())
             if y and onb(y):
-                lead = (f"Here's the HoReCa onboarding update — <b>yesterday "
-                        f"({yesterday_d.strftime('%d %b')})</b> we onboarded "
-                        f"<b>{n(onb(y))}</b> businesses.")
+                lead = (f"Here's the HoReCa onboarding update for {yesterday_d.strftime('%d %b')} — "
+                        f"we onboarded <b>{n(onb(y))}</b> businesses yesterday.")
             else:
-                lead = (f"Here's the HoReCa onboarding update for "
-                        f"{yesterday_d.strftime('%d %b')}.")
-            period_word = "day"
+                lead = f"Here's the HoReCa onboarding update for {yesterday_d.strftime('%d %b')}."
 
-        # this-week vs last-week momentum line (onboarding only)
-        momentum = ""
         if len(wow) >= 2:
             tw, lw2 = onb(wow[0]), onb(wow[1])
             if lw2:
-                diff = tw - lw2
-                arrow = "up" if diff > 0 else ("down" if diff < 0 else "flat")
-                momentum = (f" Week to date we're at <b>{n(tw)}</b> "
-                            f"({arrow} from {n(lw2)} the week before).")
+                arrow = "up" if tw > lw2 else ("down" if tw < lw2 else "steady")
+                lead += (f" Week to date we're at <b>{n(tw)}</b> "
+                         f"({arrow} from {n(lw2)} the week before).")
 
-        target = rr.get('target')
-        remaining = rr.get('remaining')
-        pace = rr.get('daily_rate')
         pace_line = ""
+        target, remaining, pace = rr.get('target'), rr.get('remaining'), rr.get('daily_rate')
         if total_onb is not None and target:
-            pace_bits = [f"We're at <b>{n(total_onb)}</b> of {n(target)} onboarded"]
+            bits = [f"We're at <b>{n(total_onb)}</b> of {n(target)} onboarded"]
             if remaining is not None:
-                pace_bits.append(f"{n(remaining)} to go")
+                bits.append(f"{n(remaining)} to go")
             if pace:
                 try:
-                    pace_bits.append(f"~{float(pace):.0f}/day lately")
+                    bits.append(f"about {float(pace):.0f} a day lately")
                 except (ValueError, TypeError):
                     pass
-            pace_line = " · ".join(pace_bits) + "."
+            pace_line = ", ".join(bits) + "."
 
-        # ---------- onboarding-only bar chart ----------
-        def bars(rows, label_fn, limit=None, oldest_first=True):
+        # ---------- simple, letter-style table ----------
+        def simple_table(rows, label_fn, limit=None, oldest_first=True):
             data = list(rows)[:limit] if limit else list(rows)
             if oldest_first:
                 data = list(reversed(data))
             if not data:
-                return (f'<div style="font-family:{FONT};font-size:13px;color:{MUTED};'
-                        f'padding:8px 0;">No data yet.</div>')
-            peak = max((onb(r) for r in data), default=0) or 1
-            trs = ""
+                return (f'<p style="font-family:{FONT};font-size:14px;color:{MUTED};margin:6px 0 0;">'
+                        f'No data yet.</p>')
+            trs = ''
             for r in data:
-                v = onb(r)
-                p = max(2, round(v / peak * 100)) if v else 0
                 trs += (
                     f'<tr>'
-                    f'<td width="84" valign="middle" style="font-family:{FONT};font-size:12px;'
-                    f'color:{MUTED};padding:5px 10px 5px 0;white-space:nowrap;">{esc(label_fn(r))}</td>'
-                    f'<td valign="middle" style="padding:5px 0;">'
-                    f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
-                    f'<td width="{p}%" bgcolor="{TEAL}" style="background-color:{TEAL};height:16px;line-height:16px;font-size:0;border-radius:3px;">&nbsp;</td>'
-                    f'<td width="{100 - p}%" style="font-size:0;line-height:16px;">&nbsp;</td>'
-                    f'</tr></table></td>'
-                    f'<td width="52" valign="middle" style="font-family:{FONT};font-size:13px;font-weight:bold;'
-                    f'color:{INK};text-align:right;padding:5px 0 5px 10px;">{n(v)}</td>'
+                    f'<td style="font-family:{FONT};font-size:14px;color:{INK};padding:5px 0;'
+                    f'border-bottom:1px solid {LINE};">{esc(label_fn(r))}</td>'
+                    f'<td style="font-family:{FONT};font-size:14px;color:{INK};padding:5px 0;'
+                    f'border-bottom:1px solid {LINE};text-align:right;font-weight:bold;">{n(onb(r))}</td>'
                     f'</tr>')
-            return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
-                    f'{trs}</table>')
+            return (
+                f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+                f'width="320" style="width:320px;max-width:100%;border-collapse:collapse;margin:6px 0 0;">'
+                f'<tr>'
+                f'<td style="font-family:{FONT};font-size:12px;color:{MUTED};padding:0 0 4px;'
+                f'border-bottom:2px solid {LINE};">Period</td>'
+                f'<td style="font-family:{FONT};font-size:12px;color:{MUTED};padding:0 0 4px;'
+                f'border-bottom:2px solid {LINE};text-align:right;">Onboarded</td>'
+                f'</tr>{trs}</table>')
 
         def wk_lbl(r):
             d = parse_d(r.get('period'))
-            return d.strftime('%d %b') if d else esc(r.get('period'))
+            if d:
+                return f"Week of {d.strftime('%d %b')}"
+            return esc(r.get('period'))
 
         def mo_lbl(r):
             try:
-                return datetime.strptime(str(r.get('period')), '%Y-%m').strftime('%b %Y')
+                return datetime.strptime(str(r.get('period')), '%Y-%m').strftime('%B %Y')
             except (ValueError, TypeError):
                 return esc(r.get('period'))
 
         def day_lbl(r):
             d = parse_d(r.get('period'))
-            return d.strftime('%a %d %b') if d else esc(r.get('period'))
+            return d.strftime('%a, %d %b') if d else esc(r.get('period'))
 
-        def section(title, note, chart_html):
-            return (
-                f'<tr><td style="padding:26px 30px 0 30px;">'
-                f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;color:{INK};">{esc(title)}</div>'
-                f'<div style="font-family:{FONT};font-size:12px;color:{MUTED};margin:2px 0 12px;">{esc(note)}</div>'
-                f'{chart_html}</td></tr>')
+        def heading(text):
+            return (f'<p style="font-family:{FONT};font-size:15px;font-weight:bold;color:{INK};'
+                    f'margin:26px 0 2px;">{esc(text)}</p>')
 
-        # ---------- assemble ----------
-        greeting = (
-            f'<tr><td style="padding:30px 30px 0 30px;">'
-            f'<div style="font-family:{FONT};font-size:17px;font-weight:bold;color:{INK};">Hi Team,</div>'
-            f'<div style="font-family:{FONT};font-size:14px;line-height:22px;color:{INK};margin-top:10px;">'
-            f'{lead}{momentum}</div>'
-            + (f'<div style="font-family:{FONT};font-size:13px;line-height:20px;color:{TEAL_DARK};'
-               f'background:{TEAL_TINT};border-radius:8px;padding:12px 16px;margin-top:14px;">{pace_line}</div>'
-               if pace_line else '')
-            + '</td></tr>')
-
-        masthead = (
-            f'<tr><td style="background-color:{TEAL_DARK};padding:22px 30px;">'
-            f'<span style="font-family:{FONT};font-size:17px;font-weight:bold;letter-spacing:2.5px;color:{WHITE};">RAVISHING</span>'
-            f'<span style="font-family:{FONT};font-size:12px;color:#bcd8d0;"> &nbsp;·&nbsp; HoReCa Onboarding Update</span>'
-            f'<div style="font-family:{FONT};font-size:12px;color:#d9ece7;margin-top:3px;">{esc(today_d.strftime("%A, %d %b %Y"))}</div>'
-            f'</td></tr>')
-
-        weekly = section(
-            "Weekly onboarding", "Businesses onboarded each week (most recent at the bottom).",
-            bars(wow, wk_lbl))
-        monthly = section(
-            "Monthly onboarding", "Businesses onboarded each month.",
-            bars(mom, mo_lbl))
-        daily = section(
-            "Daily — last 2 weeks", "Businesses onboarded per day over the last 14 days.",
-            bars(dod, day_lbl, limit=14))
+        def para(html_text, color=INK, size=14, mt=14):
+            return (f'<p style="font-family:{FONT};font-size:{size}px;line-height:1.6;'
+                    f'color:{color};margin:{mt}px 0 0;">{html_text}</p>')
 
         # ---------- today's meetings (only if any) ----------
         meetings_html = ''
@@ -3164,54 +3125,43 @@ class GoogleSheetsService:
                 todays.append(m)
         if todays:
             todays.sort(key=lambda x: str(x.get('eventTime') or ''))
-            mrows = ''
-            for i, m in enumerate(todays):
-                bg = '#f8faf9' if i % 2 else WHITE
+            items = ''
+            for m in todays:
                 is_hor = str(m.get('vpCode') or '').upper().startswith('HORECA')
-                name = m.get('vpName') or str(m.get('vpCode') or '').replace('HORECA:', '') or '—'
-                tag = 'HoReCa' if is_hor else 'VP'
-                mrows += (
-                    f'<tr>'
-                    f'<td style="font-family:{FONT};font-size:13px;color:{INK};padding:8px 10px;'
-                    f'background:{bg};border-bottom:1px solid {HAIR};white-space:nowrap;">{esc(m.get("eventTime") or "—")}</td>'
-                    f'<td style="font-family:{FONT};font-size:13px;color:{INK};padding:8px 10px;'
-                    f'background:{bg};border-bottom:1px solid {HAIR};">'
-                    f'<span style="display:inline-block;font-size:10px;font-weight:bold;padding:1px 7px;'
-                    f'border-radius:10px;background:{TEAL_TINT};color:{TEAL_DARK};margin-right:6px;">{tag}</span>'
-                    f'{esc(name)}</td>'
-                    f'<td style="font-family:{FONT};font-size:13px;color:{MUTED};padding:8px 10px;'
-                    f'background:{bg};border-bottom:1px solid {HAIR};">{esc(m.get("eventTitle") or m.get("eventType") or "—")}</td>'
-                    f'<td style="font-family:{FONT};font-size:13px;color:{INK};padding:8px 10px;'
-                    f'background:{bg};border-bottom:1px solid {HAIR};text-align:right;">{esc(m.get("assignedTo") or "—")}</td>'
-                    f'</tr>')
-            mtable = (
-                f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
-                f'<tr>'
-                + ''.join(
-                    f'<td style="font-family:{FONT};font-size:11px;font-weight:bold;color:{MUTED};'
-                    f'text-transform:uppercase;padding:6px 10px;border-bottom:2px solid {HAIR};'
-                    f'text-align:{a};">{h}</td>'
-                    for h, a in (('Time', 'left'), ('Who', 'left'), ('Type', 'left'), ('Owner', 'right')))
-                + f'</tr>{mrows}</table>')
-            meetings_html = section(
-                f"Today's meetings ({len(todays)})",
-                "Scheduled for today — worth a follow-up.", mtable)
+                who = m.get('vpName') or str(m.get('vpCode') or '').replace('HORECA:', '') or '—'
+                typ = m.get('eventTitle') or m.get('eventType') or 'Meeting'
+                owner = m.get('assignedTo') or '—'
+                tm = m.get('eventTime') or ''
+                items += (
+                    f'<li style="font-family:{FONT};font-size:14px;line-height:1.6;color:{INK};margin:2px 0;">'
+                    f'{esc(tm + " — " if tm else "")}<b>{esc(who)}</b> ({esc(typ)}), '
+                    f'{"HoReCa" if is_hor else "VP"} · owner {esc(owner)}</li>')
+            meetings_html = (
+                heading("Meetings scheduled for today")
+                + f'<ul style="margin:4px 0 0;padding-left:20px;">{items}</ul>')
 
-        footer = (
-            f'<tr><td style="padding:26px 30px 28px;border-top:1px solid {HAIR};margin-top:20px;">'
-            f'<div style="font-family:{FONT};font-size:11px;color:{MUTED};line-height:16px;">'
-            f'Automated update from the Ravishing Dashboard · onboarding figures reflect the live data at send time.</div>'
-            f'</td></tr>')
+        # ---------- assemble (plain letter) ----------
+        body = (
+            f'<p style="font-family:{FONT};font-size:15px;color:{INK};margin:0;">Hi Team,</p>'
+            + para(lead)
+            + (para(pace_line, mt=12) if pace_line else '')
+            + heading("Weekly onboarding")
+            + simple_table(wow, wk_lbl)
+            + heading("Monthly onboarding")
+            + simple_table(mom, mo_lbl)
+            + heading("Daily — last 2 weeks")
+            + simple_table(dod, day_lbl, limit=14)
+            + meetings_html
+            + para("Regards,<br>Ravishing Dashboard — HoReCa", color=MUTED, mt=28)
+            + f'<p style="font-family:{FONT};font-size:11px;color:{MUTED};margin:22px 0 0;'
+              f'border-top:1px solid {LINE};padding-top:10px;">Automated onboarding update · '
+              f'figures reflect the live data at send time.</p>'
+        )
 
         html = (
-            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:{PAGE_BG};">'
-            f'<tr><td align="center" style="padding:24px 12px;">'
-            f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" '
-            f'style="width:600px;max-width:600px;background-color:{WHITE};border-radius:10px;overflow:hidden;">'
-            f'{masthead}{greeting}{weekly}{monthly}{daily}{meetings_html}<tr><td style="height:8px;"></td></tr>{footer}'
-            f'</table></td></tr></table>')
+            f'<div style="background:#ffffff;padding:24px 26px;max-width:560px;">{body}</div>')
 
-        subject = f"HoReCa onboarding update — {n(total_onb)} onboarded ({today_d.strftime('%d %b')})"
+        subject = f"RAVISHING · HoReCa Onboarding Update · {today_d.strftime('%A, %d %b %Y')}"
         return subject, html
 
     def _collect_horeca_status_events(self):
