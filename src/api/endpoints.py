@@ -1634,23 +1634,26 @@ async def get_system_health(request: Request, limit: int = 500):
     except Exception:
         events = []
 
+    # get_analytics_log() returns raw sheet rows via gspread's get_all_records(),
+    # so keys are the sheet's own header names (Timestamp, Event_Type, ...),
+    # not the lowercase keys used when writing the event.
     logins, api_errors = [], []
     for e in events:
-        et = e.get('event_type')
+        et = e.get('Event_Type')
         if et == 'login_failed':
-            reason = e.get('element') or ''
+            reason = e.get('Element') or ''
             logins.append({
-                'timestamp': e.get('timestamp'), 'email': e.get('user_email'),
-                'reason': reason, 'device': e.get('device_type'), 'browser': e.get('browser'),
-                'os': e.get('os'), 'ip': e.get('ip'), **_diagnose(et, reason, None),
+                'timestamp': e.get('Timestamp'), 'email': e.get('User_Email'),
+                'reason': reason, 'device': e.get('Device_Type'), 'browser': e.get('Browser'),
+                'os': e.get('OS'), 'ip': e.get('IP_Address'), **_diagnose(et, reason, None),
             })
         elif et == 'api_error':
-            reason = e.get('value') or ''
-            status = e.get('element') or ''
+            reason = e.get('Value') or ''
+            status = e.get('Element') or ''
             api_errors.append({
-                'timestamp': e.get('timestamp'), 'email': e.get('user_email'),
-                'endpoint': e.get('page'), 'status': status, 'reason': reason,
-                'device': e.get('device_type'), 'os': e.get('os'), 'ip': e.get('ip'),
+                'timestamp': e.get('Timestamp'), 'email': e.get('User_Email'),
+                'endpoint': e.get('Page'), 'status': status, 'reason': reason,
+                'device': e.get('Device_Type'), 'os': e.get('OS'), 'ip': e.get('IP_Address'),
                 **_diagnose(et, reason, status),
             })
 

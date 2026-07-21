@@ -3238,9 +3238,6 @@ function setupDashboardTabs() {
 
             tab.classList.add('active');
 
-            // Stop the System Health auto-refresh when leaving that tab
-            if (window._healthTimer) { clearInterval(window._healthTimer); window._healthTimer = null; }
-
             const dashId = tab.dataset.dash;
 
             if (dashId !== 'activity') trackEvent('page_view', `dashboard:${dashId}`);
@@ -3279,13 +3276,6 @@ function setupDashboardTabs() {
 
             }
 
-            // Lazy-load System Health when tab is clicked (superadmin only)
-
-            if (dashId === 'health') {
-
-                loadSystemHealth();
-
-            }
 
 
 
@@ -4540,11 +4530,6 @@ function applyDashboardRBAC() {
         if (rvmTab) { rvmTab.style.display = ''; rvmTab.classList.remove('rbac-hidden'); }
         if (costTab) { costTab.style.display = ''; costTab.classList.remove('rbac-hidden'); }
     }
-    // System Health sub-tab: superadmin only, always visible to them (no
-    // triple-click) so login/API issues can be checked the moment they're reported.
-    const healthTab = document.querySelector('.dash-tab-health');
-    if (healthTab) healthTab.style.display = isSuper ? '' : 'none';
-
     // Activity sub-tab: superadmin only, and hidden until the "Goa DRS"
     // header title is triple-clicked (RVM/Cost stay always-visible for admins).
     if (isSuper && activityTab && !window._activityRevealWired) {
@@ -16298,9 +16283,9 @@ const _ACT_PAGE_COLORS = {
 
 
 
-// ── System Health (superadmin observability) ─────────────────────────────────
+// ── System Health (superadmin observability, sub-tab of Activity) ────────────
 async function loadSystemHealth() {
-    const el = document.getElementById('dash-health-content');
+    const el = document.getElementById('act-health-body');
     if (!el) return;
     async function refresh() {
         try {
@@ -16311,10 +16296,13 @@ async function loadSystemHealth() {
             el.innerHTML = `<div style="padding:24px;color:#f85149;font-size:13px">Failed to load System Health: ${e.message}</div>`;
         }
     }
-    el.innerHTML = '<div class="hcrm-dash-loading">Loading System Health…</div>';
+    if (!_actHealthLoaded) {
+        el.innerHTML = '<div style="color:#6B7280;font-size:13px;padding:16px">Loading System Health...</div>';
+        _actHealthLoaded = true;
+    }
     await refresh();
-    if (window._healthTimer) clearInterval(window._healthTimer);
-    window._healthTimer = setInterval(refresh, 20000);  // real-time-ish auto refresh
+    if (_actHealthTimer) clearInterval(_actHealthTimer);
+    _actHealthTimer = setInterval(refresh, 20000);  // real-time-ish auto refresh
 }
 
 function renderSystemHealth(d) {
@@ -16340,9 +16328,9 @@ function renderSystemHealth(d) {
         || `<tr><td colspan="6" style="padding:16px;color:#6b7280">No API errors 🎉</td></tr>`;
     return `
       <style>
-        #dash-health-content table{width:100%;border-collapse:collapse}
-        #dash-health-content th{text-align:left;padding:8px 10px;border-bottom:2px solid #e5e7eb;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
-        #dash-health-content td{padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;vertical-align:top}
+        #act-health-body table{width:100%;border-collapse:collapse}
+        #act-health-body th{text-align:left;padding:8px 10px;border-bottom:2px solid #e5e7eb;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+        #act-health-body td{padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;vertical-align:top}
       </style>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px">
         ${tile('Failed logins', s.failed_logins || 0, '#b91c1c')}
@@ -16375,6 +16363,8 @@ async function loadActivityLog() {
     document.getElementById('act-flow-tab').addEventListener('click', () => actSwitchTab('flow'));
 
     document.getElementById('act-trends-tab').addEventListener('click', () => actSwitchTab('trends'));
+
+    document.getElementById('act-health-tab').addEventListener('click', () => actSwitchTab('health'));
 
 
 
@@ -16420,9 +16410,15 @@ async function loadActivityLog() {
 
 
 
+let _actHealthLoaded = false;
+let _actHealthTimer = null;
+
 function actSwitchTab(tab) {
 
-    ['feed','profiles','flow','trends'].forEach(t => {
+    // Stop the System Health auto-refresh when leaving that sub-tab
+    if (tab !== 'health' && _actHealthTimer) { clearInterval(_actHealthTimer); _actHealthTimer = null; }
+
+    ['feed','profiles','flow','trends','health'].forEach(t => {
 
         document.getElementById(`act-${t}-tab`).classList.toggle('act-tab-active', t === tab);
 
@@ -16445,6 +16441,12 @@ function actSwitchTab(tab) {
         _actTrendsLoaded = true;
 
         loadActTrends();
+
+    }
+
+    if (tab === 'health') {
+
+        loadSystemHealth();
 
     }
 
@@ -17005,6 +17007,8 @@ function activityShell() {
 
     <button id="act-trends-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">Trends</button>
 
+    <button id="act-health-tab" style="background:none;border:none;border-bottom:2px solid transparent;color:#6B7280;font-size:13px;font-weight:500;padding:11px 16px 10px;cursor:pointer;font-family:inherit;margin-bottom:-1px;transition:color .15s">🩺 System Health</button>
+
   </div>
 
   <!-- Feed panel -->
@@ -17147,6 +17151,12 @@ function activityShell() {
 
     <div id="act-tr-legend" style="padding:0 24px 20px;display:flex;gap:14px;flex-wrap:wrap"></div>
 
+  </div>
+
+  <!-- System Health panel -->
+
+  <div id="act-health-panel" style="display:none;background:#F8FAFC;padding:18px 24px 24px">
+    <div id="act-health-body"><div style="color:#6B7280;font-size:13px;padding:16px">Loading System Health...</div></div>
   </div>
 
 </div>
