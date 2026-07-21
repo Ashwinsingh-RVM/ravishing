@@ -4512,11 +4512,10 @@ function applyDashboardRBAC() {
 
     }
 
-    // Hidden-by-default sub-tabs, revealed by triple-clicking the "Goa DRS"
-    // header title:
-    //   - Any admin: RVM + Cost
-    //   - ashwin only: additionally Activity
-    // RVM Deployment (ct) is a normal, always-visible tab for admins.
+    // Dashboard sub-tab visibility (triple-click reveal removed):
+    //   - admin: all sub-tabs shown directly (Progress, RVM, Cost, HoReCa)
+    //   - superadmin (ashwin): additionally the Activity sub-tab
+    //   - other roles: RVM/Cost/Activity stay hidden
 
     const rvmTab = document.querySelector('.dash-tab[data-dash="rvm"]');
     const costTab = document.querySelector('.dash-tab[data-dash="cost"]');
@@ -4526,7 +4525,15 @@ function applyDashboardRBAC() {
     // Keep these hidden on (re)load
     [rvmTab, costTab, activityTab].forEach(t => { if (t) t.style.display = 'none'; });
 
-    if (role === 'admin' && !window._secretRevealWired) {
+    // Admin sees ALL dashboard sub-tabs directly — no triple-click needed.
+    // The Activity sub-tab stays superadmin-only.
+    if (role === 'admin') {
+        if (rvmTab) { rvmTab.style.display = ''; rvmTab.classList.remove('rbac-hidden'); }
+        if (costTab) { costTab.style.display = ''; costTab.classList.remove('rbac-hidden'); }
+    }
+    if (isSuper && activityTab) activityTab.style.display = '';
+
+    if (false && role === 'admin' && !window._secretRevealWired) {  // triple-click reveal removed
 
         window._secretRevealWired = true;
 
