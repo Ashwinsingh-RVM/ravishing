@@ -724,6 +724,32 @@ async def login(request: LoginRequest, response: Response, http_request: Request
         user = auth_service.validate_user(request.email, request.pin)
 
         if not user:
+            # Track the failed attempt so login problems are visible in the
+            # analytics log. Records email + reason only — NEVER the PIN.
+            # reason = "unknown_email" (not in Authorized-Users) vs "wrong_pin"
+            # (email is present but the PIN didn't match).
+            try:
+                email_in = (request.email or '').strip().lower()
+                known = any(u['email'] == email_in
+                            for u in auth_service.get_authorized_users())
+                reason = 'wrong_pin' if known else 'unknown_email'
+                ua = http_request.headers.get('user-agent', '')
+                device = _parse_device_info(ua)
+                fwd = http_request.headers.get('x-forwarded-for')
+                ip = fwd.split(',')[0].strip() if fwd else (http_request.client.host if http_request.client else 'unknown')
+                GoogleSheetsService().log_analytics_event({
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'user_email': email_in,
+                    'user_name': '',
+                    'event_type': 'login_failed',
+                    'page': '', 'element': reason, 'value': '', 'session_id': '',
+                    'device_type': device['device_type'],
+                    'browser': device['browser'],
+                    'os': device['os'],
+                    'ip': ip,
+                })
+            except Exception:
+                pass
             raise HTTPException(status_code=401, detail="Invalid email or PIN")
 
         # Create signed session cookie
