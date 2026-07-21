@@ -259,6 +259,52 @@ async def _start_auto_sync():
           f"then every {AUTO_SYNC_INTERVAL_HOURS}h (writes Enhanced tab only)")
 
 
+# ==================== In-app HoReCa cache warmer ====================
+# Keeps the heavy HoReCa caches (Enhanced/app_sheet/Superset/Superset_v1 +
+# Overview + Insight validation) warm so a user request never triggers the ~9s
+# cold Sheets read. Entirely self-contained: runs in THIS process on a timer,
+# no external scheduler, cron, or Claude routine. Read-only (no sheet writes).
+# Failures never kill the thread.
+CACHE_WARM_ENABLED = os.getenv('CACHE_WARM_ENABLED', '1') == '1'
+CACHE_WARM_INTERVAL_SEC = float(os.getenv('CACHE_WARM_INTERVAL_SEC', '300'))  # 5 min
+_cache_warm_thread = None
+_cache_warm_last: dict = {}
+
+
+def _cache_warm_run_once():
+    entry = {'started_at': datetime.now().isoformat(timespec='seconds')}
+    try:
+        GoogleSheetsService().warm_horeca_caches()
+        entry['status'] = 'ok'
+    except Exception as e:
+        entry['status'] = 'error'
+        entry['error'] = str(e)
+    entry['finished_at'] = datetime.now().isoformat(timespec='seconds')
+    _cache_warm_last.clear()
+    _cache_warm_last.update(entry)
+
+
+def _cache_warm_loop():
+    while True:
+        _cache_warm_run_once()   # warm immediately at startup, then on interval
+        time.sleep(CACHE_WARM_INTERVAL_SEC)
+
+
+@app.on_event("startup")
+async def _start_cache_warmer():
+    global _cache_warm_thread
+    if not CACHE_WARM_ENABLED:
+        print("[cache-warmer] disabled via CACHE_WARM_ENABLED")
+        return
+    if _cache_warm_thread and _cache_warm_thread.is_alive():
+        return
+    import threading
+    _cache_warm_thread = threading.Thread(target=_cache_warm_loop, daemon=True,
+                                          name='horeca-cache-warmer')
+    _cache_warm_thread.start()
+    print(f"[cache-warmer] warming HoReCa caches now, then every {int(CACHE_WARM_INTERVAL_SEC)}s")
+
+
 # ==================== Daily digest email scheduler ====================
 # Sends the HoReCa + RVM onboarding/deployment digests once a day, at a fixed
 # IST hour, to DIGEST_TO. Read-only (no sheet writes). Failures never kill the

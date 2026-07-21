@@ -22,7 +22,7 @@ settings = Settings()
 def _gs_retry(fn, *args, _attempts=4, _base_delay=2, **kwargs):
     """Call a gspread operation, retrying on transient Google Sheets errors
     (429 rate-limit and 5xx) with exponential backoff. This is what stops a
-    momentary per-minute read-cap from surfacing to the browser as a 500 —
+    momentary per-minute read-cap from surfacing to the browser as a 500 â€”
     it waits and retries instead of crashing the request."""
     import time as _t
     last = None
@@ -55,7 +55,7 @@ def _safe_int(value, default=0):
         except (ValueError, TypeError):
             return default
 
-# OAuth configuration — from env vars or settings (loaded lazily to allow settings init first)
+# OAuth configuration â€” from env vars or settings (loaded lazily to allow settings init first)
 def _get_client_id():
     return os.getenv('GOOGLE_CLIENT_ID') or settings.google_client_id
 
@@ -480,7 +480,7 @@ class GoogleSheetsService:
     def get_deployment_data(self) -> List[Dict]:
         """Fetch all rows from the 'RVM_Deploy' sheet tab. Headers are on row 2
         (row 1 holds merged section titles), fed via an IMPORTRANGE from a
-        separate 'Master Base' spreadsheet spanning columns A:AK — any columns
+        separate 'Master Base' spreadsheet spanning columns A:AK â€” any columns
         added later (e.g. Electrical Done, Machine Date) live beyond AK and are
         picked up automatically since we read the whole sheet, not a fixed range.
         """
@@ -533,7 +533,7 @@ class GoogleSheetsService:
                 loc_name = g('Location Name', 'Location_Name')
                 entity_name = g('Entity Name', 'Entity_Name')
                 # Keep any row that identifies a place. Some rows have an Entity Name
-                # but no Location Name yet — those are still real locations and must
+                # but no Location Name yet â€” those are still real locations and must
                 # be counted (Location Identified should match the sheet's row count).
                 if not loc_name and not entity_name:
                     continue
@@ -663,7 +663,7 @@ class GoogleSheetsService:
 
     def init_rc_tab(self) -> dict:
         """Create the 'RC Deployment' tab in the Google Sheet with standard headers.
-        Safe to call multiple times — skips if tab already exists.
+        Safe to call multiple times â€” skips if tab already exists.
         """
         try:
             spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
@@ -701,7 +701,7 @@ class GoogleSheetsService:
                 "Done",
                 "Yes", "Done",
                 "2026-07-01", "Done",
-                "15.4909", "73.8278", "Dummy row — replace with real RC data",
+                "15.4909", "73.8278", "Dummy row â€” replace with real RC data",
             ]
             ws.update('A2', [dummy])
             return {"status": "created", "message": "RC Deployment tab created with headers and 1 dummy row", "tab": "RC Deployment"}
@@ -711,7 +711,7 @@ class GoogleSheetsService:
     # ==================== Plan vs Actual (PvA) Methods ====================
 
     def _get_or_create_pva_ws(self):
-        """Return the RVM-PvA worksheet (18 cols A–R), creating it with headers if needed."""
+        """Return the RVM-PvA worksheet (18 cols Aâ€“R), creating it with headers if needed."""
         spreadsheet = self.gc.open_by_key(self.spreadsheet_id)
         try:
             return spreadsheet.worksheet("RVM-PvA")
@@ -1195,11 +1195,11 @@ class GoogleSheetsService:
             stage_map = {}
             for i, stage in enumerate(DeploymentStage):
                 num = i + 1
-                stage_map[stage.value] = num                          # email_sent → 7
+                stage_map[stage.value] = num                          # email_sent â†’ 7
                 label = STAGE_LABELS.get(stage, '')
                 if label:
-                    stage_map[label] = num                            # Email Sent → 7
-                    stage_map[label.lower()] = num                    # email sent → 7
+                    stage_map[label] = num                            # Email Sent â†’ 7
+                    stage_map[label.lower()] = num                    # email sent â†’ 7
 
             # Legacy mappings
             stage_map['meeting_scheduled'] = 2
@@ -1370,7 +1370,7 @@ class GoogleSheetsService:
                 worksheet.update(f'B{row_num}', [[name]])
                 return {'success': True, 'action': 'updated', 'row': row_num}
             else:
-                # New user — append row
+                # New user â€” append row
                 row_data = [
                     email, name,
                     data.get('total_xp', 0),
@@ -1425,7 +1425,7 @@ class GoogleSheetsService:
                     if email:
                         progress_by_email[email] = row
             except gspread.WorksheetNotFound:
-                pass  # No progress yet — all users will show 0
+                pass  # No progress yet â€” all users will show 0
 
             # Merge: all authorized users with their progress (or 0s)
             merged = []
@@ -1504,7 +1504,7 @@ class GoogleSheetsService:
     # Updated_By / STATUS_CHANGE log entries to their canonical email.
     # Built from the live sheet's real distinct values. Deliberately does
     # NOT merge "Ayaansh" (23 occurrences in Updated_By) into "Ayaan" (72
-    # occurrences) — these may be two different people, not a typo, so it's
+    # occurrences) â€” these may be two different people, not a typo, so it's
     # left unmapped rather than guessed.
     HORECA_ASSOCIATE_ALIASES = {
         'varsha': 'varsha.madhyan@recykal.com',
@@ -1553,7 +1553,7 @@ class GoogleSheetsService:
             _horeca_crm_cache['data'] = []
             _horeca_crm_cache['headers'] = []
             _horeca_crm_cache['clusters'] = ({}, {})
-            _horeca_crm_cache['expiry'] = now + timedelta(minutes=2)
+            _horeca_crm_cache['expiry'] = now + _HORECA_CACHE_TTL
             return [], []
 
         headers = all_values[0]
@@ -1562,7 +1562,7 @@ class GoogleSheetsService:
         _horeca_crm_cache['data'] = rows
         _horeca_crm_cache['headers'] = headers
         _horeca_crm_cache['clusters'] = self._get_horeca_duplicate_clusters(rows, headers)
-        _horeca_crm_cache['expiry'] = now + timedelta(minutes=2)
+        _horeca_crm_cache['expiry'] = now + _HORECA_CACHE_TTL
         return rows, headers
 
     def _get_horeca_clusters_cached(self):
@@ -1597,7 +1597,7 @@ class GoogleSheetsService:
 
     # Same-name rows within this distance are treated as the same physical
     # outlet. Matches the scale of the offline ETL's own examples in the
-    # "Duplicates" tab (6m-175m) — deliberately tight, since a common
+    # "Duplicates" tab (6m-175m) â€” deliberately tight, since a common
     # generic name (e.g. "Aangan Restaurant") can legitimately recur at
     # unrelated locations many km apart and must NOT be merged.
     HORECA_DUPLICATE_GEO_THRESHOLD_M = 300
@@ -1609,9 +1609,9 @@ class GoogleSheetsService:
         flags are unreliable in practice (Is_Duplicate is never TRUE in the
         live sheet, and Merged_Place_IDs is usually just self-referential):
           1) Merged_Place_IDs, when it points to a DIFFERENT Place ID than
-             its own row — trust it, it's a genuine ETL-detected link.
+             its own row â€” trust it, it's a genuine ETL-detected link.
           2) Exact match on normalized name + close geo proximity (<= 300m)
-             — catches slip-throughs the ETL never flagged (e.g. two
+             â€” catches slip-throughs the ETL never flagged (e.g. two
              identical-name rows from different source batches that are
              actually the same physical outlet). Geo proximity, not the
              City text column, is the disambiguator: City values are
@@ -1623,7 +1623,7 @@ class GoogleSheetsService:
         Returns (place_to_cluster, cluster_info) where cluster_info maps a
         cluster root id -> {'members': [place_id, ...], 'primary': place_id}
         for every cluster with 2+ members. Singleton businesses aren't
-        included — callers should treat "not present" as "not a duplicate".
+        included â€” callers should treat "not present" as "not a duplicate".
         """
         h = {hdr: i for i, hdr in enumerate(headers)}
         pid_idx = h.get('Place ID', 0)
@@ -1678,7 +1678,7 @@ class GoogleSheetsService:
                 name_buckets.setdefault(norm_name, []).append((pid, lat, lng))
 
         # Within each same-name bucket, union pairs that are also geographically
-        # close — O(n^2) per bucket, but buckets are tiny (a handful of rows
+        # close â€” O(n^2) per bucket, but buckets are tiny (a handful of rows
         # sharing an exact normalized name out of ~16k total).
         for members in name_buckets.values():
             if len(members) < 2:
@@ -1713,7 +1713,7 @@ class GoogleSheetsService:
 
     def _collapse_horeca_duplicates(self, rows, headers):
         """Collapse duplicate-cluster rows down to one (the freshest) per
-        cluster. Read-time only — never mutates the sheet. Returns
+        cluster. Read-time only â€” never mutates the sheet. Returns
         (collapsed_rows, merge_meta) where merge_meta maps the surviving
         primary's Place ID -> {'merged_place_ids': [...], 'cluster_size': N}.
         """
@@ -1769,7 +1769,7 @@ class GoogleSheetsService:
 
     def _parse_horeca_attempts(self, notes_text, place_id='', name=''):
         """Extract ATTEMPT_LOGGED events auto-logged into Outreach_Notes.
-        Attempts are tracked going forward only — there's no way to
+        Attempts are tracked going forward only â€” there's no way to
         recover contact-attempt history for businesses touched before this
         existed, so this is genuinely empty for most pre-existing leads."""
         attempts = []
@@ -1796,7 +1796,7 @@ class GoogleSheetsService:
 
     def log_horeca_attempt(self, place_id, note='', author='Team', actor_email='', actor_name=''):
         """Append a contact-attempt entry into Outreach_Notes (same
-        append-only convention as STATUS_CHANGE — no new sheet structure).
+        append-only convention as STATUS_CHANGE â€” no new sheet structure).
         Returns the attempt count for this business so far (this session
         onward only)."""
         try:
@@ -1871,7 +1871,7 @@ class GoogleSheetsService:
             'maps_url': safe_get(h.get('Google Maps URL', 12)),
             'priority_score': safe_get(h.get('Priority_Score', 39)),
             'priority_rank': safe_get(h.get('Priority_Rank', 40)),
-            # Meso zone fields (5 km²) — indices updated after 7 micro col deletion
+            # Meso zone fields (5 kmÂ²) â€” indices updated after 7 micro col deletion
             'zone_id': safe_get(h.get('Zone_ID', 47)),
             'zone': safe_get(h.get('Zone_Name', 48)),
             'zone_count': safe_get(h.get('Zone_HoReCa_Count', 49)),
@@ -1940,7 +1940,7 @@ class GoogleSheetsService:
 
         # Map each link key -> the Superset business (item index) it belongs
         # to, so onboarded can be counted as DISTINCT Superset businesses
-        # (not per-Enhanced-row — duplicate PAN rows must not inflate it).
+        # (not per-Enhanced-row â€” duplicate PAN rows must not inflate it).
         linked = {'A': {}, 'P': {}, 'G': {}, 'F': {}}  # id -> onboarded_date
         key_to_item = {}   # (tag, id) -> item index
         item_keys = []     # parallel to active_items: list of link keys per item
@@ -1996,7 +1996,7 @@ class GoogleSheetsService:
 
             if status or is_linked:
                 # Onboarded = confirmed by Superset (system of record) ONLY,
-                # and counted per DISTINCT Superset business — so the map
+                # and counted per DISTINCT Superset business â€” so the map
                 # total ties to Superset's ACTIVE figure (~1,112), never
                 # inflated by self-reported claims or duplicate Enhanced rows.
                 onboarded = is_linked
@@ -2050,7 +2050,7 @@ class GoogleSheetsService:
                     'source': 'appsheet-coords',
                 })
 
-        # Onboarded counts are per DISTINCT Superset business → tie to ACTIVE.
+        # Onboarded counts are per DISTINCT Superset business â†’ tie to ACTIVE.
         counts['onboarded'] = sum(1 for v in item_has_coord if v)
         counts['onboarded_nocoord'] = len(active_items) - counts['onboarded']
 
@@ -2203,7 +2203,7 @@ class GoogleSheetsService:
     def _ensure_enhanced_pan_gst_columns(self):
         """One-time, idempotent migration: add PAN_Number, GST_Number, and
         FSSAI_Number columns to Enhanced (same safe pattern as
-        AppSheet_Lead_ID — verify empty before claiming). Returns
+        AppSheet_Lead_ID â€” verify empty before claiming). Returns
         {'PAN_Number': idx, 'GST_Number': idx, 'FSSAI_Number': idx}
         (1-based column indices)."""
         spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
@@ -2225,7 +2225,7 @@ class GoogleSheetsService:
             sample_cells = worksheet.range(2, next_col_idx, 20, next_col_idx)
             if any(c.value for c in sample_cells):
                 raise RuntimeError(
-                    f'Column {next_col_idx} on Enhanced is not empty — refusing to claim it as {col_name}'
+                    f'Column {next_col_idx} on Enhanced is not empty â€” refusing to claim it as {col_name}'
                 )
             if worksheet.col_count < next_col_idx:
                 worksheet.resize(cols=next_col_idx)
@@ -2250,7 +2250,7 @@ class GoogleSheetsService:
 
             # Capture the prior status before any writes below, so a real
             # transition can be auto-logged into Outreach_Notes afterward
-            # (DOD day-on-day tracking — see bottom of this method).
+            # (DOD day-on-day tracking â€” see bottom of this method).
             new_status = updates.get('outreach_status')
             from_status = ''
             if new_status:
@@ -2274,7 +2274,7 @@ class GoogleSheetsService:
             if 'assigned_to' in updates and updates['assigned_to']:
                 assignee = updates.pop('assigned_to')
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-                new_entry = f"[{timestamp}|{author}] → {assignee}"
+                new_entry = f"[{timestamp}|{author}] â†’ {assignee}"
 
                 # Write current assignee
                 worksheet.update(f'BN{row_num}', [[assignee]])
@@ -2309,7 +2309,7 @@ class GoogleSheetsService:
             worksheet.update(f'BM{row_num}', [[author]])
 
             # Auto-log real status transitions into Outreach_Notes (existing,
-            # already-append-only column — no new sheet structure). This is
+            # already-append-only column â€” no new sheet structure). This is
             # what powers the Day-on-Day view and per-business timeline.
             # Never let a logging hiccup break the update the user is waiting on.
             if new_status and new_status != from_status:
@@ -2388,7 +2388,7 @@ class GoogleSheetsService:
                 if 'Assigned_To' in h: row[h['Assigned_To']] = data['assigned_to']
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
                 if 'Assignment_History' in h:
-                    row[h['Assignment_History']] = f"[{timestamp}|Manual Entry] → {data['assigned_to']}"
+                    row[h['Assignment_History']] = f"[{timestamp}|Manual Entry] â†’ {data['assigned_to']}"
 
             # Initial note
             if data.get('note'):
@@ -2487,13 +2487,13 @@ class GoogleSheetsService:
         """Current-state snapshot for the Overall Daily dashboard: for each
         whitelisted associate, how many businesses they're responsible for
         sit at each Outreach_Status right now. This is a live count of
-        current holdings, not a history of events — a business counts once,
+        current holdings, not a history of events â€” a business counts once,
         under whatever status it's at today, however many times that status
         has changed. Duplicate-cluster rows are collapsed first so a merged
         business isn't double-counted under two associates.
 
         Only the roster in HORECA_ASSOCIATE_WHITELIST is returned (all 10,
-        even with zero counts) — free-text Assigned_To values that don't
+        even with zero counts) â€” free-text Assigned_To values that don't
         resolve to one of them (via HORECA_ASSOCIATE_ALIASES) are counted
         in 'unmapped_count' but not attributed to anyone, rather than
         guessed."""
@@ -2570,7 +2570,7 @@ class GoogleSheetsService:
         """Approximate lead-to-OB-Filled cycle time from auto-logged
         STATUS_CHANGE events. For businesses that existed before this
         tracking was added, the first tracked event only marks when the
-        feature first observed them — not their true original lead date —
+        feature first observed them â€” not their true original lead date â€”
         so this is exact only for businesses created after this shipped."""
         timeline = self.get_horeca_business_timeline(place_id)
         events = timeline['events']
@@ -2597,7 +2597,7 @@ class GoogleSheetsService:
     def get_horeca_cycle_time_overview(self):
         """Aggregate lead-to-OB-Filled cycle time across ALL businesses,
         using ONLY real tracked STATUS_CHANGE history (never the
-        approximate backfill — a single snapshot point can't tell you how
+        approximate backfill â€” a single snapshot point can't tell you how
         long a journey took). Since real tracking only started recently,
         this will show a small or zero sample size for a while; that's
         surfaced explicitly via sample_size rather than faked."""
@@ -2642,7 +2642,7 @@ class GoogleSheetsService:
 
     def get_horeca_metrics_overview(self, stuck_threshold_days=14):
         """Top-line metrics for the HoReCa Metrics dashboard: conversion
-        rate (both denominators — worked leads and total database), a
+        rate (both denominators â€” worked leads and total database), a
         current funnel snapshot, a stuck-lead count, and the real-only
         cycle-time aggregate above."""
         rows, headers = self._get_horeca_crm_cache()
@@ -2687,7 +2687,7 @@ class GoogleSheetsService:
         }
 
     def _get_appsheet_onboarded(self):
-        """Businesses associates have marked 'OB Form filled' in app_sheet —
+        """Businesses associates have marked 'OB Form filled' in app_sheet â€”
         the LIVE onboarded source (moves within the ~2-min cache the moment
         an associate updates, no Superset paste needed). One entry per row:
         name, id, lat, lng (parsed from Location, may be None), date (from
@@ -2724,6 +2724,27 @@ class GoogleSheetsService:
             pass
         return out
 
+    def warm_horeca_caches(self):
+        """Force-refresh the heavy HoReCa caches so a user request never
+        triggers the ~9s cold Sheets read. Called on an interval by the in-app
+        `_cache_warmer` thread (endpoints.py) — no external scheduler involved.
+        Clears the sheet-cache expiries, reloads them fresh, then recomputes the
+        Overview and Insight (validation) views into their caches."""
+        global _horeca_crm_cache, _appsheet_cache, _superset_cache, _superset_v1_cache
+        # Clear + reload each cache one at a time so no cache sits empty longer
+        # than its own reload — a concurrent user read still finds the others warm.
+        _horeca_crm_cache['expiry'] = None
+        self._get_horeca_crm_cache()
+        _appsheet_cache['expiry'] = None
+        self._get_appsheet_cache()
+        _superset_cache['expiry'] = None
+        self._get_superset_cache()
+        _superset_v1_cache['expiry'] = None
+        self._get_superset_v1_cache()
+        # Recompute derived views (read the now-warm sheet caches) into their caches.
+        self.get_horeca_overview()
+        self._compute_superset_validation()
+
     def get_horeca_overview(self, target=10000, run_rate_window_days=30):
         """Overview tab: funnel KPIs (cumulative, from Enhanced), the REAL
         onboarded count (Superset ACTIVE) shown alongside our self-reported
@@ -2731,7 +2752,7 @@ class GoogleSheetsService:
         Day-on-Day + Month-on-Month movement tables.
 
         DoD/MoM movement is derived from each Enhanced row's Last_Updated
-        date bucketed under its current status tier — approximate for history
+        date bucketed under its current status tier â€” approximate for history
         (Last_Updated only marks the latest touch), exact going forward. The
         onboarded TOTAL is reconciled against Superset (the real backend), so
         the headline number is trustworthy even though per-day attribution is
@@ -2741,7 +2762,7 @@ class GoogleSheetsService:
         h = {hdr: i for i, hdr in enumerate(headers)}
         status_idx = h.get('Outreach_Status', 53)
         # DoD/MoM are dated off "Updated Date" (the field team's own work date),
-        # NOT "Last_Updated" — the latter is an app timestamp that gets bumped
+        # NOT "Last_Updated" â€” the latter is an app timestamp that gets bumped
         # by any edit (incl. bulk sync/backfill ops), which produced impossible
         # single-day spikes. "Updated Date" reflects when work actually happened.
         updated_date_idx = h.get('Updated Date')
@@ -2841,7 +2862,7 @@ class GoogleSheetsService:
             if r >= reached_bar:
                 add_reached(wd)
 
-        # ONBOARDED (headline) = ACTIVE businesses in the Superset_v1 tab — a
+        # ONBOARDED (headline) = ACTIVE businesses in the Superset_v1 tab â€” a
         # direct, daily-refreshed Superset dump that is the system of record
         # for confirmed onboardings. Each ACTIVE business is dated by its
         # 'updated_day' (the onboarding date) so the weekly & monthly buckets
@@ -2863,7 +2884,7 @@ class GoogleSheetsService:
                     sup(row, 'updated_day') or sup(row, 'created_day') or sup(row, 'Date'))
 
             for srow in sup_rows:
-                # 'started onboarding' movement — created_day if present.
+                # 'started onboarding' movement â€” created_day if present.
                 created = parse_work_date(sup(srow, 'created_day')) or parse_work_date(sup(srow, 'Date'))
                 if created:
                     dk, wk, mk = created.isoformat(), (created - timedelta(days=created.weekday())).isoformat(), created.strftime('%Y-%m')
@@ -2885,7 +2906,7 @@ class GoogleSheetsService:
             pass
 
         # app_sheet OB-Filled kept only as a secondary "reported by associates"
-        # reference figure — no longer the headline or the bucket driver.
+        # reference figure â€” no longer the headline or the bucket driver.
         try:
             onboarded_reported = len(self._get_appsheet_onboarded())
         except Exception:
@@ -2896,7 +2917,7 @@ class GoogleSheetsService:
 
         # Keep the funnel monotonic. Onboarded comes from Superset (the system
         # of record), while reached / OB-opened / OB-filled / touch_base come
-        # from Enhanced statuses — which associates DON'T always update (they
+        # from Enhanced statuses â€” which associates DON'T always update (they
         # work app_sheet/Superset), so the upstream stages under-count and can
         # fall below onboarded. But every onboarded business logically passed
         # through each earlier stage, so floor each stage at the one below it:
@@ -2906,7 +2927,7 @@ class GoogleSheetsService:
         reached = max(reached, ob_opened)
         touch_base = max(touch_base, reached)
 
-        # Run rate: total onboarded ÷ days since onboarding first began.
+        # Run rate: total onboarded Ã· days since onboarding first began.
         # first_onboard_date comes from the earliest "Updated Date" among
         # OB-Filled rows; days_active is inclusive of today.
         if first_onboard_date:
@@ -2919,7 +2940,7 @@ class GoogleSheetsService:
 
         def rowify(store):
             # conv_touch_base / conv_overall are CUMULATIVE: total onboarded
-            # up to and including that period, over the fixed denominators —
+            # up to and including that period, over the fixed denominators â€”
             # so the columns read as "where we stood as of that day/month",
             # not just that period's isolated contribution.
             out = []
@@ -2981,7 +3002,7 @@ class GoogleSheetsService:
         }
 
     def build_horeca_digest(self, for_date_str=None):
-        """Personal, letter-style HoReCa ONBOARDING update — written in the
+        """Personal, letter-style HoReCa ONBOARDING update â€” written in the
         first person, with a couple of inline line graphs (daily + weekly
         onboarding trend) and a simple monthly table. Onboarding only.
         Read-only. Returns (subject, html_body, inline_images) where
@@ -3140,16 +3161,16 @@ class GoogleSheetsService:
             lw_mon = (today_d - timedelta(days=7))
             lw_mon = lw_mon - timedelta(days=lw_mon.weekday())
             lw = find(wow, lw_mon.isoformat())
-            span = f"{lw_mon.strftime('%d %b')}–{(lw_mon + timedelta(days=6)).strftime('%d %b')}"
+            span = f"{lw_mon.strftime('%d %b')}â€“{(lw_mon + timedelta(days=6)).strftime('%d %b')}"
             if lw and onb(lw):
-                lead = (f"Sharing where we landed on HoReCa onboarding last week ({span}) — "
+                lead = (f"Sharing where we landed on HoReCa onboarding last week ({span}) â€” "
                         f"we brought on <b>{n(onb(lw))}</b> businesses.")
             else:
                 lead = f"Sharing our HoReCa onboarding numbers for last week ({span})."
         else:
             y = find(dod, yesterday_d.isoformat())
             if y and onb(y):
-                lead = (f"Quick HoReCa onboarding update — we added "
+                lead = (f"Quick HoReCa onboarding update â€” we added "
                         f"<b>{n(onb(y))}</b> businesses yesterday ({yesterday_d.strftime('%d %b')}).")
             else:
                 lead = f"Quick HoReCa onboarding update for {yesterday_d.strftime('%d %b')}."
@@ -3227,14 +3248,14 @@ class GoogleSheetsService:
             items = ''
             for m in todays:
                 is_hor = str(m.get('vpCode') or '').upper().startswith('HORECA')
-                who = m.get('vpName') or str(m.get('vpCode') or '').replace('HORECA:', '') or '—'
+                who = m.get('vpName') or str(m.get('vpCode') or '').replace('HORECA:', '') or 'â€”'
                 typ = m.get('eventTitle') or m.get('eventType') or 'Meeting'
-                owner = m.get('assignedTo') or '—'
+                owner = m.get('assignedTo') or 'â€”'
                 tm = m.get('eventTime') or ''
                 items += (
                     f'<li style="font-family:{FONT};font-size:14px;line-height:1.6;color:{INK};margin:2px 0;">'
-                    f'{esc(tm + " — " if tm else "")}<b>{esc(who)}</b> ({esc(typ)}), '
-                    f'{"HoReCa" if is_hor else "VP"} · owner {esc(owner)}</li>')
+                    f'{esc(tm + " â€” " if tm else "")}<b>{esc(who)}</b> ({esc(typ)}), '
+                    f'{"HoReCa" if is_hor else "VP"} Â· owner {esc(owner)}</li>')
             meetings_html = (heading("A few meetings on today")
                              + f'<ul style="margin:4px 0 0;padding-left:20px;">{items}</ul>')
 
@@ -3242,20 +3263,20 @@ class GoogleSheetsService:
         body = (
             f'<p style="font-family:{FONT};font-size:15px;color:{INK};margin:0;">Hi Team,</p>'
             + para(lead)
-            + heading("Daily onboarding — last 2 weeks")
+            + heading("Daily onboarding â€” last 2 weeks")
             + daily_chart
             + heading("Weekly onboarding")
             + weekly_chart
             + heading("Monthly onboarding")
             + month_table(mom)
             + meetings_html
-            + para("Keep it going 💪", mt=22)
+            + para("Keep it going ðŸ’ª", mt=22)
             + para("Best,<br>Ashwin", color=INK, mt=18)
         )
 
         html = (f'<div style="background:#ffffff;padding:24px 26px;width:100%;'
                 f'max-width:960px;margin:0;text-align:left;box-sizing:border-box;">{body}</div>')
-        subject = f"RAVISHING · HoReCa Onboarding Update · {today_d.strftime('%A, %d %b %Y')}"
+        subject = f"RAVISHING Â· HoReCa Onboarding Update Â· {today_d.strftime('%A, %d %b %Y')}"
         return subject, html, images
 
     def build_rvm_digest(self, for_date_str=None):
@@ -3303,7 +3324,7 @@ class GoogleSheetsService:
         live = done('machineLive')
 
         from collections import Counter
-        by_block = Counter(l.get('block', '') or '—'
+        by_block = Counter(l.get('block', '') or 'â€”'
                            for l in locs if str(l.get('rvmDeployed', '')).strip() in ('Yes', 'Done'))
 
         # ---------- horizontal bar chart (PNG via PIL, referenced by cid:) ----------
@@ -3383,7 +3404,7 @@ class GoogleSheetsService:
             return (f'<p style="font-family:{FONT};font-size:{size}px;line-height:1.6;'
                     f'color:{color};margin:{mt}px 0 0;">{html_text}</p>')
 
-        lead = (f"Quick RVM deployment update — we've deployed <b>{n(deployed)}</b> "
+        lead = (f"Quick RVM deployment update â€” we've deployed <b>{n(deployed)}</b> "
                 f"machines of {n(plan_total)} planned, across {n(total_loc)} identified "
                 f"locations. {n(delivered)} machines are delivered and {n(shed)} sheds are ready.")
 
@@ -3405,15 +3426,15 @@ class GoogleSheetsService:
 
         html = (f'<div style="background:#ffffff;padding:24px 26px;width:100%;'
                 f'max-width:960px;margin:0;text-align:left;box-sizing:border-box;">{body}</div>')
-        subject = (f"RAVISHING · RVM Deployment Update · {today_d.strftime('%A, %d %b %Y')} "
-                   f"· {n(deployed)} deployed")
+        subject = (f"RAVISHING Â· RVM Deployment Update Â· {today_d.strftime('%A, %d %b %Y')} "
+                   f"Â· {n(deployed)} deployed")
         return subject, html, images
 
     def _collect_horeca_status_events(self):
         """Flat list of every status-reached event across all (collapsed)
         Enhanced businesses: real auto-logged STATUS_CHANGE entries where
-        they exist, plus a one-time read-only approximation — current
-        Outreach_Status dated to Last_Updated — for businesses with no real
+        they exist, plus a one-time read-only approximation â€” current
+        Outreach_Status dated to Last_Updated â€” for businesses with no real
         tracked history at all (everything from before this feature
         shipped, when Outreach_Status only ever held one value at a time).
         Nothing is written back to the sheet. Shared by the Day-on-Day grid
@@ -3441,7 +3462,7 @@ class GoogleSheetsService:
                     events.append({**ev, 'approximate': False})
                 continue
 
-            # No real tracked history — approximate from current snapshot.
+            # No real tracked history â€” approximate from current snapshot.
             status = row[status_idx].strip() if status_idx < len(row) else ''
             last_updated = row[last_updated_idx].strip() if last_updated_idx < len(row) else ''
             if status not in self.HORECA_OUTREACH_STATUSES or not last_updated:
@@ -3466,7 +3487,7 @@ class GoogleSheetsService:
         section: rows are dates in the range, columns are the canonical
         outreach statuses, values are how many businesses reached that
         status on that day (real tracked events, plus a read-only
-        approximation for businesses with no tracked history — see
+        approximation for businesses with no tracked history â€” see
         _collect_horeca_status_events)."""
         try:
             start = datetime.strptime(start_date_str, '%Y-%m-%d').date()
@@ -3608,7 +3629,7 @@ class GoogleSheetsService:
         # --- Reached: real tracked events preferred; if the sheet has NO
         # real STATUS_CHANGE history at all yet (verified live 2026-07:
         # zero real events), fall back to the approximate events (current
-        # status @ Last_Updated) — same fallback the Overview uses.
+        # status @ Last_Updated) â€” same fallback the Overview uses.
         all_events = self._collect_horeca_status_events()
         real_events = [e for e in all_events if not e.get('approximate')]
         reached_source = 'real'
@@ -3735,19 +3756,19 @@ class GoogleSheetsService:
         }
 
     # ==================== HoReCa app_sheet -> Enhanced sync (preview only) ====================
-    # app_sheet is the tab the field team actively updates (confirmed live —
+    # app_sheet is the tab the field team actively updates (confirmed live â€”
     # real recent dates, real associate emails); the web CRM only ever reads
     # "Enhanced". The two tabs share no ID (Enhanced uses Google Place IDs,
     # app_sheet uses its own short lead code), so matching is done by
     # normalized name + geo-distance on app_sheet's own "Location" column
-    # (lat,lng as a single string) against Enhanced's Latitude/Longitude —
+    # (lat,lng as a single string) against Enhanced's Latitude/Longitude â€”
     # validated against live data at ~97% clean unambiguous match rate.
     APPSHEET_TAB_NAME = 'app_sheet'
     APPSHEET_GEO_THRESHOLD_M = 500
 
     # Best-effort mapping from app_sheet's free-text "Lead Stage" values onto
     # Enhanced's canonical Outreach_Status vocabulary. Only high-confidence,
-    # high-volume mappings are included — anything else is left unmapped and
+    # high-volume mappings are included â€” anything else is left unmapped and
     # surfaced as "needs review" rather than guessed, since a wrong status
     # write is worse than no write.
     APPSHEET_STATUS_MAP = {
@@ -3762,7 +3783,7 @@ class GoogleSheetsService:
     @classmethod
     def _status_rank(cls, status):
         """Position of a status in the outreach funnel (0=earliest). None if
-        blank/unrecognized — callers must treat None as "unknown", not 0."""
+        blank/unrecognized â€” callers must treat None as "unknown", not 0."""
         if not status:
             return None
         try:
@@ -3786,14 +3807,14 @@ class GoogleSheetsService:
         if len(all_values) < 2:
             _appsheet_cache['data'] = []
             _appsheet_cache['headers'] = []
-            _appsheet_cache['expiry'] = now + timedelta(minutes=2)
+            _appsheet_cache['expiry'] = now + _HORECA_CACHE_TTL
             return [], []
 
         headers = all_values[0]
         rows = all_values[1:]
         _appsheet_cache['data'] = rows
         _appsheet_cache['headers'] = headers
-        _appsheet_cache['expiry'] = now + timedelta(minutes=2)
+        _appsheet_cache['expiry'] = now + _HORECA_CACHE_TTL
         return rows, headers
 
     SUPERSET_TAB_NAME = 'Superset'
@@ -3815,7 +3836,7 @@ class GoogleSheetsService:
 
     def _get_superset_cache(self):
         """Get or initialize the Superset export cache (separate tab, same
-        spreadsheet — a plain-values import, not formula-driven). Test/dummy
+        spreadsheet â€” a plain-values import, not formula-driven). Test/dummy
         businesses (SUPERSET_TEST_TERMS) are filtered out here so every
         downstream number excludes them automatically."""
         global _superset_cache
@@ -3832,10 +3853,10 @@ class GoogleSheetsService:
         if len(all_values) < 2:
             _superset_cache['data'] = []
             _superset_cache['headers'] = []
-            _superset_cache['expiry'] = now + timedelta(minutes=2)
+            _superset_cache['expiry'] = now + _HORECA_CACHE_TTL
             return [], []
 
-        # Canonicalize header names — the export's schema has changed across
+        # Canonicalize header names â€” the export's schema has changed across
         # versions (pan_number -> PAN, etc.); downstream code always sees the
         # canonical names regardless of which export version is in the tab.
         CANON = {'pan': 'pan_number', 'gst': 'gstin_number', 'fssai': 'fssai_number',
@@ -3848,13 +3869,13 @@ class GoogleSheetsService:
         ]
         _superset_cache['data'] = rows
         _superset_cache['headers'] = headers
-        _superset_cache['expiry'] = now + timedelta(minutes=2)
+        _superset_cache['expiry'] = now + _HORECA_CACHE_TTL
         return rows, headers
 
     SUPERSET_V1_TAB_NAME = 'Superset_v1'
 
     def _get_superset_v1_cache(self):
-        """Superset_v1 tab — a direct, daily-refreshed Superset dump that is
+        """Superset_v1 tab â€” a direct, daily-refreshed Superset dump that is
         the system of record for the ONBOARDED count and onboarding dates
         (columns: business_name, status, created_day, updated_day, ...).
         Row 1 is a 'Last updated: ...' stamp, so the real header row is
@@ -3881,7 +3902,7 @@ class GoogleSheetsService:
                 break
         if hdr_idx is None or len(all_values) <= hdr_idx + 1:
             _superset_v1_cache.update(data=[], headers=[],
-                                      expiry=now + timedelta(minutes=2))
+                                      expiry=now + _HORECA_CACHE_TTL)
             return [], []
 
         headers = [h.strip() for h in all_values[hdr_idx]]
@@ -3892,11 +3913,11 @@ class GoogleSheetsService:
             and not (name_idx < len(r) and self._is_superset_test_row(r[name_idx]))
         ]
         _superset_v1_cache.update(data=rows, headers=headers,
-                                  expiry=now + timedelta(minutes=2))
+                                  expiry=now + _HORECA_CACHE_TTL)
         return rows, headers
 
     def get_horeca_superset_data(self, search='', page=1, page_size=50):
-        """Paginated read of the Superset export tab — a raw viewer only,
+        """Paginated read of the Superset export tab â€” a raw viewer only,
         no matching against Enhanced/app_sheet yet."""
         rows, headers = self._get_superset_cache()
         if not rows:
@@ -3941,7 +3962,7 @@ class GoogleSheetsService:
         }
 
     # ==================== Superset <-> Enhanced validation ====================
-    # Words that carry no identity in a Goan hospitality business name —
+    # Words that carry no identity in a Goan hospitality business name â€”
     # generic industry terms plus locality/place names. Two unrelated
     # businesses routinely share these, so they must not count as evidence
     # of a match (verified live: "Baga 24 Bar" wrongly matched "De baga
@@ -3985,7 +4006,7 @@ class GoogleSheetsService:
         Exact tiers strengthen automatically as PAN/GST/FSSAI populate on
         the Enhanced side (fed by the app_sheet document auto-copy).
 
-        Collisions (two Enhanced rows claiming one Superset row — the
+        Collisions (two Enhanced rows claiming one Superset row â€” the
         multi-location-brand case) are demoted to needs_review: counted in
         neither matched nor unmatched, listed for human review instead.
 
@@ -4106,7 +4127,7 @@ class GoogleSheetsService:
             })
 
         # --- Collision demotion: 2+ Superset rows claiming one Enhanced row,
-        # or (equivalently) matches sharing a Place ID — only one can be
+        # or (equivalently) matches sharing a Place ID â€” only one can be
         # right, so trust none of them automatically.
         pid_claims = {}
         for m in matches:
@@ -4182,7 +4203,7 @@ class GoogleSheetsService:
                 status_counts[st] = status_counts.get(st, 0) + 1
 
         # Onboarded headline (ACTIVE) + in-progress (DRAFT) come from the
-        # Superset_v1 tab — the daily-refreshed system of record — so Insight
+        # Superset_v1 tab â€” the daily-refreshed system of record â€” so Insight
         # matches the dashboard. PAN/GST/FSSAI matching above still uses the
         # separate 'Superset' tab (which carries the identity columns).
         try:
@@ -4226,7 +4247,7 @@ class GoogleSheetsService:
             'organic_candidates': organic_candidates,
         }
         _superset_validation_cache['data'] = result
-        _superset_validation_cache['expiry'] = now + timedelta(minutes=2)
+        _superset_validation_cache['expiry'] = now + _HORECA_CACHE_TTL
         return result
 
     def _classify_superset_rows(self, sup_rows, sg, matches, eh, eg,
@@ -4235,26 +4256,26 @@ class GoogleSheetsService:
 
         Universe = Superset rows. DRAFT -> onboarding_in_progress.
         Every ACTIVE business is EXACTLY ONE of:
-          Inorganic — its PAN or GST (normalized upper/strip) exists in the
+          Inorganic â€” its PAN or GST (normalized upper/strip) exists in the
             associate pool (Enhanced PAN_Number/GST_Number + app_sheet
             Document_Number via _classify_document): captured on BOTH sides.
-          Organic — everything else.
+          Organic â€” everything else.
 
-        QA queues are OVERLAYS — a row keeps its organic/inorganic bucket
+        QA queues are OVERLAYS â€” a row keeps its organic/inorganic bucket
         AND appears in any queue it qualifies for:
-          qa_dup_pan / qa_dup_gst / qa_dup_fssai — the ID is shared by 2+
+          qa_dup_pan / qa_dup_gst / qa_dup_fssai â€” the ID is shared by 2+
             Superset rows.
-          qa_name_both — the Superset business_name confidently matches an
+          qa_name_both â€” the Superset business_name confidently matches an
             Enhanced or app_sheet name (_distinctive_name_tokens matching).
 
-        Decisions affect counts: a disapproved row is OFFBOARDED — dropped
+        Decisions affect counts: a disapproved row is OFFBOARDED â€” dropped
         from organic/inorganic and collected in 'offboarded';
         onboarded_after_qa = ACTIVE - offboarded. Approved rows stay
         counted and leave qa_pending. Read-only; nothing is written back.
         """
         # --- associate ID pool: Enhanced + app_sheet ---
         # Alongside membership, remember OUR side's record per ID:
-        # app_sheet ID, business name and status — so every row can show
+        # app_sheet ID, business name and status â€” so every row can show
         # the Ravishing record next to the Superset one.
         pool_pan, pool_gst = set(), set()
         our_by_pan, our_by_gst, our_by_fssai = {}, {}, {}
@@ -4432,7 +4453,7 @@ class GoogleSheetsService:
             except ValueError:
                 return None
         # Unique-undecided tracking (by Superset row id) for the three
-        # duplicate-ID queues only — name queues are NOT counted (B3).
+        # duplicate-ID queues only â€” name queues are NOT counted (B3).
         pending_ids = {'dup_pan': set(), 'dup_gst': set(), 'dup_fssai': set()}
 
         for row_idx, (srow, m) in enumerate(zip(sup_rows, matches)):
@@ -4473,7 +4494,7 @@ class GoogleSheetsService:
                 'onboarded_date': sg(srow, 'updated_day'),
             }
 
-            # Duplicate business names — informational; onboarded-only
+            # Duplicate business names â€” informational; onboarded-only
             # (Superset ACTIVE), matching dup_names_ravishing's OB-only rule.
             if norm_name and norm_name in dup_names and sstatus == 'ACTIVE':
                 dup_name_rows.append({**item, 'queue': 'dup_name',
@@ -4499,7 +4520,7 @@ class GoogleSheetsService:
             # --- Decision cascade (B2): a decision on ANY identity key of
             # this business (PAN / GST / FSSAI / NAME) propagates to the
             # whole business. ALL its keys participate, not just the ones
-            # that landed it in a queue — so approving PAN:x decides every
+            # that landed it in a queue â€” so approving PAN:x decides every
             # row bearing PAN:x, and their GST/FSSAI groups count those
             # rows as decided too. Disapproved beats approved.
             all_keys = []
@@ -4536,7 +4557,7 @@ class GoogleSheetsService:
             # Pending doc update: onboarded yesterday-or-later but with no
             # PAN/GST/FSSAI in the Superset tab yet (the identity refresh lags
             # a day behind onboarding). Park these separately so the lag does
-            # not inflate organic — they reclassify automatically once the
+            # not inflate organic â€” they reclassify automatically once the
             # docs land.
             if not (span or sgst or sfssai):
                 _d = _s_onboard_date(srow)
@@ -4588,7 +4609,7 @@ class GoogleSheetsService:
         # 'PAN/GST/FSSAI not updated in Superset' = businesses that are
         # onboarded (ACTIVE in the daily Superset_v1 tab) but whose identity
         # is not yet present in the 'Superset' matching tab (name has no
-        # doc-bearing row there). This is the sheet-refresh lag — surfaced so
+        # doc-bearing row there). This is the sheet-refresh lag â€” surfaced so
         # it isn't mistaken for a real matching gap.
         try:
             _sup_names_withdoc = set()
@@ -4650,7 +4671,7 @@ class GoogleSheetsService:
                             'Decision', 'Decided_By']
 
     def _get_qa_decisions_worksheet(self, create=False):
-        """QA-Decisions tab handle. Lazily created on FIRST WRITE only —
+        """QA-Decisions tab handle. Lazily created on FIRST WRITE only â€”
         reads never create it. This is the sole tab this feature writes to;
         Enhanced / app_sheet / Superset are never written."""
         spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
@@ -4685,7 +4706,7 @@ class GoogleSheetsService:
 
     def record_horeca_qa_decision(self, key, queue, business_name,
                                   decision, decided_by):
-        """Append one approve/disapprove decision. Append-only audit trail —
+        """Append one approve/disapprove decision. Append-only audit trail â€”
         re-deciding a key appends a new row; the latest row wins on read."""
         decision = (decision or '').strip().lower()
         if decision not in ('approved', 'disapproved'):
@@ -4727,7 +4748,7 @@ class GoogleSheetsService:
         """Read-only, step-by-step preview of what an app_sheet -> Enhanced
         sync would do for each app_sheet lead: the matched Enhanced record
         (if any), each side's current data, and the decision the sync would
-        make. Writes nothing — this exists so the matching/reconciliation
+        make. Writes nothing â€” this exists so the matching/reconciliation
         logic can be inspected and trusted before it's ever allowed to write.
         """
         app_rows, app_headers = self._get_appsheet_cache()
@@ -4766,7 +4787,7 @@ class GoogleSheetsService:
             candidates = name_index.get(norm, [])
             if not candidates:
                 entry['decision'] = 'no_match'
-                entry['decision_detail'] = 'No Enhanced record with this name — new lead, not yet enriched.'
+                entry['decision_detail'] = 'No Enhanced record with this name â€” new lead, not yet enriched.'
                 results.append(entry)
                 continue
 
@@ -4779,13 +4800,13 @@ class GoogleSheetsService:
 
             if not within:
                 entry['decision'] = 'no_match'
-                entry['decision_detail'] = f"{len(candidates)} Enhanced record(s) share this name but none are within {self.APPSHEET_GEO_THRESHOLD_M}m — likely a different business with the same name."
+                entry['decision_detail'] = f"{len(candidates)} Enhanced record(s) share this name but none are within {self.APPSHEET_GEO_THRESHOLD_M}m â€” likely a different business with the same name."
                 results.append(entry)
                 continue
 
             if len(within) > 1:
                 entry['decision'] = 'ambiguous_match'
-                entry['decision_detail'] = f'{len(within)} Enhanced records both match by name and distance — needs manual review, not auto-synced.'
+                entry['decision_detail'] = f'{len(within)} Enhanced records both match by name and distance â€” needs manual review, not auto-synced.'
                 results.append(entry)
                 continue
 
@@ -4805,13 +4826,13 @@ class GoogleSheetsService:
             entry['lead_stage_mapped'] = mapped_status
             if mapped_status is None:
                 entry['decision'] = 'unmapped_status'
-                entry['decision_detail'] = f"app_sheet Lead Stage \"{entry['lead_stage_raw']}\" has no confident mapping to an Enhanced status — needs review."
+                entry['decision_detail'] = f"app_sheet Lead Stage \"{entry['lead_stage_raw']}\" has no confident mapping to an Enhanced status â€” needs review."
                 results.append(entry)
                 continue
 
             if not mapped_status:
                 entry['decision'] = 'no_change_needed'
-                entry['decision_detail'] = 'app_sheet lead not yet worked (Lead Created) — nothing to sync.'
+                entry['decision_detail'] = 'app_sheet lead not yet worked (Lead Created) â€” nothing to sync.'
                 results.append(entry)
                 continue
 
@@ -4822,7 +4843,7 @@ class GoogleSheetsService:
                 continue
 
             # Never move a business backward in the pipeline, regardless of what
-            # the timestamps say — a "newer" app_sheet edit to an unrelated
+            # the timestamps say â€” a "newer" app_sheet edit to an unrelated
             # field (contact info, remarks) still bumps its Last Updated Date
             # even though Lead Stage is stale, and a downgrade from e.g.
             # "OB Form Filled" back to "Meeting done" would be a real data
@@ -4833,28 +4854,28 @@ class GoogleSheetsService:
             new_rank = self._status_rank(mapped_status)
             if current_rank is not None and new_rank is not None and new_rank < current_rank:
                 entry['decision'] = 'no_change_needed'
-                entry['decision_detail'] = f"app_sheet shows an earlier stage (\"{mapped_status}\") than Enhanced already has (\"{entry['enhanced']['outreach_status']}\") — never moving a business backward."
+                entry['decision_detail'] = f"app_sheet shows an earlier stage (\"{mapped_status}\") than Enhanced already has (\"{entry['enhanced']['outreach_status']}\") â€” never moving a business backward."
                 results.append(entry)
                 continue
 
             # Most-recent-timestamp-wins reconciliation. A missing/unparseable
-            # timestamp on either side is NOT treated as "older" — it means we
+            # timestamp on either side is NOT treated as "older" â€” it means we
             # have no evidence, so the side we can't date never wins.
             app_dt = self._parse_appsheet_datetime(entry['last_updated_appsheet'])
             enh_dt = self._parse_enhanced_datetime(entry['enhanced']['last_updated'])
 
             if enh_dt is None:
                 entry['decision'] = 'would_sync'
-                entry['decision_detail'] = f"Enhanced has no recorded update yet — would set Outreach_Status to \"{mapped_status}\"."
+                entry['decision_detail'] = f"Enhanced has no recorded update yet â€” would set Outreach_Status to \"{mapped_status}\"."
             elif app_dt is None:
                 entry['decision'] = 'no_change_needed'
-                entry['decision_detail'] = f"Enhanced already has a timestamped status ({entry['enhanced']['last_updated']}) and app_sheet has no parseable update date — can't prove app_sheet is newer, keeping Enhanced as-is."
+                entry['decision_detail'] = f"Enhanced already has a timestamped status ({entry['enhanced']['last_updated']}) and app_sheet has no parseable update date â€” can't prove app_sheet is newer, keeping Enhanced as-is."
             elif app_dt > enh_dt:
                 entry['decision'] = 'would_sync'
-                entry['decision_detail'] = f"app_sheet was updated more recently ({entry['last_updated_appsheet']}) than Enhanced ({entry['enhanced']['last_updated']}) — would set Outreach_Status to \"{mapped_status}\"."
+                entry['decision_detail'] = f"app_sheet was updated more recently ({entry['last_updated_appsheet']}) than Enhanced ({entry['enhanced']['last_updated']}) â€” would set Outreach_Status to \"{mapped_status}\"."
             else:
                 entry['decision'] = 'enhanced_is_newer'
-                entry['decision_detail'] = f"Enhanced was updated more recently ({entry['enhanced']['last_updated']}) than app_sheet ({entry['last_updated_appsheet']}) — Enhanced wins, no sync."
+                entry['decision_detail'] = f"Enhanced was updated more recently ({entry['enhanced']['last_updated']}) than app_sheet ({entry['last_updated_appsheet']}) â€” Enhanced wins, no sync."
 
             results.append(entry)
 
@@ -4901,7 +4922,7 @@ class GoogleSheetsService:
 
     def _ensure_enhanced_appsheet_id_column(self):
         """One-time, idempotent migration: add an AppSheet_Lead_ID column to
-        Enhanced — the crosswalk join key the sync job maintains itself,
+        Enhanced â€” the crosswalk join key the sync job maintains itself,
         nobody on the team ever types into it. Deliberately placed on
         Enhanced, NOT app_sheet: Enhanced is a plain, directly-edited sheet,
         while app_sheet is driven by a live IMPORTRANGE formula spilling
@@ -4920,7 +4941,7 @@ class GoogleSheetsService:
         sample_cells = worksheet.range(2, col_idx, 20, col_idx)
         if any(c.value for c in sample_cells):
             raise RuntimeError(
-                f'Column {col_idx} on Enhanced is not empty — refusing to claim it as AppSheet_Lead_ID'
+                f'Column {col_idx} on Enhanced is not empty â€” refusing to claim it as AppSheet_Lead_ID'
             )
 
         if worksheet.col_count < col_idx:
@@ -4933,8 +4954,8 @@ class GoogleSheetsService:
     def create_horeca_lead_from_appsheet(self, app_row, app_headers):
         """Create a new Enhanced row for a genuinely-new app_sheet lead,
         reusing the exact same path as the manual '+ Add Lead' flow
-        (add_horeca_record). Enrichment-only fields — photos, priority
-        score, zone assignment — are left blank, since only the offline
+        (add_horeca_record). Enrichment-only fields â€” photos, priority
+        score, zone assignment â€” are left blank, since only the offline
         Google-Places pipeline can populate those; everything else (CRM
         list, Board, Overall Daily, Metrics) works fine without them."""
         ah = {hdr: i for i, hdr in enumerate(app_headers)}
@@ -4969,7 +4990,7 @@ class GoogleSheetsService:
     def sync_new_horeca_leads(self, dry_run=False):
         """Automatic app_sheet -> Enhanced sync for NEW leads. The crosswalk
         lives entirely on Enhanced's AppSheet_Lead_ID column (see
-        _ensure_enhanced_appsheet_id_column) — app_sheet is never written
+        _ensure_enhanced_appsheet_id_column) â€” app_sheet is never written
         to by this job, at all, ever.
 
         For every app_sheet lead whose ID isn't already recorded in some
@@ -4979,7 +5000,7 @@ class GoogleSheetsService:
           - exactly one Enhanced match within the geo threshold -> link the
             crosswalk to that existing business, no new row.
           - zero or multiple candidates within threshold -> ambiguous
-            (same name, wrong distance, or multiple plausible matches) —
+            (same name, wrong distance, or multiple plausible matches) â€”
             left unlinked and simply re-evaluated next run rather than
             auto-created (avoids duplicating a business that already
             exists under a slightly different name).
@@ -5048,7 +5069,7 @@ class GoogleSheetsService:
                 skipped_already_done += 1
                 continue
 
-            # Tier 1 — deterministic identity match: if the app_sheet lead's
+            # Tier 1 â€” deterministic identity match: if the app_sheet lead's
             # captured document (PAN or GST or FSSAI, any one) matches an
             # Enhanced row, link the crosswalk to it. This resolves leads that
             # name+geo would otherwise skip as "ambiguous" (blank coords or a
@@ -5099,7 +5120,7 @@ class GoogleSheetsService:
             if len(within) == 1:
                 wpid = eg(within[0], pid_idx)
                 if wpid and wpid in linked_place_ids:
-                    # that Enhanced row is already crosswalked — don't double-claim
+                    # that Enhanced row is already crosswalked â€” don't double-claim
                     ambiguous += 1
                 else:
                     linked_existing += 1
@@ -5114,7 +5135,7 @@ class GoogleSheetsService:
             appsheet_col_idx = self._ensure_enhanced_appsheet_id_column()
 
             # Force a fresh read so rows created above (via append_row) are
-            # included when resolving place_id -> row_num — never assume a
+            # included when resolving place_id -> row_num â€” never assume a
             # specific landing position for a freshly appended row.
             global _horeca_crm_cache
             _horeca_crm_cache['expiry'] = None
@@ -5136,7 +5157,7 @@ class GoogleSheetsService:
 
             spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
             worksheet = spreadsheet.sheet1
-            # Chunk the batch write — a single request covering thousands of
+            # Chunk the batch write â€” a single request covering thousands of
             # cells (e.g. the first-ever catch-up run) risks the Sheets
             # API's per-request size limit; chunking keeps each call small
             # and lets one bad chunk fail without losing the rest.
@@ -5164,8 +5185,8 @@ class GoogleSheetsService:
     @staticmethod
     def _classify_document(doc_type, doc_number):
         """Map an app_sheet Document_Type/Document_Number pair onto the
-        matching Enhanced column. The form holds ONE document per lead —
-        PAN or GST or FSSAI — signalled by Document_Type, with a format
+        matching Enhanced column. The form holds ONE document per lead â€”
+        PAN or GST or FSSAI â€” signalled by Document_Type, with a format
         sanity-check as backup (PAN=10 alphanumeric, GSTIN=15, FSSAI=14
         digits) since the type field is free-ish text."""
         num = (doc_number or '').strip().upper()
@@ -5183,7 +5204,7 @@ class GoogleSheetsService:
     def sync_appsheet_documents_to_enhanced(self, dry_run=False):
         """Copy PAN/GST/FSSAI captured in app_sheet (Document_Type +
         Document_Number) into the matching Enhanced columns, using the
-        AppSheet_Lead_ID crosswalk — deterministic, no matching involved.
+        AppSheet_Lead_ID crosswalk â€” deterministic, no matching involved.
         Only fills BLANK Enhanced cells; never overwrites an existing value
         (a value already in Enhanced may have been hand-entered via the CRM
         and should win). Enhanced is the master store, so this is what keeps
@@ -5248,7 +5269,7 @@ class GoogleSheetsService:
         if dry_run or not would_write:
             return result
 
-        # FSSAI_Number column may not exist yet — provision all three
+        # FSSAI_Number column may not exist yet â€” provision all three
         # (idempotent, verify-empty-before-claim) before writing.
         col_idx_by_name = self._ensure_enhanced_pan_gst_columns()
         spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
@@ -5319,7 +5340,12 @@ class GoogleSheetsService:
             raise RuntimeError(f"Failed to add assignment headers: {e}")
 
 
-# HoReCa CRM cache (process-level, 2-min TTL)
+# HoReCa CRM cache (process-level). TTL is longer than the in-app cache-warmer
+# interval (see endpoints.py `_cache_warmer`) so the heavy Sheets reads are
+# always served warm and users never trigger the ~9s cold path. The underlying
+# data changes at most every few hours (auto-sync 6h; Superset_v1 daily), so a
+# 15-min TTL is safely fresh.
+_HORECA_CACHE_TTL = timedelta(minutes=15)
 _horeca_crm_cache = {'data': None, 'headers': None, 'clusters': None, 'expiry': None}
 _appsheet_cache = {'data': None, 'headers': None, 'expiry': None}
 _superset_cache = {'data': None, 'headers': None, 'expiry': None}
@@ -5434,7 +5460,7 @@ class GmailService:
             cc: CC recipients
             attachments: List of file paths to attach
             inline_images: {content_id: png_bytes} referenced in HTML as
-                           <img src="cid:content_id"> — rendered inline by
+                           <img src="cid:content_id"> â€” rendered inline by
                            Gmail (unlike data: URIs, which Gmail strips).
 
         Returns:
@@ -5541,3 +5567,4 @@ Goa DRS Implementation Team</p>
             body=body,
             cc=settings.notification_emails,
         )
+
