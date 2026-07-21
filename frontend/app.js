@@ -4533,42 +4533,6 @@ function applyDashboardRBAC() {
     }
     if (isSuper && activityTab) activityTab.style.display = '';
 
-    if (false && role === 'admin' && !window._secretRevealWired) {  // triple-click reveal removed
-
-        window._secretRevealWired = true;
-
-        const title = document.querySelector('.header h1, .header-title, header h1');
-
-        let clicks = 0, timer = null;
-
-        (title || document).addEventListener('click', (e) => {
-
-            if (!title && !(e.target.closest && e.target.closest('.header'))) return;
-
-            clicks++;
-
-            clearTimeout(timer);
-
-            timer = setTimeout(() => { clicks = 0; }, 600);
-
-            if (clicks >= 3) {
-
-                clicks = 0;
-
-                // Toggle based on RVM's current state so RVM+Cost stay in sync
-                const showing = rvmTab && rvmTab.style.display !== 'none';
-                const next = showing ? 'none' : '';
-
-                if (rvmTab) rvmTab.style.display = next;
-                if (costTab) costTab.style.display = next;
-                if (isSuper && activityTab) activityTab.style.display = next;
-
-            }
-
-        });
-
-    }
-
 }
 
 
@@ -6819,7 +6783,12 @@ function renderHsvKPIs() {
 
     el.style.marginBottom = '16px';
 
-    el.innerHTML = cards.join('');
+    const pending = c.pending_doc_update_count || 0;
+    const banner = pending > 0
+        ? `<div style="grid-column:1/-1;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;font-size:13px;color:#9a3412;">&#9203; <strong>${n(pending)}</strong> business(es) onboarded yesterday are pending a PAN/GST/FSSAI update in Superset &mdash; excluded from Organic/Inorganic until their documents refresh (usually the next day).</div>`
+        : '';
+
+    el.innerHTML = banner + cards.join('');
 
 }
 

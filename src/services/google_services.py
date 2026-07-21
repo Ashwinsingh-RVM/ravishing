@@ -4181,8 +4181,21 @@ class GoogleSheetsService:
             if st:
                 status_counts[st] = status_counts.get(st, 0) + 1
 
-        active_total = sum(1 for r in sup_rows if sg(r, 'status') == 'ACTIVE')
-        draft_total = sum(1 for r in sup_rows if sg(r, 'status') == 'DRAFT')
+        # Onboarded headline (ACTIVE) + in-progress (DRAFT) come from the
+        # Superset_v1 tab — the daily-refreshed system of record — so Insight
+        # matches the dashboard. PAN/GST/FSSAI matching above still uses the
+        # separate 'Superset' tab (which carries the identity columns).
+        try:
+            v1_rows, v1_headers = self._get_superset_v1_cache()
+            v1_status_i = {hd: i for i, hd in enumerate(v1_headers)}.get('status')
+
+            def _v1st(r):
+                return r[v1_status_i].strip().upper() if v1_status_i is not None and v1_status_i < len(r) else ''
+            active_total = sum(1 for r in v1_rows if _v1st(r) == 'ACTIVE')
+            draft_total = sum(1 for r in v1_rows if _v1st(r) == 'DRAFT')
+        except Exception:
+            active_total = sum(1 for r in sup_rows if sg(r, 'status') == 'ACTIVE')
+            draft_total = sum(1 for r in sup_rows if sg(r, 'status') == 'DRAFT')
         matched_total = associate_matched + organic_matched
 
         classification = self._classify_superset_rows(
@@ -4408,6 +4421,15 @@ class GoogleSheetsService:
         organic, inorganic = [], []
         qa_name_both, qa_dup_pan, qa_dup_gst, qa_dup_fssai = [], [], [], []
         dup_name_rows, offboarded, in_progress = [], [], []
+        pending_doc_update = []  # onboarded yesterday+, PAN/GST/FSSAI not yet refreshed
+        _yesterday = (datetime.now() - timedelta(days=1)).date()
+
+        def _s_onboard_date(srow):
+            v = (sg(srow, 'Date') or sg(srow, 'updated_day') or '').strip()[:10]
+            try:
+                return datetime.fromisoformat(v).date()
+            except ValueError:
+                return None
         # Unique-undecided tracking (by Superset row id) for the three
         # duplicate-ID queues only — name queues are NOT counted (B3).
         pending_ids = {'dup_pan': set(), 'dup_gst': set(), 'dup_fssai': set()}
@@ -4510,6 +4532,17 @@ class GoogleSheetsService:
                                    'decided_by': eff_by})
                 continue
 
+            # Pending doc update: onboarded yesterday-or-later but with no
+            # PAN/GST/FSSAI in the Superset tab yet (the identity refresh lags
+            # a day behind onboarding). Park these separately so the lag does
+            # not inflate organic — they reclassify automatically once the
+            # docs land.
+            if not (span or sgst or sfssai):
+                _d = _s_onboard_date(srow)
+                if _d is not None and _d >= _yesterday:
+                    pending_doc_update.append({**item, 'queue': 'pending_doc_update'})
+                    continue
+
             # Base bucket: inorganic (ID on both sides) vs organic
             if (span and span in pool_pan) or (sgst and sgst in pool_gst):
                 inorganic.append({**item,
@@ -4560,6 +4593,8 @@ class GoogleSheetsService:
             'new_leads': new_leads,
             'organic_count': len(organic),
             'inorganic_count': len(inorganic),
+            'pending_doc_update_count': len(pending_doc_update),
+            'pending_doc_update': pending_doc_update,
             'qa_pending': qa_pending,
             'qa_pending_breakdown': qa_pending_breakdown,
             'dup_names_ravishing': dup_names_ravishing,
@@ -4927,6 +4962,8 @@ class GoogleSheetsService:
         name_idx = ah.get('HoReCa Name')
         id_idx = ah.get('ID')
         loc_idx = ah.get('Location')
+        dt_idx = ah.get('Document_Type')
+        dn_idx = ah.get('Document_Number')
 
         enh_rows, enh_headers = self._get_horeca_crm_cache()
         name_index, eh = self._build_enhanced_name_index(enh_rows, enh_headers)
@@ -4934,19 +4971,42 @@ class GoogleSheetsService:
         lat_idx = eh.get('Latitude', 10)
         lng_idx = eh.get('Longitude', 11)
         appsheet_id_idx = eh.get('AppSheet_Lead_ID')
+        pan_idx = eh.get('PAN_Number')
+        gst_idx = eh.get('GST_Number')
+        fssai_idx = eh.get('FSSAI_Number')
 
         def eg(erow, idx):
             return erow[idx].strip() if idx is not None and idx < len(erow) else ''
 
+        def ag(arow, idx):
+            return arow[idx].strip() if idx is not None and idx < len(arow) else ''
+
+        # Enhanced identity indexes (any ONE of PAN/GST/FSSAI is enough) +
+        # the set of Enhanced businesses already crosswalked to some app lead,
+        # so we never attach a second app_id to a row that already has one.
+        enh_by_pan, enh_by_gst, enh_by_fssai = {}, {}, {}
         already_linked_ids = set()
-        if appsheet_id_idx is not None:
-            for erow in enh_rows:
-                val = eg(erow, appsheet_id_idx)
-                if val:
-                    already_linked_ids.add(val)
+        linked_place_ids = set()
+        for erow in enh_rows:
+            if appsheet_id_idx is not None and eg(erow, appsheet_id_idx):
+                already_linked_ids.add(eg(erow, appsheet_id_idx))
+                pid = eg(erow, pid_idx)
+                if pid:
+                    linked_place_ids.add(pid)
+            p = eg(erow, pan_idx).upper()
+            g = eg(erow, gst_idx).upper()
+            f = eg(erow, fssai_idx)
+            if p:
+                enh_by_pan.setdefault(p, erow)
+            if g:
+                enh_by_gst.setdefault(g, erow)
+            if f:
+                enh_by_fssai.setdefault(f, erow)
 
         created = 0
         linked_existing = 0
+        doc_linked = 0
+        doc_collision = 0
         ambiguous = 0
         skipped_already_done = 0
         errors = []
@@ -4959,6 +5019,31 @@ class GoogleSheetsService:
             app_id = arow[id_idx].strip() if id_idx is not None and id_idx < len(arow) else ''
             if app_id and app_id in already_linked_ids:
                 skipped_already_done += 1
+                continue
+
+            # Tier 1 — deterministic identity match: if the app_sheet lead's
+            # captured document (PAN or GST or FSSAI, any one) matches an
+            # Enhanced row, link the crosswalk to it. This resolves leads that
+            # name+geo would otherwise skip as "ambiguous" (blank coords or a
+            # same-name twin) without risking a duplicate. Guarded so we never
+            # double-claim an Enhanced row already linked to another lead.
+            col, num = self._classify_document(ag(arow, dt_idx), ag(arow, dn_idx))
+            doc_erow = None
+            if col == 'PAN_Number' and num in enh_by_pan:
+                doc_erow = enh_by_pan[num]
+            elif col == 'GST_Number' and num in enh_by_gst:
+                doc_erow = enh_by_gst[num]
+            elif col == 'FSSAI_Number' and num in enh_by_fssai:
+                doc_erow = enh_by_fssai[num]
+            if doc_erow is not None:
+                dpid = eg(doc_erow, pid_idx)
+                if dpid and dpid not in linked_place_ids:
+                    doc_linked += 1
+                    if not dry_run:
+                        pending_crosswalk.append((dpid, app_id))
+                    linked_place_ids.add(dpid)
+                else:
+                    doc_collision += 1
                 continue
 
             norm = self._normalize_horeca_name(name)
@@ -4985,9 +5070,16 @@ class GoogleSheetsService:
                     within.append(erow)
 
             if len(within) == 1:
-                linked_existing += 1
-                if not dry_run:
-                    pending_crosswalk.append((eg(within[0], pid_idx), app_id))
+                wpid = eg(within[0], pid_idx)
+                if wpid and wpid in linked_place_ids:
+                    # that Enhanced row is already crosswalked — don't double-claim
+                    ambiguous += 1
+                else:
+                    linked_existing += 1
+                    if wpid:
+                        linked_place_ids.add(wpid)
+                    if not dry_run:
+                        pending_crosswalk.append((wpid, app_id))
             else:
                 ambiguous += 1
 
@@ -5035,6 +5127,8 @@ class GoogleSheetsService:
             'dry_run': dry_run,
             'created': created,
             'linked_existing': linked_existing,
+            'doc_linked': doc_linked,
+            'doc_collision': doc_collision,
             'ambiguous_skipped': ambiguous,
             'already_done_skipped': skipped_already_done,
             'errors': errors,
