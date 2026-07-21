@@ -860,9 +860,17 @@ class GoogleSheetsService:
 
         from collections import defaultdict
 
+        # Cells can come back as int/float instead of str — Google Sheets
+        # auto-detects numeric-looking values (e.g. an HTTP status code or a
+        # scroll percentage) regardless of what type was originally written.
+        # Coerce every field through str() before .strip() so a numeric cell
+        # never raises AttributeError.
+        def _s(v):
+            return str(v).strip() if v is not None else ''
+
         users: dict = {}
         for r in records:
-            email = (r.get('User_Email') or '').strip()
+            email = _s(r.get('User_Email'))
             if not email:
                 continue
             if email not in users:
@@ -875,23 +883,23 @@ class GoogleSheetsService:
                     'hours': [0] * 24,
                 }
             u = users[email]
-            name = (r.get('User_Name') or '').strip()
+            name = _s(r.get('User_Name'))
             if name:
                 u['name'] = name
-            ts = (r.get('Timestamp') or '').strip()
+            ts = _s(r.get('Timestamp'))
             if ts > u['last_seen']:
                 u['last_seen'] = ts
             try:
                 u['hours'][int(ts[11:13])] += 1
             except Exception:
                 pass
-            ev = (r.get('Event_Type') or '').strip()
-            page = (r.get('Page') or '').strip()
-            element = (r.get('Element') or '').strip()
+            ev = _s(r.get('Event_Type'))
+            page = _s(r.get('Page'))
+            element = _s(r.get('Element'))
             if ev == 'login':
                 u['logins'] += 1
                 u['total_logins'] += 1
-                if (r.get('Device_Type') or '').strip() == 'Mobile':
+                if _s(r.get('Device_Type')) == 'Mobile':
                     u['mobile_count'] += 1
             elif ev == 'page_view' and page:
                 u['pages'][page]['visits'] += 1

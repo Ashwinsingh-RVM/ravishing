@@ -16305,13 +16305,25 @@ async function loadSystemHealth() {
     _actHealthTimer = setInterval(refresh, 20000);  // real-time-ish auto refresh
 }
 
+// Server timestamps are stored/returned in UTC (datetime.now() on Railway is
+// UTC) — convert to IST for display, same convention as the Activity Feed.
+function _tsToIST(ts) {
+    if (!ts) return '—';
+    const utc = new Date(String(ts).trim().replace(' ', 'T') + 'Z');
+    if (isNaN(utc.getTime())) return String(ts);
+    const ist = new Date(utc.getTime() + 5.5 * 3600000);
+    const pad = n => String(n).padStart(2, '0');
+    return `${ist.getUTCFullYear()}-${pad(ist.getUTCMonth()+1)}-${pad(ist.getUTCDate())} `
+         + `${pad(ist.getUTCHours())}:${pad(ist.getUTCMinutes())}:${pad(ist.getUTCSeconds())} IST`;
+}
+
 function renderSystemHealth(d) {
     const s = d.summary || {};
     const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const tile = (label, val, color) => `<div style="flex:1;min-width:130px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">${label}</div><div style="font-size:26px;font-weight:700;color:${color || '#111827'};margin-top:4px">${val}</div></div>`;
     const reasons = Object.entries(s.login_reasons || {}).map(([k, v]) => `${esc(k)}: ${v}`).join(' · ') || '—';
     const loginRows = (d.failed_logins || []).slice(0, 100).map(f => `<tr>
-        <td style="white-space:nowrap;color:#6b7280">${esc(f.timestamp)}</td>
+        <td style="white-space:nowrap;color:#6b7280">${esc(_tsToIST(f.timestamp))}</td>
         <td style="font-weight:600">${esc(f.email)}</td>
         <td><span style="background:#fef2f2;color:#b91c1c;border-radius:6px;padding:2px 8px;font-size:12px">${esc(f.reason)}</span></td>
         <td>${esc(f.what_went_wrong)}</td>
@@ -16319,7 +16331,7 @@ function renderSystemHealth(d) {
         <td style="color:#6b7280;white-space:nowrap">${esc(f.device)} / ${esc(f.os)}</td></tr>`).join('')
         || `<tr><td colspan="6" style="padding:16px;color:#6b7280">No failed logins 🎉</td></tr>`;
     const errRows = (d.api_errors || []).slice(0, 100).map(a => `<tr>
-        <td style="white-space:nowrap;color:#6b7280">${esc(a.timestamp)}</td>
+        <td style="white-space:nowrap;color:#6b7280">${esc(_tsToIST(a.timestamp))}</td>
         <td style="font-family:monospace;font-size:12px">${esc(a.endpoint)}</td>
         <td><span style="background:#fff7ed;color:#9a3412;border-radius:6px;padding:2px 8px;font-size:12px">${esc(a.status)} ${esc(a.reason)}</span></td>
         <td>${esc(a.what_went_wrong)}</td>
