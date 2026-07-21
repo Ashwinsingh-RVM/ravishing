@@ -4190,8 +4190,6 @@ function renderHovOverview(container) {
 
         </div>
 
-        <p class="hint" style="margin-top:8px;">Run rate: ${rrSub.replace(/&rarr;/g, '→').replace(/&middot;/g, '·')}</p>
-
     </div>`;
 
     const exclusionCard = (label, value, sub, icon, variant) => `
