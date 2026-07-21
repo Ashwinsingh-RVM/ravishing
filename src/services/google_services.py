@@ -2843,9 +2843,11 @@ class GoogleSheetsService:
 
         # ONBOARDED (headline) = Superset ACTIVE — the system of record for
         # confirmed onboardings. Each ACTIVE business is dated by its Superset
-        # 'updated_day' (the onboarding/update date) so the weekly & monthly
-        # onboarding buckets are driven straight off Superset. 'created_day'
-        # still drives the 'started onboarding' movement column.
+        # onboarding date so the weekly & monthly onboarding buckets are driven
+        # straight off Superset. The current export carries a single 'Date'
+        # column (the onboarding/registration date); older exports used
+        # 'updated_day' + 'created_day'. Read whichever is present so the
+        # trends keep working across export-schema versions.
         superset_active = 0
         try:
             sup_rows, sup_headers = self._get_superset_cache()
@@ -2855,16 +2857,24 @@ class GoogleSheetsService:
                 i = shx.get(col)
                 return row[i].strip() if i is not None and i < len(row) else ''
 
+            def sup_onboard_date(row):
+                # Prefer the new single 'Date' column; fall back to the older
+                # updated_day/created_day names for back-compat.
+                return parse_work_date(
+                    sup(row, 'Date') or sup(row, 'updated_day') or sup(row, 'created_day'))
+
             for srow in sup_rows:
-                created = parse_work_date(sup(srow, 'created_day'))
+                # 'started onboarding' movement — created_day if the export has
+                # it, else the single onboarding Date.
+                created = parse_work_date(sup(srow, 'created_day')) or parse_work_date(sup(srow, 'Date'))
                 if created:
                     dk, wk, mk = created.isoformat(), (created - timedelta(days=created.weekday())).isoformat(), created.strftime('%Y-%m')
                     for store, key in ((dod, dk), (wow, wk), (mom, mk)):
                         bucket(store, key)['started'] += 1
                 if sup(srow, 'status').upper() == 'ACTIVE':
                     superset_active += 1
-                    # Date each onboarded business by updated_day (fallback created_day)
-                    d = parse_work_date(sup(srow, 'updated_day')) or created
+                    # Date each onboarded business by its Superset onboarding date
+                    d = sup_onboard_date(srow)
                     if d is None:
                         undated_onboarded += 1
                         continue
@@ -3051,7 +3061,17 @@ class GoogleSheetsService:
             img = Image.new('RGB', (W, H), '#ffffff')
             d = ImageDraw.Draw(img)
             f_sm = load_font(12 * S)
-            f_val = load_font(12 * S)
+            f_val = load_font(13 * S)
+            def load_bold(sz):
+                for p in ('DejaVuSans-Bold.ttf',
+                          '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+                          'C:\\Windows\\Fonts\\arialbd.ttf'):
+                    try:
+                        return ImageFont.truetype(p, sz)
+                    except Exception:
+                        continue
+                return f_val
+            f_val_b = load_bold(13 * S)
             plot_w = W - ml - mr
             plot_h = H - mt - mb
             vmax = max(vals) or 1
@@ -3072,8 +3092,21 @@ class GoogleSheetsService:
                 r = 4 * S
                 d.ellipse([x - r, y - r, x + r, y + r], fill=TEAL,
                           outline='#ffffff', width=2 * S)
-                # value label above each point
-                d.text((x, y - 9 * S), n(v), font=f_val, fill=TEAL, anchor='mb')
+                # value label: bold dark text with a white halo so it stays
+                # readable over the line/gridlines. Flip below the marker when
+                # the point sits near the top so the label never clips.
+                near_top = (y - mt) < 22 * S
+                ly = (y + 11 * S) if near_top else (y - 10 * S)
+                anchor = 'mt' if near_top else 'mb'
+                try:
+                    d.text((x, ly), n(v), font=f_val_b, fill=INK, anchor=anchor,
+                           stroke_width=3 * S, stroke_fill='#ffffff')
+                except TypeError:
+                    # very old Pillow without stroke support: manual halo
+                    for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
+                        d.text((x + dx * S, ly + dy * S), n(v), font=f_val_b,
+                               fill='#ffffff', anchor=anchor)
+                    d.text((x, ly), n(v), font=f_val_b, fill=INK, anchor=anchor)
             # x labels: show all if few, else thin out to avoid overlap
             step = 1 if len(data) <= 16 else 2
             for i in range(0, len(data), step):
