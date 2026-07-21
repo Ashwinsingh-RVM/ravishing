@@ -3238,7 +3238,8 @@ function setupDashboardTabs() {
 
             tab.classList.add('active');
 
-
+            // Stop the System Health auto-refresh when leaving that tab
+            if (window._healthTimer) { clearInterval(window._healthTimer); window._healthTimer = null; }
 
             const dashId = tab.dataset.dash;
 
@@ -3275,6 +3276,14 @@ function setupDashboardTabs() {
                 trackEvent('page_view', 'activity');
 
                 loadActivityLog();
+
+            }
+
+            // Lazy-load System Health when tab is clicked (superadmin only)
+
+            if (dashId === 'health') {
+
+                loadSystemHealth();
 
             }
 
@@ -4531,6 +4540,11 @@ function applyDashboardRBAC() {
         if (rvmTab) { rvmTab.style.display = ''; rvmTab.classList.remove('rbac-hidden'); }
         if (costTab) { costTab.style.display = ''; costTab.classList.remove('rbac-hidden'); }
     }
+    // System Health sub-tab: superadmin only, always visible to them (no
+    // triple-click) so login/API issues can be checked the moment they're reported.
+    const healthTab = document.querySelector('.dash-tab-health');
+    if (healthTab) healthTab.style.display = isSuper ? '' : 'none';
+
     // Activity sub-tab: superadmin only, and hidden until the "Goa DRS"
     // header title is triple-clicked (RVM/Cost stay always-visible for admins).
     if (isSuper && activityTab && !window._activityRevealWired) {
@@ -16283,6 +16297,68 @@ const _ACT_PAGE_COLORS = {
 };
 
 
+
+// ── System Health (superadmin observability) ─────────────────────────────────
+async function loadSystemHealth() {
+    const el = document.getElementById('dash-health-content');
+    if (!el) return;
+    async function refresh() {
+        try {
+            const res = await fetch(`${API_BASE}/system/health?limit=500`);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            el.innerHTML = renderSystemHealth(await res.json());
+        } catch (e) {
+            el.innerHTML = `<div style="padding:24px;color:#f85149;font-size:13px">Failed to load System Health: ${e.message}</div>`;
+        }
+    }
+    el.innerHTML = '<div class="hcrm-dash-loading">Loading System Health…</div>';
+    await refresh();
+    if (window._healthTimer) clearInterval(window._healthTimer);
+    window._healthTimer = setInterval(refresh, 20000);  // real-time-ish auto refresh
+}
+
+function renderSystemHealth(d) {
+    const s = d.summary || {};
+    const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const tile = (label, val, color) => `<div style="flex:1;min-width:130px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">${label}</div><div style="font-size:26px;font-weight:700;color:${color || '#111827'};margin-top:4px">${val}</div></div>`;
+    const reasons = Object.entries(s.login_reasons || {}).map(([k, v]) => `${esc(k)}: ${v}`).join(' · ') || '—';
+    const loginRows = (d.failed_logins || []).slice(0, 100).map(f => `<tr>
+        <td style="white-space:nowrap;color:#6b7280">${esc(f.timestamp)}</td>
+        <td style="font-weight:600">${esc(f.email)}</td>
+        <td><span style="background:#fef2f2;color:#b91c1c;border-radius:6px;padding:2px 8px;font-size:12px">${esc(f.reason)}</span></td>
+        <td>${esc(f.what_went_wrong)}</td>
+        <td style="color:#065f46">${esc(f.how_to_fix)}</td>
+        <td style="color:#6b7280;white-space:nowrap">${esc(f.device)} / ${esc(f.os)}</td></tr>`).join('')
+        || `<tr><td colspan="6" style="padding:16px;color:#6b7280">No failed logins 🎉</td></tr>`;
+    const errRows = (d.api_errors || []).slice(0, 100).map(a => `<tr>
+        <td style="white-space:nowrap;color:#6b7280">${esc(a.timestamp)}</td>
+        <td style="font-family:monospace;font-size:12px">${esc(a.endpoint)}</td>
+        <td><span style="background:#fff7ed;color:#9a3412;border-radius:6px;padding:2px 8px;font-size:12px">${esc(a.status)} ${esc(a.reason)}</span></td>
+        <td>${esc(a.what_went_wrong)}</td>
+        <td style="color:#065f46">${esc(a.how_to_fix)}</td>
+        <td style="font-weight:600">${esc(a.email) || '—'}</td></tr>`).join('')
+        || `<tr><td colspan="6" style="padding:16px;color:#6b7280">No API errors 🎉</td></tr>`;
+    return `
+      <style>
+        #dash-health-content table{width:100%;border-collapse:collapse}
+        #dash-health-content th{text-align:left;padding:8px 10px;border-bottom:2px solid #e5e7eb;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+        #dash-health-content td{padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:13px;vertical-align:top}
+      </style>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+        ${tile('Failed logins', s.failed_logins || 0, '#b91c1c')}
+        ${tile('API errors', s.api_errors || 0, '#9a3412')}
+        ${tile('Login reasons', reasons, '#111827')}
+      </div>
+      <div style="font-size:12px;color:#6b7280;margin:4px 0 14px">🔄 Auto-refreshing every 20s · superadmin only</div>
+      <h3 style="margin:16px 0 6px;font-size:15px">Failed logins — who &amp; how to fix</h3>
+      <div style="overflow:auto"><table><thead><tr>
+        <th>Time</th><th>Email</th><th>Reason</th><th>What went wrong</th><th>How to fix</th><th>Device</th>
+      </tr></thead><tbody>${loginRows}</tbody></table></div>
+      <h3 style="margin:22px 0 6px;font-size:15px">API errors</h3>
+      <div style="overflow:auto"><table><thead><tr>
+        <th>Time</th><th>Endpoint</th><th>Status</th><th>What went wrong</th><th>How to fix</th><th>User</th>
+      </tr></thead><tbody>${errRows}</tbody></table></div>`;
+}
 
 async function loadActivityLog() {
 
