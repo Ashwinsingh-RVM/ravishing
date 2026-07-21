@@ -4531,7 +4531,23 @@ function applyDashboardRBAC() {
         if (rvmTab) { rvmTab.style.display = ''; rvmTab.classList.remove('rbac-hidden'); }
         if (costTab) { costTab.style.display = ''; costTab.classList.remove('rbac-hidden'); }
     }
-    if (isSuper && activityTab) activityTab.style.display = '';
+    // Activity sub-tab: superadmin only, and hidden until the "Goa DRS"
+    // header title is triple-clicked (RVM/Cost stay always-visible for admins).
+    if (isSuper && activityTab && !window._activityRevealWired) {
+        window._activityRevealWired = true;
+        const title = document.querySelector('.header h1, .header-title, header h1');
+        let clicks = 0, timer = null;
+        (title || document).addEventListener('click', (e) => {
+            if (!title && !(e.target.closest && e.target.closest('.header'))) return;
+            clicks++;
+            clearTimeout(timer);
+            timer = setTimeout(() => { clicks = 0; }, 600);
+            if (clicks >= 3) {
+                clicks = 0;
+                activityTab.style.display = activityTab.style.display === 'none' ? '' : 'none';
+            }
+        });
+    }
 
 }
 
