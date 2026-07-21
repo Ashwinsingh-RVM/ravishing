@@ -2841,16 +2841,16 @@ class GoogleSheetsService:
             if r >= reached_bar:
                 add_reached(wd)
 
-        # ONBOARDED (headline) = Superset ACTIVE — the system of record for
-        # confirmed onboardings. Each ACTIVE business is dated by its Superset
-        # onboarding date so the weekly & monthly onboarding buckets are driven
-        # straight off Superset. The current export carries a single 'Date'
-        # column (the onboarding/registration date); older exports used
-        # 'updated_day' + 'created_day'. Read whichever is present so the
-        # trends keep working across export-schema versions.
+        # ONBOARDED (headline) = ACTIVE businesses in the Superset_v1 tab — a
+        # direct, daily-refreshed Superset dump that is the system of record
+        # for confirmed onboardings. Each ACTIVE business is dated by its
+        # 'updated_day' (the onboarding date) so the weekly & monthly buckets
+        # are driven straight off Superset_v1; 'created_day' drives the
+        # 'started onboarding' movement. (PAN/GST/FSSAI still come from the
+        # separate 'Superset' tab, used only for identity matching.)
         superset_active = 0
         try:
-            sup_rows, sup_headers = self._get_superset_cache()
+            sup_rows, sup_headers = self._get_superset_v1_cache()
             shx = {hd: i for i, hd in enumerate(sup_headers)}
 
             def sup(row, col):
@@ -2858,14 +2858,12 @@ class GoogleSheetsService:
                 return row[i].strip() if i is not None and i < len(row) else ''
 
             def sup_onboard_date(row):
-                # Prefer the new single 'Date' column; fall back to the older
-                # updated_day/created_day names for back-compat.
+                # Onboarding date = updated_day (fallback created_day / Date).
                 return parse_work_date(
-                    sup(row, 'Date') or sup(row, 'updated_day') or sup(row, 'created_day'))
+                    sup(row, 'updated_day') or sup(row, 'created_day') or sup(row, 'Date'))
 
             for srow in sup_rows:
-                # 'started onboarding' movement — created_day if the export has
-                # it, else the single onboarding Date.
+                # 'started onboarding' movement — created_day if present.
                 created = parse_work_date(sup(srow, 'created_day')) or parse_work_date(sup(srow, 'Date'))
                 if created:
                     dk, wk, mk = created.isoformat(), (created - timedelta(days=created.weekday())).isoformat(), created.strftime('%Y-%m')
@@ -3851,6 +3849,50 @@ class GoogleSheetsService:
         _superset_cache['data'] = rows
         _superset_cache['headers'] = headers
         _superset_cache['expiry'] = now + timedelta(minutes=2)
+        return rows, headers
+
+    SUPERSET_V1_TAB_NAME = 'Superset_v1'
+
+    def _get_superset_v1_cache(self):
+        """Superset_v1 tab — a direct, daily-refreshed Superset dump that is
+        the system of record for the ONBOARDED count and onboarding dates
+        (columns: business_name, status, created_day, updated_day, ...).
+        Row 1 is a 'Last updated: ...' stamp, so the real header row is
+        detected (the row carrying 'status'/'business_name') rather than
+        assumed to be row 1. Test/dummy businesses are filtered out here.
+        PAN/GST/FSSAI still come from the separate 'Superset' tab."""
+        global _superset_v1_cache
+        now = datetime.now()
+        if (_superset_v1_cache['data'] is not None
+                and _superset_v1_cache['expiry']
+                and now < _superset_v1_cache['expiry']):
+            return _superset_v1_cache['data'], _superset_v1_cache['headers']
+
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.worksheet(self.SUPERSET_V1_TAB_NAME)
+        all_values = _gs_retry(worksheet.get_all_values)
+
+        # Find the header row (skips the leading "Last updated: ..." stamp row).
+        hdr_idx = None
+        for i, row in enumerate(all_values[:5]):
+            low = [c.strip().lower() for c in row]
+            if 'status' in low or 'business_name' in low:
+                hdr_idx = i
+                break
+        if hdr_idx is None or len(all_values) <= hdr_idx + 1:
+            _superset_v1_cache.update(data=[], headers=[],
+                                      expiry=now + timedelta(minutes=2))
+            return [], []
+
+        headers = [h.strip() for h in all_values[hdr_idx]]
+        name_idx = headers.index('business_name') if 'business_name' in headers else 1
+        rows = [
+            r for r in all_values[hdr_idx + 1:]
+            if any(c.strip() for c in r)
+            and not (name_idx < len(r) and self._is_superset_test_row(r[name_idx]))
+        ]
+        _superset_v1_cache.update(data=rows, headers=headers,
+                                  expiry=now + timedelta(minutes=2))
         return rows, headers
 
     def get_horeca_superset_data(self, search='', page=1, page_size=50):
@@ -5160,6 +5202,7 @@ class GoogleSheetsService:
 _horeca_crm_cache = {'data': None, 'headers': None, 'clusters': None, 'expiry': None}
 _appsheet_cache = {'data': None, 'headers': None, 'expiry': None}
 _superset_cache = {'data': None, 'headers': None, 'expiry': None}
+_superset_v1_cache = {'data': None, 'headers': None, 'expiry': None}
 _superset_validation_cache = {'data': None, 'expiry': None}
 
 # Cache for authorized users

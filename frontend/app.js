@@ -4192,8 +4192,6 @@ function renderHovOverview(container) {
 
         <p class="hint" style="margin-top:8px;">Run rate: ${rrSub.replace(/&rarr;/g, '→').replace(/&middot;/g, '·')}</p>
 
-        <p class="hint" style="margin-top:4px;">Onboarded = <strong>${d.onboarded_real.toLocaleString()}</strong> confirmed (Superset) &middot; ${(d.onboarded_reported || 0).toLocaleString()} reported by associates in app_sheet (live)${d.onboarded_reported && d.onboarded_reported !== d.onboarded_real ? ` — ${Math.abs(d.onboarded_real - d.onboarded_reported)} ${d.onboarded_real > d.onboarded_reported ? 'confirmed but not yet marked in app_sheet' : 'reported but not yet Superset-confirmed'}` : ''}</p>
-
     </div>`;
 
     const exclusionCard = (label, value, sub, icon, variant) => `
