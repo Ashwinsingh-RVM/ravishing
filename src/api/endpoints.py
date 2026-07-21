@@ -147,6 +147,80 @@ async def auth_middleware(request: Request, call_next):
     return _apply_no_cache(request, await call_next(request))
 
 
+# ==================== API failure tracking (observability) ====================
+# Captures every /api failure — status, endpoint, user, reason, response time —
+# into an in-memory ring buffer (fast, always) and persists the notable ones
+# (5xx server errors + 403 permission denials) to the analytics sheet so they
+# survive restarts and show in the superadmin Activity + System Health views.
+# Login failures are tracked separately in the login handler (login_failed).
+_api_failure_buffer: list = []  # newest first, capped at 500
+
+
+def _record_api_failure(request: Request, status: int, reason: str, user_email: str, ms: int):
+    entry = {
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'path': request.url.path, 'status': status, 'reason': reason,
+        'user_email': user_email or '', 'response_ms': ms,
+    }
+    _api_failure_buffer.insert(0, entry)
+    del _api_failure_buffer[500:]
+    # Persist only meaningful failures to the sheet (avoid flooding on 401/404).
+    if status < 500 and status != 403:
+        return
+
+    def _w():
+        try:
+            ua = request.headers.get('user-agent', '')
+            device = _parse_device_info(ua)
+            fwd = request.headers.get('x-forwarded-for')
+            ip = fwd.split(',')[0].strip() if fwd else (request.client.host if request.client else 'unknown')
+            GoogleSheetsService().log_analytics_event({
+                'timestamp': entry['timestamp'], 'user_email': entry['user_email'], 'user_name': '',
+                'event_type': 'api_error', 'page': request.url.path, 'element': str(status),
+                'value': reason, 'session_id': '', 'device_type': device['device_type'],
+                'browser': device['browser'], 'os': device['os'], 'ip': ip,
+            })
+        except Exception:
+            pass
+    import threading
+    threading.Thread(target=_w, daemon=True).start()
+
+
+@app.middleware("http")
+async def api_failure_tracker(request: Request, call_next):
+    path = request.url.path
+    # Skip non-API, the analytics/system endpoints (avoid self-noise), the login
+    # endpoint (tracked as login_failed), and the health check.
+    if (not path.startswith('/api') or path.startswith('/api/analytics')
+            or path.startswith('/api/system') or path == '/api/auth/login'
+            or path == '/api/health'):
+        return await call_next(request)
+    import time as _t
+    t0 = _t.monotonic()
+    try:
+        resp = await call_next(request)
+    except Exception as e:
+        ms = int((_t.monotonic() - t0) * 1000)
+        try:
+            u = get_session_user(request)
+        except Exception:
+            u = None
+        _record_api_failure(request, 500, f"{type(e).__name__}: {str(e)[:200]}",
+                            (u or {}).get('email') if u else '', ms)
+        raise
+    if resp.status_code >= 400:
+        ms = int((_t.monotonic() - t0) * 1000)
+        try:
+            u = get_session_user(request)
+        except Exception:
+            u = None
+        reason = {401: 'not_authenticated', 403: 'forbidden', 404: 'not_found',
+                  429: 'rate_limited'}.get(resp.status_code, '')
+        _record_api_failure(request, resp.status_code, reason,
+                            (u or {}).get('email') if u else '', ms)
+    return resp
+
+
 # Static files - serve frontend
 FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend"
 if FRONTEND_DIR.exists():
@@ -1514,6 +1588,98 @@ async def get_activity_log(request: Request, limit: int = 300):
         return {"events": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# What-went-wrong + how-to-fix guidance, keyed by failure reason.
+_FIX_HINTS = {
+    'wrong_pin': ("User entered the wrong PIN.",
+                  "Confirm their PIN in the Authorized-Users sheet and ask them to re-enter it exactly (no spaces)."),
+    'unknown_email': ("The email isn't in the Authorized-Users sheet.",
+                      "Add the user to Authorized-Users with Active=TRUE, or correct the email spelling. New entries take up to 5 min to take effect (cache)."),
+    'not_authenticated': ("Session expired or the user isn't logged in.",
+                          "Ask the user to log in again. If it happens right after login, check that cookies aren't blocked."),
+    'forbidden': ("The user's role doesn't have access to this feature.",
+                  "Update the user's Role in the Authorized-Users sheet to one that permits this tab."),
+    'not_found': ("The requested resource or route doesn't exist.",
+                  "Usually a stale/cached frontend calling an old endpoint — ask the user to hard-refresh (Ctrl+Shift+R)."),
+    'rate_limited': ("Too many requests in a short window.",
+                     "Transient — retry shortly. If frequent, a client is polling too aggressively."),
+}
+
+
+def _diagnose(event_type: str, reason: str, status) -> dict:
+    if reason in _FIX_HINTS:
+        went, fix = _FIX_HINTS[reason]
+    elif status and str(status).isdigit() and int(status) >= 500:
+        went = "Server error — usually Google Sheets being slow or unreachable."
+        fix = "Retry; if it persists, check Google Sheets API quota and the Railway logs for the traceback."
+    elif event_type == 'login_failed':
+        went, fix = "Login rejected.", "Verify the user's email and PIN in the Authorized-Users sheet."
+    else:
+        went, fix = "Request failed.", "Review the endpoint and error detail in the logs."
+    return {'what_went_wrong': went, 'how_to_fix': fix}
+
+
+@app.get("/api/system/health")
+async def get_system_health(request: Request, limit: int = 500):
+    """CRM-grade observability — superadmin only. Failed-login history and API
+    errors, each annotated with what went wrong and how to fix it, plus summary
+    counts. Reads the persisted analytics sheet + the live in-memory buffer."""
+    user = require_auth(request)
+    if user.get('email') != SUPERADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Access denied")
+    from collections import Counter
+    try:
+        events = GoogleSheetsService().get_analytics_log(limit=limit)
+    except Exception:
+        events = []
+
+    logins, api_errors = [], []
+    for e in events:
+        et = e.get('event_type')
+        if et == 'login_failed':
+            reason = e.get('element') or ''
+            logins.append({
+                'timestamp': e.get('timestamp'), 'email': e.get('user_email'),
+                'reason': reason, 'device': e.get('device_type'), 'browser': e.get('browser'),
+                'os': e.get('os'), 'ip': e.get('ip'), **_diagnose(et, reason, None),
+            })
+        elif et == 'api_error':
+            reason = e.get('value') or ''
+            status = e.get('element') or ''
+            api_errors.append({
+                'timestamp': e.get('timestamp'), 'email': e.get('user_email'),
+                'endpoint': e.get('page'), 'status': status, 'reason': reason,
+                'device': e.get('device_type'), 'os': e.get('os'), 'ip': e.get('ip'),
+                **_diagnose(et, reason, status),
+            })
+
+    # Merge in the live in-memory buffer (covers errors not persisted to sheet,
+    # e.g. recent 401/404), de-duplicated loosely by timestamp+path+status.
+    seen = {(a['timestamp'], a['endpoint'], str(a['status'])) for a in api_errors}
+    for b in _api_failure_buffer:
+        key = (b['timestamp'], b['path'], str(b['status']))
+        if key in seen:
+            continue
+        api_errors.append({
+            'timestamp': b['timestamp'], 'email': b['user_email'], 'endpoint': b['path'],
+            'status': b['status'], 'reason': b['reason'], 'response_ms': b.get('response_ms'),
+            **_diagnose('api_error', b['reason'], b['status']),
+        })
+
+    logins.sort(key=lambda x: x.get('timestamp') or '', reverse=True)
+    api_errors.sort(key=lambda x: x.get('timestamp') or '', reverse=True)
+    return {
+        'summary': {
+            'failed_logins': len(logins),
+            'api_errors': len(api_errors),
+            'login_reasons': dict(Counter(l['reason'] for l in logins)),
+            'error_endpoints': dict(Counter(a['endpoint'] for a in api_errors).most_common(10)),
+            'top_failing_users': dict(Counter(l['email'] for l in logins if l['email']).most_common(10)),
+        },
+        'failed_logins': logins,
+        'api_errors': api_errors,
+    }
 
 @app.get("/api/analytics/profiles")
 async def get_user_profiles_analytics(request: Request):
