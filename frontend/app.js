@@ -6799,9 +6799,9 @@ function renderHsvKPIs() {
 
     el.style.marginBottom = '16px';
 
-    const pending = c.pending_doc_update_count || 0;
-    const banner = pending > 0
-        ? `<div style="grid-column:1/-1;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;font-size:13px;color:#9a3412;">&#9203; <strong>${n(pending)}</strong> business(es) onboarded yesterday are pending a PAN/GST/FSSAI update in Superset &mdash; excluded from Organic/Inorganic until their documents refresh (usually the next day).</div>`
+    const notUpdated = c.docs_not_updated_count || 0;
+    const banner = notUpdated > 0
+        ? `<div style="grid-column:1/-1;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;font-size:13px;color:#9a3412;">&#9888; PAN/GST/FSSAI not updated in Superset for <strong>${n(notUpdated)}</strong> onboarded business(es) &mdash; their identity data hasn't been refreshed in the sheet yet, so they can't be matched (they show as Organic until updated).</div>`
         : '';
 
     el.innerHTML = banner + cards.join('');

@@ -4422,6 +4422,7 @@ class GoogleSheetsService:
         qa_name_both, qa_dup_pan, qa_dup_gst, qa_dup_fssai = [], [], [], []
         dup_name_rows, offboarded, in_progress = [], [], []
         pending_doc_update = []  # onboarded yesterday+, PAN/GST/FSSAI not yet refreshed
+        docs_not_updated = 0     # ALL ACTIVE businesses with no PAN/GST/FSSAI in Superset yet
         _yesterday = (datetime.now() - timedelta(days=1)).date()
 
         def _s_onboard_date(srow):
@@ -4584,6 +4585,31 @@ class GoogleSheetsService:
                          | pending_ids['dup_fssai'])
         qa_pending_breakdown = {q: len(ids) for q, ids in pending_ids.items()}
 
+        # 'PAN/GST/FSSAI not updated in Superset' = businesses that are
+        # onboarded (ACTIVE in the daily Superset_v1 tab) but whose identity
+        # is not yet present in the 'Superset' matching tab (name has no
+        # doc-bearing row there). This is the sheet-refresh lag — surfaced so
+        # it isn't mistaken for a real matching gap.
+        try:
+            _sup_names_withdoc = set()
+            for r in sup_rows:
+                nm = self._normalize_horeca_name(sg(r, 'business_name'))
+                if nm and (sg(r, 'pan_number') or sg(r, 'gstin_number') or sg(r, 'fssai_number')):
+                    _sup_names_withdoc.add(nm)
+            _v1_rows, _v1_headers = self._get_superset_v1_cache()
+            _vhx = {h: i for i, h in enumerate(_v1_headers)}
+            _vn, _vs = _vhx.get('business_name'), _vhx.get('status')
+            docs_not_updated = 0
+            for r in _v1_rows:
+                st = r[_vs].strip().upper() if _vs is not None and _vs < len(r) else ''
+                if st != 'ACTIVE':
+                    continue
+                nm = self._normalize_horeca_name(r[_vn] if _vn is not None and _vn < len(r) else '')
+                if nm and nm not in _sup_names_withdoc:
+                    docs_not_updated += 1
+        except Exception:
+            docs_not_updated = 0
+
         return {
             'total_onboarded': active_total,
             'onboarded_after_qa': active_total - len(offboarded),
@@ -4595,6 +4621,7 @@ class GoogleSheetsService:
             'inorganic_count': len(inorganic),
             'pending_doc_update_count': len(pending_doc_update),
             'pending_doc_update': pending_doc_update,
+            'docs_not_updated_count': docs_not_updated,
             'qa_pending': qa_pending,
             'qa_pending_breakdown': qa_pending_breakdown,
             'dup_names_ravishing': dup_names_ravishing,
