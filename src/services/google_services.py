@@ -3949,8 +3949,9 @@ class GoogleSheetsService:
         worksheet = spreadsheet.worksheet(self.EXCISE_TAB_NAME)
         all_values = _gs_retry(worksheet.get_all_values)
         if len(all_values) < 2:
-            _excise_cache.update(data=[], expiry=now + _HORECA_CACHE_TTL)
-            return []
+            empty = {'outlets': [], 'overall_onboarded_count': 0}
+            _excise_cache.update(data=empty, expiry=now + _HORECA_CACHE_TTL)
+            return empty
 
         headers = [h.strip() for h in all_values[0]]
         h = {hd: i for i, hd in enumerate(headers)}
@@ -3969,14 +3970,16 @@ class GoogleSheetsService:
         status_i = shx.get('status')
         token_index = {}
         pool_names = []
+        overall_active_count = 0
         if name_i is not None and status_i is not None:
             for srow in sup_rows:
                 if status_i >= len(srow) or srow[status_i].strip().upper() != 'ACTIVE':
                     continue
+                overall_active_count += 1
                 nm = srow[name_i].strip() if name_i < len(srow) else ''
                 toks = self._distinctive_name_tokens(nm)
                 if len(toks) < 2:
-                    continue
+                    continue  # too generic a name to match reliably, but still counted above
                 idx = len(pool_names)
                 pool_names.append((toks, nm))
                 for t in toks:
@@ -4025,8 +4028,9 @@ class GoogleSheetsService:
                 'matched_name': match_nm if onboarded else None,
             })
 
-        _excise_cache.update(data=outlets, expiry=now + _HORECA_CACHE_TTL)
-        return outlets
+        result = {'outlets': outlets, 'overall_onboarded_count': overall_active_count}
+        _excise_cache.update(data=result, expiry=now + _HORECA_CACHE_TTL)
+        return result
 
     def get_horeca_superset_data(self, search='', page=1, page_size=50):
         """Paginated read of the Superset export tab â€” a raw viewer only,

@@ -3744,6 +3744,7 @@ let cpcMapClusterBounds = {};   // id -> Leaflet LatLngBounds covering all its b
 let cpcMapBlockClusterColor = {}; // block/taluka name -> its cluster's color (single source of truth for block fill)
 let cpcMapRvmRawTotal = 0;   // total RVM locations tracked in the sheet, incl. ones with no GPS yet
 let cpcMapRvmNoCoords = 0;   // subset of the above that can't be plotted (no lat/lng yet)
+let cpcMapHorecaOverallOnboarded = 0;  // Superset ACTIVE total (Enhanced/app_sheet) — usually > the excise-matched count
 
 // Shoelace polygon area in km² using an equirectangular approximation centered
 // on each ring — accurate enough at Goa's scale (no external geo library).
@@ -3882,7 +3883,8 @@ async function initCpcMapTab() {
                 fetch('/static/data/cpc/cpc_clusters.json'),
             ]);
             const rvmData = rvmRes.ok ? await rvmRes.json() : { locations: [] };
-            const exciseData = exciseRes.ok ? await exciseRes.json() : { outlets: [] };
+            const exciseData = exciseRes.ok ? await exciseRes.json() : { outlets: [], overallOnboardedCount: 0 };
+            cpcMapHorecaOverallOnboarded = exciseData.overallOnboardedCount || 0;
             const cpcData = cpcRes.ok ? await cpcRes.json() : { clusters: [] };
             cpcMapClustersData = cpcData.clusters || [];
             cpcMapTalukaGeo = window.TALUKA_GEO || null;
@@ -4194,7 +4196,9 @@ function cpcMapRenderStats(label, stats, meta) {
         </div>`;
     el.innerHTML = scopeBar +
         card('horeca', '🍽️', stats.horecaTotal.toLocaleString(), 'HoReCa Total') +
-        card('horeca', '✅', stats.horecaOnboarded.toLocaleString(), 'HoReCa Onboarded', `${stats.horecaPct}% of total`) +
+        card('horeca', '✅', stats.horecaOnboarded.toLocaleString(), 'HoReCa Onboarded',
+            `${stats.horecaPct}% of total` + (meta.horecaOverallOnboarded > stats.horecaOnboarded
+                ? ` &middot; ${meta.horecaOverallOnboarded.toLocaleString()} onboarded overall (Superset), not all matched to excise` : '')) +
         card('rvm', '📍', stats.rvmTotal.toLocaleString(), 'RVM Location Identified', meta.rvmNoCoords ? `${meta.rvmNoCoords} awaiting GPS` : null) +
         card('rvm', '♻️', stats.rvmInstalled.toLocaleString(), 'RVM Installed', `${stats.rvmPct}% &middot; ${stats.rvmPending} pending`) +
         card('coastal', '🏖️', stats.coastalHoreca.toLocaleString(), 'Coastal HoReCa', `within ${CPCM_COASTAL_KM}km of beach`) +
@@ -4216,7 +4220,7 @@ function cpcMapClearScope() {
     stats.rvmTotal = cpcMapRvmRawTotal;
     stats.rvmPending = cpcMapRvmRawTotal - stats.rvmInstalled;
     stats.rvmPct = stats.rvmTotal ? Math.round(stats.rvmInstalled / stats.rvmTotal * 100) : 0;
-    cpcMapRenderStats(null, stats, { areaKm2, rvmNoCoords: cpcMapRvmNoCoords });
+    cpcMapRenderStats(null, stats, { areaKm2, rvmNoCoords: cpcMapRvmNoCoords, horecaOverallOnboarded: cpcMapHorecaOverallOnboarded });
     const bs = document.getElementById('cpcm-block-select'); if (bs) bs.value = '';
     const ps = document.getElementById('cpcm-panchayat-select'); if (ps) ps.value = '';
     cpcMapPopulatePanchayatDatalist(null);

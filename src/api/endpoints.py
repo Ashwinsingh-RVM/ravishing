@@ -1492,11 +1492,16 @@ async def get_excise_outlets(request: Request):
     require_auth(request)
     try:
         sheets_service = GoogleSheetsService()
-        outlets = sheets_service.get_excise_outlets()
+        result = sheets_service.get_excise_outlets()
+        outlets = result['outlets']
         onboarded = len([o for o in outlets if o.get('onboarded')])
         return {
             "outlets": outlets,
             "counts": {"total": len(outlets), "onboarded": onboarded, "not_onboarded": len(outlets) - onboarded},
+            # Superset ACTIVE businesses overall (has its own lat/lng via Enhanced/
+            # app_sheet) — usually bigger than "onboarded" above since most onboarded
+            # HoReCas aren't liquor-licensed outlets in the Consumption tab at all.
+            "overallOnboardedCount": result['overall_onboarded_count'],
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
