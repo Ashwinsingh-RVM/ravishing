@@ -3291,6 +3291,11 @@ function setupDashboardTabs() {
 
             }
 
+            // Lazy-load unified CPC Map when tab is clicked
+            if (dashId === 'maps') {
+                initCpcMapTab();
+            }
+
 
 
 
@@ -3715,6 +3720,683 @@ function initHovMap() {
             container.innerHTML = `<p class="hint" style="padding:20px;">Could not load map: ${escapeHtml(e.message)}</p>`;
         }
     });
+}
+
+// ============ CPC Map (unified: HoReCa/Excise + RVM Deployment + CPC/Warehouse clusters) ============
+let cpcMapInstance = null;
+let cpcMapLayers = {};
+let cpcMapHeatLayer = null;
+let cpcMapHeatOn = false;
+// Default = clean boundaries-only view. All pin/cluster layers start OFF;
+// the user opts in per-layer from the sidebar instead of being shown everything at once.
+let cpcMapState = {
+    rvmInstalled: false, rvmPending: false,
+    horecaOnboarded: false, horecaNotOnboarded: false,
+    clusters: false,
+    boundaryBlocks: true, boundaryPanchayats: true, blockLabels: false,
+};
+let cpcMapClustersData = [];
+let cpcMapTalukaGeo = null;
+let cpcMapPoints = { horeca: [], rvm: [] };   // flat, enriched point pool used for stats/search
+let cpcMapScope = null;                        // {type,label,filterFn} | null = global
+let cpcMapAllClusterBounds = null;
+let cpcMapClusterBounds = {};   // id -> Leaflet LatLngBounds covering all its blocks
+let cpcMapBlockClusterColor = {}; // block/taluka name -> its cluster's color (single source of truth for block fill)
+
+// Shoelace polygon area in km² using an equirectangular approximation centered
+// on each ring — accurate enough at Goa's scale (no external geo library).
+function cpcmRingAreaKm2(ring) {
+    if (!ring || ring.length < 3) return 0;
+    const lat0 = ring.reduce((s, p) => s + p[1], 0) / ring.length;
+    const kx = 111.32 * Math.cos(lat0 * Math.PI / 180), ky = 110.57;
+    let a = 0;
+    for (let i = 0; i < ring.length; i++) {
+        const [lng1, lat1] = ring[i], [lng2, lat2] = ring[(i + 1) % ring.length];
+        a += (lng1 * kx) * (lat2 * ky) - (lng2 * kx) * (lat1 * ky);
+    }
+    return Math.abs(a) / 2;
+}
+function cpcmGeometryAreaKm2(geom) {
+    if (!geom) return 0;
+    const polys = geom.type === 'Polygon' ? [geom.coordinates] : (geom.type === 'MultiPolygon' ? geom.coordinates : []);
+    let area = 0;
+    polys.forEach(rings => {
+        area += cpcmRingAreaKm2(rings[0]);
+        rings.slice(1).forEach(hole => { area -= cpcmRingAreaKm2(hole); });
+    });
+    return area;
+}
+// 3-bucket choropleth: low HoReCa onboarded % reads warm/red, high reads green.
+function cpcmChoroplethColor(pct) {
+    if (pct < 34) return '#f87171';
+    if (pct < 67) return '#fbbf24';
+    return '#4ade80';
+}
+
+function cpcmTalukaFeatures(names) {
+    if (!cpcMapTalukaGeo) return [];
+    const set = new Set(names || []);
+    return (cpcMapTalukaGeo.features || []).filter(f => set.has(f.properties && (f.properties.name || f.properties.NAME)));
+}
+
+// Hand-drawn Goa coastline (north → south), used only for the "near beach" proxy.
+// Approximate — good enough for a ~4km "coastal" bucket, not survey-grade.
+const CPCM_COASTLINE = [
+    [15.7486, 73.7211], [15.6540, 73.7150], [15.5760, 73.7379], [15.5439, 73.7623],
+    [15.5185, 73.7639], [15.4909, 73.7847], [15.4200, 73.8020], [15.3838, 73.8080],
+    [15.3095, 73.9195], [15.2200, 73.9330], [15.1600, 73.9500], [15.0104, 74.0231],
+    [14.9646, 74.0396],
+];
+const CPCM_COASTAL_KM = 2;           // HoReCa "coastal" bucket
+const CPCM_COASTAL_KM_TIGHT = 1;     // HoReCa "right on the beach" bucket
+const CPCM_COASTAL_RVM_KM = 0.5;     // RVM coastal bucket — tighter since a machine's exact footfall matters more
+
+function cpcmDistToSegKm(lat, lng, a, b) {
+    const kx = 111.32 * Math.cos(lat * Math.PI / 180), ky = 110.57;
+    const x = (lng - a[1]) * kx, y = (lat - a[0]) * ky;
+    const dx = (b[1] - a[1]) * kx, dy = (b[0] - a[0]) * ky;
+    const len2 = dx * dx + dy * dy || 1e-9;
+    let t = (x * dx + y * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(x - dx * t, y - dy * t);
+}
+// Real min distance to the coastline (km) — computed once per point, then reused
+// for every threshold bucket instead of re-walking the coastline per threshold.
+function cpcmCoastDistKm(lat, lng) {
+    let min = Infinity;
+    for (let i = 0; i < CPCM_COASTLINE.length - 1; i++) {
+        const d = cpcmDistToSegKm(lat, lng, CPCM_COASTLINE[i], CPCM_COASTLINE[i + 1]);
+        if (d < min) min = d;
+    }
+    return min;
+}
+const CPC_MAP_LAYER_GROUPS = [
+    {
+        title: 'HoReCa',
+        rows: [
+            { key: 'horecaOnboarded', label: 'Onboarded', color: '#16a34a' },
+            { key: 'horecaNotOnboarded', label: 'Not Onboarded', color: '#f97316' },
+        ],
+    },
+    {
+        title: 'RVM Deployment',
+        rows: [
+            { key: 'rvmInstalled', label: 'Installed', color: '#16a34a' },
+            { key: 'rvmPending', label: 'Pending', color: '#dc2626' },
+        ],
+    },
+    {
+        title: 'CPC',
+        rows: [
+            { key: 'clusters', label: 'Clusters', color: '#7c3aed' },
+        ],
+    },
+    {
+        title: 'Boundaries',
+        rows: [
+            { key: 'boundaryBlocks', label: 'Block (Taluka)', color: '#475569' },
+            { key: 'boundaryPanchayats', label: 'Panchayat', color: '#cbd5e1' },
+            { key: 'blockLabels', label: 'Block Stat Labels', color: '#0f172a' },
+        ],
+    },
+];
+const CPC_MAP_LAYER_META = CPC_MAP_LAYER_GROUPS.flatMap(g => g.rows);
+
+function cpcmLoadScript(src) {
+    return new Promise(resolve => {
+        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = src; s.onload = resolve; s.onerror = resolve;
+        document.head.appendChild(s);
+    });
+}
+
+function cpcmTalukaOf(lat, lng) {
+    if (!cpcMapTalukaGeo) return null;
+    for (const f of cpcMapTalukaGeo.features || []) {
+        if (hovPointInFeature(lat, lng, f.geometry)) return (f.properties && (f.properties.name || f.properties.NAME)) || null;
+    }
+    return null;
+}
+function cpcmPanchayatOf(lat, lng) {
+    if (!window.PANCHAYAT_GEO) return null;
+    for (const f of window.PANCHAYAT_GEO.features || []) {
+        if (hovPointInFeature(lat, lng, f.geometry)) return (f.properties && f.properties.name) || null;
+    }
+    return null;
+}
+
+async function initCpcMapTab() {
+    if (cpcMapInstance) { setTimeout(() => cpcMapInstance.invalidateSize(), 100); return; }
+    loadLeaflet(async () => {
+        const container = document.getElementById('cpcmap-container');
+        try {
+            // goa_geo.js defines TALUKA_GEO + PANCHAYAT_GEO globals (reused from the RVM Deployment map)
+            if (!window.TALUKA_GEO) await cpcmLoadScript('/static/data/goa_geo.js');
+
+            const [rvmRes, exciseRes, cpcRes] = await Promise.all([
+                fetch('/api/deployment/summary'),
+                fetch(`${API_BASE}/excise/outlets`),
+                fetch('/static/data/cpc/cpc_clusters.json'),
+            ]);
+            const rvmData = rvmRes.ok ? await rvmRes.json() : { locations: [] };
+            const exciseData = exciseRes.ok ? await exciseRes.json() : { outlets: [] };
+            const cpcData = cpcRes.ok ? await cpcRes.json() : { clusters: [] };
+            cpcMapClustersData = cpcData.clusters || [];
+            cpcMapTalukaGeo = window.TALUKA_GEO || null;
+            // Each block takes ITS cluster's color directly (one color system, not two
+            // translucent layers fighting each other) — blocks with no cluster fall back
+            // to the plain TAL_COLORS palette.
+            cpcMapBlockClusterColor = {};
+            cpcMapClustersData.forEach(c => (c.block_names || []).forEach(b => { cpcMapBlockClusterColor[b] = c.color; }));
+
+            container.innerHTML = '';
+            const GOA_BOUNDS = L.latLngBounds([14.85, 73.60], [15.85, 74.45]);
+            const map = L.map('cpcmap-container', {
+                preferCanvas: true, zoomControl: true,
+                maxBounds: GOA_BOUNDS.pad(0.05), maxBoundsViscosity: 1.0,
+                minZoom: 9.25, maxZoom: 18, zoomSnap: 0.25,
+            });
+            cpcMapInstance = map;
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OSM &copy; CARTO', maxZoom: 19,
+            }).addTo(map);
+            map.fitBounds(GOA_BOUNDS);
+
+            // Block/taluka boundaries — always-visible layer (toggleable), same government
+            // boundary data as the RVM Deployment map. Bold enough to read at Goa-wide zoom.
+            if (cpcMapTalukaGeo) {
+                cpcMapLayers.boundaryBlocks = L.geoJSON(cpcMapTalukaGeo, {
+                    style: { color: '#475569', weight: 2, fillOpacity: 0, opacity: 0.9 },
+                    onEachFeature: (f, layer) => {
+                        const nm = (f.properties && (f.properties.name || f.properties.NAME)) || 'Block';
+                        layer.bindTooltip(nm, { direction: 'center', sticky: true, className: 'cpcm-block-label' });
+                        layer.on('click', () => cpcMapSelectBlockOnMap(nm));
+                    },
+                });
+            }
+            // Panchayat boundaries — same dark, crisp style as the RVM Deployment map
+            // (depMapBuildBoundaries: #0f172a / weight 1.3 / opacity 0.95) for visual parity.
+            if (window.PANCHAYAT_GEO) {
+                cpcMapLayers.boundaryPanchayats = L.geoJSON(window.PANCHAYAT_GEO, {
+                    style: { color: '#0f172a', weight: 1.3, fillOpacity: 0, opacity: 0.95 },
+                    onEachFeature: (f, layer) => {
+                        const nm = (f.properties && f.properties.name) || 'Panchayat';
+                        layer.bindTooltip(nm, { direction: 'center', sticky: true, className: 'cpcm-panchayat-label' });
+                        layer.on('click', () => cpcMapSelectPanchayatOnMap(f));
+                    },
+                });
+            }
+
+            // --- CPC / Warehouse clusters: bold OUTLINE only (no fill — the block
+            // choropleth below already carries the cluster's color as its fill, so
+            // this layer's only job is to trace a thick border around the group and
+            // hold the warehouse pin, instead of a second translucent tint competing
+            // with the block color underneath). ---
+            const clusterLayer = L.layerGroup();
+            let clusterBoundsAll = null;
+            cpcMapClusterBounds = {};
+            cpcMapClustersData.forEach(c => {
+                let clusterBounds = null;
+                if (cpcMapTalukaGeo) {
+                    (cpcMapTalukaGeo.features || [])
+                        .filter(f => (c.block_names || []).includes((f.properties && (f.properties.name || f.properties.NAME))))
+                        .forEach(f => {
+                            const gj = L.geoJSON(f, { style: {
+                                color: c.color || '#4338ca', weight: 4, opacity: 1, fillOpacity: 0,
+                            } }).bindTooltip(c.name, { sticky: true })
+                              .on('click', () => cpcMapFocusCluster(c.id));
+                            gj.addTo(clusterLayer);
+                            clusterBoundsAll = clusterBoundsAll ? clusterBoundsAll.extend(gj.getBounds()) : gj.getBounds();
+                            clusterBounds = clusterBounds ? clusterBounds.extend(gj.getBounds()) : gj.getBounds();
+                        });
+                }
+                if (clusterBounds) cpcMapClusterBounds[c.id] = clusterBounds;
+                if (c.warehouse) {
+                    const col = c.color || '#4338ca';
+                    const icon = L.divIcon({
+                        className: '', iconSize: [30, 40], iconAnchor: [15, 38], popupAnchor: [0, -36],
+                        html: `<svg width="30" height="40" viewBox="0 0 30 40" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));">
+                            <path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 13 22.5 14.3 23.6a1 1 0 0 0 1.4 0C17 37.5 30 25.5 30 15 30 6.7 23.3 0 15 0z" fill="${col}"/>
+                            <circle cx="15" cy="15" r="9.5" fill="#fff"/>
+                            <path d="M10.5 19.5v-7l4.5-2.6 4.5 2.6v7h-3v-4.5h-3v4.5z" fill="${col}"/>
+                        </svg>`,
+                    });
+                    L.marker([c.warehouse.lat, c.warehouse.lng], { icon, zIndexOffset: 1000 })
+                        .bindTooltip(c.name, { direction: 'top', offset: [0, -36] })
+                        .on('click', () => cpcMapFocusCluster(c.id))
+                        .addTo(clusterLayer);
+                }
+            });
+            cpcMapLayers.clusters = clusterLayer;
+            cpcMapAllClusterBounds = clusterBoundsAll;
+
+            // --- RVM Deployment: Installed (rvmDelivery = Yes) = green, Pending = red ---
+            const rvmInstalledPts = [], rvmPendingPts = [];
+            cpcMapPoints.rvm = [];
+            (rvmData.locations || []).forEach(l => {
+                const lat = parseFloat(l.lat), lng = parseFloat(l.lng);
+                if (!isFinite(lat) || !isFinite(lng) || !lat || !lng) return;
+                const installed = l.rvmDelivery === 'Yes';
+                const taluka = cpcmTalukaOf(lat, lng) || l.block || null;
+                const panchayat = cpcmPanchayatOf(lat, lng);
+                const coastDistKm = cpcmCoastDistKm(lat, lng);
+                const name = l.entityName || l.locationName || 'RVM Location';
+                // RVM = square marker (HoReCa stays circular) so the two dot types are
+                // tell-apart-able by shape alone, not just color.
+                const rvmCol = installed ? '#16a34a' : '#dc2626';
+                const marker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        className: '', iconSize: [11, 11], iconAnchor: [5, 5],
+                        html: `<div style="width:9px;height:9px;background:${rvmCol};border:1.5px solid #fff;border-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.3);"></div>`,
+                    }),
+                }).bindPopup(`<div class="hmap-popup-card"><div class="hp-name">${escapeHtml(name)}</div>
+                    <div class="hp-meta">RVM &middot; ${escapeHtml(taluka || '')}</div>
+                    <span class="hmap-popup-badge" style="background:${installed ? '#dcfce7' : '#fee2e2'};color:${installed ? '#16a34a' : '#dc2626'};">${installed ? 'Installed' : 'Pending'}</span></div>`);
+                (installed ? rvmInstalledPts : rvmPendingPts).push(marker);
+                cpcMapPoints.rvm.push({ lat, lng, name, taluka, panchayat, coastDistKm, installed, marker });
+            });
+            cpcMapLayers.rvmInstalled = L.layerGroup(rvmInstalledPts);
+            cpcMapLayers.rvmPending = L.layerGroup(rvmPendingPts);
+
+            // --- HoReCa: scoped ENTIRELY to the Consumption tab (8,314 outlets) so Total
+            // and Onboarded stay self-consistent (same pool, percentage makes sense).
+            // Onboarded = matched to a Superset ACTIVE business (243); rest = Not Onboarded.
+            const horecaOnPts = [], horecaOffPts = [];
+            cpcMapPoints.horeca = [];
+            (exciseData.outlets || []).forEach(o => {
+                if (!isFinite(o.lat) || !isFinite(o.lng)) return;
+                const onb = !!o.onboarded;
+                const taluka = cpcmTalukaOf(o.lat, o.lng) || o.block || null;
+                const panchayat = cpcmPanchayatOf(o.lat, o.lng);
+                const coastDistKm = cpcmCoastDistKm(o.lat, o.lng);
+                const marker = L.circleMarker([o.lat, o.lng], {
+                    radius: 5, color: '#fff', weight: 1.5,
+                    fillColor: onb ? '#16a34a' : '#f97316', fillOpacity: 0.9,
+                }).bindPopup(`<div class="hmap-popup-card"><div class="hp-name">${escapeHtml(o.name)}</div>
+                    <div class="hp-meta">HoReCa &middot; ${escapeHtml(taluka || '')}</div>
+                    <span class="hmap-popup-badge" style="background:${onb ? '#dcfce7' : '#ffedd5'};color:${onb ? '#16a34a' : '#f97316'};">${onb ? 'Onboarded' : 'Not Onboarded'}</span></div>`);
+                (onb ? horecaOnPts : horecaOffPts).push(marker);
+                cpcMapPoints.horeca.push({ lat: o.lat, lng: o.lng, name: o.name, taluka, panchayat, coastDistKm, onboarded: onb, marker });
+            });
+            cpcMapLayers.horecaOnboarded = L.layerGroup(horecaOnPts);
+            cpcMapLayers.horecaNotOnboarded = L.layerGroup(horecaOffPts);
+
+            // Per-block label: name + HoReCa onboarded% + RVM installed% shown directly on
+            // the map (not just the side stats), placed at each taluka polygon's center.
+            const labelMarkers = [];
+            if (cpcMapTalukaGeo) {
+                (cpcMapTalukaGeo.features || []).forEach(f => {
+                    const nm = f.properties && (f.properties.name || f.properties.NAME);
+                    if (!nm) return;
+                    const s = cpcMapComputeStats(p => p.taluka === nm);
+                    const center = L.geoJSON(f).getBounds().getCenter();
+                    labelMarkers.push(L.marker(center, {
+                        interactive: false, zIndexOffset: 500,
+                        icon: L.divIcon({
+                            className: '', iconSize: null,
+                            html: `<div class="cpcm-block-tag">
+                                <div class="cbt-name">${escapeHtml(nm)}</div>
+                                <div class="cbt-row"><span class="cbt-dot" style="background:#16a34a"></span>HoReCa ${s.horecaOnboarded}/${s.horecaTotal} (${s.horecaPct}%)</div>
+                                <div class="cbt-row"><span class="cbt-dot" style="background:#0284c7"></span>RVM ${s.rvmInstalled}/${s.rvmTotal} (${s.rvmPct}%)</div>
+                            </div>`,
+                        }),
+                    }));
+                });
+            }
+            cpcMapLayers.blockLabels = L.layerGroup(labelMarkers);
+
+            // Categorical fill per block: a block that belongs to a CPC cluster takes
+            // THAT cluster's color (so cluster membership reads instantly without a
+            // second competing overlay); blocks with no cluster fall back to the plain
+            // TAL_COLORS palette. Panchayats stay outline-only underneath.
+            if (cpcMapLayers.boundaryBlocks) {
+                const talColors = (typeof TAL_COLORS === 'object' && TAL_COLORS) || {};
+                cpcMapLayers.boundaryBlocks.eachLayer(layer => {
+                    const nm = layer.feature.properties && (layer.feature.properties.name || layer.feature.properties.NAME);
+                    const col = cpcMapBlockClusterColor[nm] || talColors[nm] || '#cbd5e1';
+                    layer.setStyle({ fillColor: col, fillOpacity: 0.55 });
+                });
+            }
+
+            cpcMapApplyLayers();
+            cpcMapRenderSidebar({
+                rvmInstalled: rvmInstalledPts.length, rvmPending: rvmPendingPts.length,
+                horecaOnboarded: horecaOnPts.length, horecaNotOnboarded: horecaOffPts.length,
+                clusters: cpcMapClustersData.length,
+            });
+            cpcMapPopulateBlockSelect();
+            cpcMapClearScope();
+        } catch (e) {
+            container.innerHTML = `<p class="hint" style="padding:20px;">Could not load Maps: ${escapeHtml(e.message)}</p>`;
+        }
+    });
+}
+
+function cpcMapApplyLayers() {
+    if (!cpcMapInstance) return;
+    const map = cpcMapInstance;
+    Object.keys(cpcMapLayers).forEach(key => {
+        const layer = cpcMapLayers[key];
+        if (!layer) return;
+        if (cpcMapState[key]) { if (!map.hasLayer(layer)) layer.addTo(map); }
+        else if (map.hasLayer(layer)) map.removeLayer(layer);
+    });
+}
+
+let cpcMapCounts = {};
+
+function cpcMapRenderSidebar(counts) {
+    if (counts) cpcMapCounts = counts;
+    const el = document.getElementById('cpcmap-layer-toggles');
+    if (el) {
+        el.innerHTML = `
+            <div class="hmap-seg-row" style="justify-content:flex-end;gap:14px;background:none;border:none;padding:0 2px;">
+                <span style="font-size:11.5px;font-weight:600;color:var(--primary,#1e6b5c);cursor:pointer;" onclick="cpcMapSetAllLayers(true)">Select all</span>
+                <span style="font-size:11.5px;font-weight:600;color:#94a3b8;cursor:pointer;" onclick="cpcMapSetAllLayers(false)">Clear all</span>
+            </div>` +
+            CPC_MAP_LAYER_GROUPS.map(g => `
+            <div class="hmap-side-title" style="margin-top:10px;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;opacity:.7;">${g.title}</div>
+            ${g.rows.map(m => {
+                const on = cpcMapState[m.key];
+                const count = cpcMapCounts[m.key] || 0;
+                return `<div class="hmap-seg-row ${on ? 'on' : 'off'}" onclick="cpcMapToggleLayer('${m.key}')">
+                    <span class="hmap-seg-dot" style="background:${m.color};"></span>
+                    <span class="hmap-seg-label">${m.label}</span>
+                    <span class="hmap-seg-count">${count.toLocaleString()}</span>
+                    <span class="hmap-seg-state">${on ? 'ON' : 'OFF'}</span>
+                </div>`;
+            }).join('')}
+        `).join('');
+    }
+    const listEl = document.getElementById('cpcmap-cluster-list');
+    if (listEl) {
+        listEl.innerHTML = `
+            <div class="hmap-seg-row" style="cursor:pointer;justify-content:center;font-weight:600;color:var(--primary,#1e6b5c);" onclick="cpcMapViewAllClusters()">
+                🗺️ View all clusters
+            </div>` +
+            cpcMapClustersData.map(c => `
+            <div class="hmap-seg-row on" style="cursor:pointer;" onclick="cpcMapFocusCluster('${c.id}')">
+                <span class="hmap-seg-dot" style="background:${c.color || '#7c3aed'};"></span>
+                <span class="hmap-seg-label">${escapeHtml(c.name)}<br><span class="hint" style="font-size:10.5px;">${escapeHtml((c.block_names || []).join(' + '))} &middot; PIN ${escapeHtml((c.pincodes || []).join(', '))}</span></span>
+            </div>`).join('') || '<p class="hint" style="padding:8px;">No clusters defined</p>';
+    }
+}
+
+function cpcMapSetAllLayers(on) {
+    Object.keys(cpcMapState).forEach(k => { cpcMapState[k] = on; });
+    cpcMapApplyLayers();
+    cpcMapRenderSidebar();
+}
+
+function cpcMapViewAllClusters() {
+    if (!cpcMapInstance) return;
+    if (!cpcMapState.clusters) { cpcMapState.clusters = true; cpcMapApplyLayers(); cpcMapRenderSidebar(); }
+    if (cpcMapAllClusterBounds) cpcMapInstance.flyToBounds(cpcMapAllClusterBounds, { padding: [40, 40] });
+    cpcMapClearScope();
+}
+
+function cpcMapToggleLayer(key) {
+    cpcMapState[key] = !cpcMapState[key];
+    cpcMapApplyLayers();
+    cpcMapRenderSidebar();
+}
+
+// ── Scoped stats (global / cluster / block / panchayat) ──
+// scopeBlockNames: the taluka(s) this scope structurally covers — used to count
+// GEOGRAPHIC panchayats/blocks in that territory (from PANCHAYAT_GEO), not just
+// the ones that happen to contain a plotted pin. null = whole of Goa.
+function cpcMapComputeStats(filterFn, scopeBlockNames) {
+    const h = cpcMapPoints.horeca.filter(filterFn);
+    const r = cpcMapPoints.rvm.filter(filterFn);
+    const hOn = h.filter(p => p.onboarded).length;
+    const rIn = r.filter(p => p.installed).length;
+
+    let blocksCovered, panchayatsCovered;
+    if (window.PANCHAYAT_GEO) {
+        const feats = scopeBlockNames
+            ? (window.PANCHAYAT_GEO.features || []).filter(f => f.properties && scopeBlockNames.includes(f.properties.taluka))
+            : (window.PANCHAYAT_GEO.features || []);
+        panchayatsCovered = new Set(feats.map(f => f.properties.name + '|' + f.properties.taluka)).size;
+        blocksCovered = scopeBlockNames ? scopeBlockNames.length : new Set(feats.map(f => f.properties.taluka)).size;
+    } else {
+        const blocks = new Set([...h, ...r].map(p => p.taluka).filter(Boolean));
+        panchayatsCovered = new Set([...h, ...r].map(p => p.panchayat).filter(Boolean)).size;
+        blocksCovered = blocks.size;
+    }
+
+    return {
+        horecaTotal: h.length, horecaOnboarded: hOn, horecaPct: h.length ? Math.round(hOn / h.length * 100) : 0,
+        rvmTotal: r.length, rvmInstalled: rIn, rvmPending: r.length - rIn,
+        rvmPct: r.length ? Math.round(rIn / r.length * 100) : 0,
+        blocksCovered, panchayatsCovered,
+        coastalHoreca: h.filter(p => p.coastDistKm <= CPCM_COASTAL_KM).length,
+        coastalHorecaTight: h.filter(p => p.coastDistKm <= CPCM_COASTAL_KM_TIGHT).length,
+        coastalRvm: r.filter(p => p.coastDistKm <= CPCM_COASTAL_RVM_KM).length,
+    };
+}
+
+function cpcMapRenderStats(label, stats, meta) {
+    const el = document.getElementById('cpcm-stats');
+    if (!el) return;
+    meta = meta || {};
+    const scopeBar = label ? `<div class="cpcm-scope-bar">📍 ${escapeHtml(label)}<button onclick="cpcMapClearScope()">Clear ✕</button></div>` : '';
+    const areaStr = meta.areaKm2 != null ? meta.areaKm2.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+    el.innerHTML = scopeBar + `
+        <div class="cpcm-stat-card accent-horeca"><span class="csv">${stats.horecaTotal.toLocaleString()}</span><span class="csk">HoReCa Total</span></div>
+        <div class="cpcm-stat-card accent-horeca"><span class="csv">${stats.horecaOnboarded.toLocaleString()}</span><span class="csk">HoReCa Onboarded</span><span class="css">${stats.horecaPct}% of total</span></div>
+        <div class="cpcm-stat-card accent-rvm"><span class="csv">${stats.rvmTotal.toLocaleString()}</span><span class="csk">RVM Location Identified</span></div>
+        <div class="cpcm-stat-card accent-rvm"><span class="csv">${stats.rvmInstalled.toLocaleString()}</span><span class="csk">RVM Installed</span><span class="css">${stats.rvmPct}% &middot; ${stats.rvmPending} pending</span></div>
+        <div class="cpcm-stat-card accent-coastal"><span class="csv">${stats.coastalHoreca.toLocaleString()}</span><span class="csk">Coastal HoReCa</span><span class="css">within ${CPCM_COASTAL_KM}km of beach</span></div>
+        <div class="cpcm-stat-card accent-coastal"><span class="csv">${stats.coastalHorecaTight.toLocaleString()}</span><span class="csk">Coastal HoReCa (tight)</span><span class="css">within ${CPCM_COASTAL_KM_TIGHT}km of beach</span></div>
+        <div class="cpcm-stat-card accent-coastal"><span class="csv">${stats.coastalRvm.toLocaleString()}</span><span class="csk">Coastal RVM</span><span class="css">within ${CPCM_COASTAL_RVM_KM * 1000}m of beach</span></div>
+        <div class="cpcm-stat-card"><span class="csv">${stats.blocksCovered}</span><span class="csk">Blocks Covered</span></div>
+        <div class="cpcm-stat-card"><span class="csv">${stats.panchayatsCovered}</span><span class="csk">Panchayats Covered</span></div>
+        <div class="cpcm-stat-card"><span class="csv">${areaStr}</span><span class="csk">Area Covered (km²)</span></div>
+    `;
+}
+
+function cpcMapClearScope() {
+    cpcMapScope = null;
+    const allTaluka = (cpcMapTalukaGeo && cpcMapTalukaGeo.features) || [];
+    const areaKm2 = allTaluka.reduce((s, f) => s + cpcmGeometryAreaKm2(f.geometry), 0);
+    cpcMapRenderStats(null, cpcMapComputeStats(() => true), { areaKm2 });
+    const bs = document.getElementById('cpcm-block-select'); if (bs) bs.value = '';
+    const ps = document.getElementById('cpcm-panchayat-select'); if (ps) ps.value = '';
+    cpcMapPopulatePanchayatDatalist(null);
+}
+
+function cpcMapFocusCluster(id) {
+    const c = cpcMapClustersData.find(x => x.id === id);
+    if (!c || !cpcMapInstance) return;
+    const blockSet = new Set(c.block_names || []);
+    cpcMapScope = { type: 'cluster', id };
+    const feats = cpcmTalukaFeatures(c.block_names);
+    const areaKm2 = feats.reduce((s, f) => s + cpcmGeometryAreaKm2(f.geometry), 0);
+    cpcMapRenderStats(`${c.name} (CPC Cluster)`, cpcMapComputeStats(p => blockSet.has(p.taluka), c.block_names), { areaKm2, pincodes: c.pincodes });
+    const bounds = cpcMapClusterBounds[id];
+    if (bounds) cpcMapInstance.flyToBounds(bounds, { padding: [50, 50] });
+    else if (c.warehouse) cpcMapInstance.flyTo([c.warehouse.lat, c.warehouse.lng], 11);
+}
+
+// ── Block / Panchayat locate + drill-down (searchable via <input list=datalist>) ──
+function cpcMapPopulateBlockSelect() {
+    const dl = document.getElementById('cpcm-block-datalist');
+    if (!dl || !cpcMapTalukaGeo) return;
+    const names = (cpcMapTalukaGeo.features || [])
+        .map(f => f.properties && (f.properties.name || f.properties.NAME)).filter(Boolean).sort();
+    dl.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
+    cpcMapPopulatePanchayatDatalist(null);
+}
+
+// filterTaluka = null shows every panchayat in Goa; a name scopes the list to that block
+function cpcMapPopulatePanchayatDatalist(filterTaluka) {
+    const dl = document.getElementById('cpcm-panchayat-datalist');
+    if (!dl || !window.PANCHAYAT_GEO) return;
+    const feats = (window.PANCHAYAT_GEO.features || [])
+        .filter(pf => !filterTaluka || (pf.properties && pf.properties.taluka === filterTaluka));
+    const seen = new Set();
+    dl.innerHTML = feats
+        .map(pf => pf.properties && pf.properties.name).filter(Boolean).sort()
+        .filter(n => (seen.has(n) ? false : (seen.add(n), true)))
+        .map(n => `<option value="${escapeHtml(n)}">`).join('');
+}
+
+function cpcmTalukaFeature(name) {
+    return (cpcMapTalukaGeo.features || []).find(f => (f.properties && (f.properties.name || f.properties.NAME)) === name);
+}
+
+// Clicking a boundary shape on the map does the same thing as typing it into
+// the search box — keep both in sync so state never diverges.
+function cpcMapSelectBlockOnMap(name) {
+    const el = document.getElementById('cpcm-block-select');
+    if (el) el.value = name;
+    cpcMapSelectBlock(name);
+}
+function cpcMapSelectPanchayatOnMap(feature) {
+    const name = feature.properties && feature.properties.name;
+    const taluka = feature.properties && feature.properties.taluka;
+    if (!name) return;
+    const blockEl = document.getElementById('cpcm-block-select');
+    if (blockEl && taluka && blockEl.value !== taluka) { blockEl.value = taluka; cpcMapSelectBlock(taluka); }
+    const panEl = document.getElementById('cpcm-panchayat-select');
+    if (panEl) panEl.value = name;
+    cpcMapSelectPanchayat(name);
+}
+
+// Datalist inputs fire oninput on every keystroke — only act once the typed
+// text exactly matches a known name (or was cleared back to empty = "All").
+function cpcMapBlockInput(val) {
+    val = (val || '').trim();
+    if (!val) { cpcMapSelectBlock(''); return; }
+    if (cpcmTalukaFeature(val)) cpcMapSelectBlock(val);
+}
+function cpcMapPanchayatInput(val) {
+    val = (val || '').trim();
+    if (!val) { cpcMapScope && cpcMapScope.type === 'panchayat' && cpcMapClearScope(); return; }
+    if (window.PANCHAYAT_GEO && (window.PANCHAYAT_GEO.features || []).some(f => f.properties && f.properties.name === val)) {
+        cpcMapSelectPanchayat(val);
+    }
+}
+
+function cpcMapSelectBlock(name) {
+    if (!name) {
+        cpcMapClearScope();
+        return;
+    }
+    const f = cpcmTalukaFeature(name);
+    if (!f) return;
+    cpcMapScope = { type: 'block', name };
+    const areaKm2 = cpcmGeometryAreaKm2(f.geometry);
+    cpcMapRenderStats(`${name} (Block)`, cpcMapComputeStats(p => p.taluka === name, [name]), { areaKm2 });
+    const layer = L.geoJSON(f);
+    cpcMapInstance.flyToBounds(layer.getBounds(), { padding: [30, 30], maxZoom: 13 });
+    cpcMapPopulatePanchayatDatalist(name);
+    const panEl = document.getElementById('cpcm-panchayat-select');
+    if (panEl) panEl.value = '';
+}
+
+function cpcMapSelectPanchayat(name) {
+    if (!name || !window.PANCHAYAT_GEO) { return; }
+    const blockVal = document.getElementById('cpcm-block-select').value;
+    const f = (window.PANCHAYAT_GEO.features || []).find(pf =>
+        pf.properties && pf.properties.name === name && (!blockVal || pf.properties.taluka === blockVal));
+    if (!f) return;
+    cpcMapScope = { type: 'panchayat', name };
+    const filterFn = p => hovPointInFeature(p.lat, p.lng, f.geometry);
+    const areaKm2 = cpcmGeometryAreaKm2(f.geometry);
+    const pStats = cpcMapComputeStats(filterFn);
+    pStats.blocksCovered = 1; pStats.panchayatsCovered = 1;  // a single panchayat, trivially
+    cpcMapRenderStats(`${name} (Panchayat)`, pStats, { areaKm2 });
+    const layer = L.geoJSON(f);
+    cpcMapInstance.flyToBounds(layer.getBounds(), { padding: [30, 30], maxZoom: 15 });
+}
+
+// ── Search (HoReCa + RVM names) ──
+function cpcMapSearchInput(q) {
+    const box = document.getElementById('cpcm-search-results');
+    q = (q || '').trim().toLowerCase();
+    if (q.length < 2) { box.classList.remove('show'); box.innerHTML = ''; return; }
+    const pool = [
+        ...cpcMapPoints.horeca.map(p => ({ ...p, type: 'HoReCa' })),
+        ...cpcMapPoints.rvm.map(p => ({ ...p, type: 'RVM' })),
+    ];
+    const results = pool.filter(p => p.name && p.name.toLowerCase().includes(q)).slice(0, 20);
+    box.innerHTML = results.map((r, i) =>
+        `<div class="r" onclick="cpcMapSearchSelect(${r.lat},${r.lng})"><div class="rn">${escapeHtml(r.name)}</div><div class="ra">${r.type} &middot; ${escapeHtml(r.taluka || '')}</div></div>`
+    ).join('') || '<div class="r"><span class="ra">No matches</span></div>';
+    box.classList.add('show');
+}
+function cpcMapSearchSelect(lat, lng) {
+    if (!cpcMapInstance) return;
+    cpcMapInstance.flyTo([lat, lng], 16);
+    document.getElementById('cpcm-search-results').classList.remove('show');
+}
+document.addEventListener('click', (e) => {
+    const wrap = document.querySelector('.cpcm-search-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+        const box = document.getElementById('cpcm-search-results');
+        if (box) box.classList.remove('show');
+    }
+});
+
+// ── Toolbar: sidebar toggle / fullscreen / heatmap ──
+function cpcMapToggleSidebar() {
+    document.getElementById('cpcm-shell').classList.toggle('cpcm-sidebar-collapsed');
+    setTimeout(() => cpcMapInstance && cpcMapInstance.invalidateSize(), 200);
+}
+function cpcMapToggleFullscreen() {
+    const shell = document.getElementById('cpcm-shell');
+    shell.classList.toggle('cpcm-fullscreen');
+    document.getElementById('cpcm-fullscreen-btn').classList.toggle('active');
+    setTimeout(() => cpcMapInstance && cpcMapInstance.invalidateSize(), 200);
+}
+async function cpcMapToggleHeat() {
+    if (!cpcMapInstance) return;
+    if (!window.L.heatLayer) {
+        await cpcmLoadScript('https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js');
+    }
+    cpcMapHeatOn = !cpcMapHeatOn;
+    document.getElementById('cpcm-heat-btn').classList.toggle('active', cpcMapHeatOn);
+    if (cpcMapHeatOn) {
+        if (!cpcMapHeatLayer) {
+            // Not-onboarded weighted higher (0.4) than onboarded (0.2) — the heatmap
+            // reads as "where's the untapped opportunity", not just raw density.
+            // Smaller radius + a max cap + an explicit gradient stop 9,400 points
+            // don't just saturate solid red across the whole state.
+            const pts = cpcMapPoints.horeca.map(p => [p.lat, p.lng, p.onboarded ? 0.2 : 0.4]);
+            cpcMapHeatLayer = L.heatLayer(pts, {
+                radius: 14, blur: 18, maxZoom: 16, max: 3.0, minOpacity: 0.25,
+                gradient: { 0.2: '#1d4ed8', 0.4: '#0ea5e9', 0.6: '#facc15', 0.8: '#f97316', 1.0: '#dc2626' },
+            });
+        }
+        cpcMapHeatLayer.addTo(cpcMapInstance);
+    } else if (cpcMapHeatLayer) {
+        cpcMapInstance.removeLayer(cpcMapHeatLayer);
+    }
+}
+
+// Block Summary View: declutters to just the colored block shapes + their inline
+// "HoReCa X/Y (Z%) · RVM X/Y (Z%)" tags — hides individual pins and panchayat
+// lines so the totals read cleanly at a glance. Toggling off restores whatever
+// layers were on before.
+let cpcMapSummaryOn = false;
+let cpcMapPreSummaryState = null;
+function cpcMapToggleSummaryView() {
+    cpcMapSummaryOn = !cpcMapSummaryOn;
+    document.getElementById('cpcm-summary-btn').classList.toggle('active', cpcMapSummaryOn);
+    if (cpcMapSummaryOn) {
+        cpcMapPreSummaryState = { ...cpcMapState };
+        cpcMapState.horecaOnboarded = false; cpcMapState.horecaNotOnboarded = false;
+        cpcMapState.rvmInstalled = false; cpcMapState.rvmPending = false;
+        cpcMapState.boundaryPanchayats = false;
+        cpcMapState.boundaryBlocks = true; cpcMapState.blockLabels = true;
+    } else if (cpcMapPreSummaryState) {
+        Object.assign(cpcMapState, cpcMapPreSummaryState);
+        cpcMapPreSummaryState = null;
+    }
+    cpcMapApplyLayers();
+    cpcMapRenderSidebar();
 }
 
 // ── Sidebar (summary strip + segment rows + block list + focus) ──

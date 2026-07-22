@@ -3924,6 +3924,110 @@ class GoogleSheetsService:
                                   expiry=now + _HORECA_CACHE_TTL)
         return rows, headers
 
+    EXCISE_TAB_NAME = 'Consumption'
+
+    def get_excise_outlets(self):
+        """Excise liquor-outlet geocode data — now living in the 'Consumption' tab
+        of the HoReCa CRM workbook itself (moved 2026-07-22 from the standalone
+        excise sheet so it sits alongside Enhanced/Superset/app_sheet instead of
+        a separate spreadsheet). Same columns as before: OWNER_NAME, SHOP_NAME,
+        LOCATION, LIC_TYPE, ADDRESS, MOBILE_NO, LATITUDE, LONGITUDE,
+        LOCATION_TYPE, GOOGLE_FORMATTED_ADDRESS.
+
+        The sheet itself carries no onboarding flag, so 'onboarded' is derived
+        by name-matching each outlet against Superset ACTIVE businesses (the
+        same distinctive-token Jaccard match used by get_horeca_superset_validation),
+        using an inverted token index so 8k+ rows match in well under a second."""
+        global _excise_cache
+        now = datetime.now()
+        if (_excise_cache['data'] is not None
+                and _excise_cache['expiry']
+                and now < _excise_cache['expiry']):
+            return _excise_cache['data']
+
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.worksheet(self.EXCISE_TAB_NAME)
+        all_values = _gs_retry(worksheet.get_all_values)
+        if len(all_values) < 2:
+            _excise_cache.update(data=[], expiry=now + _HORECA_CACHE_TTL)
+            return []
+
+        headers = [h.strip() for h in all_values[0]]
+        h = {hd: i for i, hd in enumerate(headers)}
+
+        def g(row, col, default=''):
+            i = h.get(col)
+            return row[i].strip() if i is not None and i < len(row) else default
+
+        # Onboarded-name pool = Superset ACTIVE businesses (system of record)
+        try:
+            sup_rows, sup_headers = self._get_superset_v1_cache()
+        except Exception:
+            sup_rows, sup_headers = [], []
+        shx = {hd: i for i, hd in enumerate(sup_headers)}
+        name_i = shx.get('business_name')
+        status_i = shx.get('status')
+        token_index = {}
+        pool_names = []
+        if name_i is not None and status_i is not None:
+            for srow in sup_rows:
+                if status_i >= len(srow) or srow[status_i].strip().upper() != 'ACTIVE':
+                    continue
+                nm = srow[name_i].strip() if name_i < len(srow) else ''
+                toks = self._distinctive_name_tokens(nm)
+                if len(toks) < 2:
+                    continue
+                idx = len(pool_names)
+                pool_names.append((toks, nm))
+                for t in toks:
+                    token_index.setdefault(t, []).append(idx)
+
+        def best_match(shop_tokens):
+            if len(shop_tokens) < 2 or not token_index:
+                return None, 0.0
+            counts = {}
+            for t in shop_tokens:
+                for idx in token_index.get(t, ()):
+                    counts[idx] = counts.get(idx, 0) + 1
+            best_j, best_nm = 0.0, None
+            for idx, shared in counts.items():
+                if shared < self.SUPERSET_MIN_SHARED_TOKENS:
+                    continue
+                toks, nm = pool_names[idx]
+                union = len(shop_tokens | toks)
+                j = shared / union if union else 0.0
+                if j > best_j:
+                    best_j, best_nm = j, nm
+            return best_nm, best_j
+
+        outlets = []
+        for row in all_values[1:]:
+            shop_name = g(row, 'SHOP_NAME')
+            if not shop_name:
+                continue
+            try:
+                lat_f = float(g(row, 'LATITUDE'))
+                lng_f = float(g(row, 'LONGITUDE'))
+            except ValueError:
+                continue
+            toks = self._distinctive_name_tokens(shop_name)
+            match_nm, score = best_match(toks)
+            onboarded = bool(match_nm) and score >= self.SUPERSET_NAME_SIM_THRESHOLD
+            outlets.append({
+                'name': shop_name,
+                'owner': g(row, 'OWNER_NAME'),
+                'block': g(row, 'LOCATION'),
+                'address': g(row, 'ADDRESS') or g(row, 'GOOGLE_FORMATTED_ADDRESS'),
+                'lic_type': g(row, 'LIC_TYPE'),
+                'lat': lat_f,
+                'lng': lng_f,
+                'onboarded': onboarded,
+                'matched_name': match_nm if onboarded else None,
+            })
+
+        _excise_cache.update(data=outlets, expiry=now + _HORECA_CACHE_TTL)
+        return outlets
+
     def get_horeca_superset_data(self, search='', page=1, page_size=50):
         """Paginated read of the Superset export tab â€” a raw viewer only,
         no matching against Enhanced/app_sheet yet."""
@@ -5359,6 +5463,7 @@ _appsheet_cache = {'data': None, 'headers': None, 'expiry': None}
 _superset_cache = {'data': None, 'headers': None, 'expiry': None}
 _superset_v1_cache = {'data': None, 'headers': None, 'expiry': None}
 _superset_validation_cache = {'data': None, 'expiry': None}
+_excise_cache = {'data': None, 'expiry': None}
 
 # Cache for authorized users
 _authorized_users_cache = {

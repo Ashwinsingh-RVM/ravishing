@@ -1485,6 +1485,23 @@ async def get_deployment_summary(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/excise/outlets")
+async def get_excise_outlets(request: Request):
+    """Excise liquor-outlet geocode data, cross-matched against Superset
+    ACTIVE businesses to flag which outlets are already onboarded."""
+    require_auth(request)
+    try:
+        sheets_service = GoogleSheetsService()
+        outlets = sheets_service.get_excise_outlets()
+        onboarded = len([o for o in outlets if o.get('onboarded')])
+        return {
+            "outlets": outlets,
+            "counts": {"total": len(outlets), "onboarded": onboarded, "not_onboarded": len(outlets) - onboarded},
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/rc/init")
 async def init_rc_tab(request: Request):
     """Create the RC Deployment tab in Google Sheet with standard headers."""

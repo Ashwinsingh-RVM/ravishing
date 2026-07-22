@@ -1,0 +1,29 @@
+{
+  "_note": "PLACEHOLDER data — real Excise sheet (liquor outlet geocode tab) access is pending Google auth scope fix. Structure mirrors what /api/excise/outlets will return once wired to the live sheet: name, block/taluka, lat, lng, onboarded (bool), license_no.",
+  "outlets": [
+    { "name": "Blue Wave Bar & Restaurant", "block": "Pernem", "lat": 15.7091, "lng": 73.8267, "onboarded": true,  "license_no": "PER-EX-101" },
+    { "name": "Pernem Liquor Mart",         "block": "Pernem", "lat": 15.6982, "lng": 73.8143, "onboarded": false, "license_no": "PER-EX-102" },
+    { "name": "Bicholim Wine Shop",         "block": "Bicholim", "lat": 15.5768, "lng": 73.9482, "onboarded": true,  "license_no": "BIC-EX-101" },
+    { "name": "Sahyadri Beer Bar",          "block": "Bicholim", "lat": 15.5651, "lng": 73.9601, "onboarded": false, "license_no": "BIC-EX-102" },
+    { "name": "Mapusa Central Wines",       "block": "Bardez", "lat": 15.5934, "lng": 73.8138, "onboarded": true,  "license_no": "BAR-EX-101" },
+    { "name": "Candolim Beach Shack Bar",   "block": "Bardez", "lat": 15.5185, "lng": 73.7639, "onboarded": true,  "license_no": "BAR-EX-102" },
+    { "name": "Calangute Liquor Store",     "block": "Bardez", "lat": 15.5449, "lng": 73.7623, "onboarded": false, "license_no": "BAR-EX-103" },
+    { "name": "Sattari Hill Bar",           "block": "Sattari", "lat": 15.5511, "lng": 74.1602, "onboarded": false, "license_no": "SAT-EX-101" },
+    { "name": "Valpoi Wine Depot",          "block": "Sattari", "lat": 15.5723, "lng": 74.1998, "onboarded": true,  "license_no": "SAT-EX-102" },
+    { "name": "Panjim Riverside Bar",       "block": "Tiswadi", "lat": 15.4989, "lng": 73.8278, "onboarded": true,  "license_no": "TIS-EX-101" },
+    { "name": "Old Goa Tavern",             "block": "Tiswadi", "lat": 15.5033, "lng": 73.9122, "onboarded": false, "license_no": "TIS-EX-102" },
+    { "name": "Ponda Market Wines",         "block": "Ponda", "lat": 15.4021, "lng": 73.9789, "onboarded": true,  "license_no": "PON-EX-101" },
+    { "name": "Farmagudi Beer Bar",         "block": "Ponda", "lat": 15.3944, "lng": 74.0067, "onboarded": false, "license_no": "PON-EX-102" },
+    { "name": "Vasco Port Bar",             "block": "Mormugao", "lat": 15.3955, "lng": 73.8114, "onboarded": true,  "license_no": "MOR-EX-101" },
+    { "name": "Dabolim Liquor Store",       "block": "Mormugao", "lat": 15.3808, "lng": 73.8322, "onboarded": false, "license_no": "MOR-EX-102" },
+    { "name": "Margao City Wines",          "block": "Salcete", "lat": 15.2743, "lng": 73.9581, "onboarded": true,  "license_no": "SAL-EX-101" },
+    { "name": "Colva Beach Bar",            "block": "Salcete", "lat": 15.2790, "lng": 73.9159, "onboarded": true,  "license_no": "SAL-EX-102" },
+    { "name": "Navelim Wine Shop",          "block": "Salcete", "lat": 15.2611, "lng": 73.9722, "onboarded": false, "license_no": "SAL-EX-103" },
+    { "name": "Quepem Liquor Depot",        "block": "Quepem", "lat": 15.2158, "lng": 74.0819, "onboarded": false, "license_no": "QUE-EX-101" },
+    { "name": "Curchorem Wine Store",       "block": "Quepem", "lat": 15.2635, "lng": 74.1046, "onboarded": true,  "license_no": "QUE-EX-102" },
+    { "name": "Sanguem Hillside Bar",       "block": "Sanguem", "lat": 15.2494, "lng": 74.1583, "onboarded": false, "license_no": "SAN-EX-101" },
+    { "name": "Dharbandora Wine Mart",      "block": "Dharbandora", "lat": 15.3812, "lng": 74.1328, "onboarded": true,  "license_no": "DHA-EX-101" },
+    { "name": "Canacona Beach Bar",         "block": "Canacona", "lat": 14.9979, "lng": 74.0491, "onboarded": true,  "license_no": "CAN-EX-101" },
+    { "name": "Palolem Shack Wines",        "block": "Canacona", "lat": 15.0104, "lng": 74.0231, "onboarded": false, "license_no": "CAN-EX-102" }
+  ]
+}

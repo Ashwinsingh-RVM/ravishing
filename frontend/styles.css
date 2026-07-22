@@ -7170,7 +7170,7 @@ tr.zero-r:hover { opacity: 1; }
     padding-right: 4px;
 }
 .hmap-map-wrap { flex: 1; min-width: 0; }
-#hmap-container {
+#hmap-container, #cpcmap-container {
     width: 100%; height: calc(100vh - 240px); min-height: 560px;
     border-radius: var(--radius-lg, 12px); overflow: hidden;
     border: 1px solid var(--gray-200);
@@ -7178,8 +7178,106 @@ tr.zero-r:hover { opacity: 1; }
 @media (max-width: 900px) {
     .hmap-shell { flex-direction: column; }
     .hmap-sidebar { width: 100%; flex: none; max-height: none; min-height: 0; }
-    #hmap-container { height: 60vh; min-height: 420px; }
+    #hmap-container, #cpcmap-container { height: 60vh; min-height: 420px; }
 }
+/* ==================== CPC Map (unified HoReCa + RVM + CPC clusters) ==================== */
+.cpcm-shell {
+    display: flex; flex-direction: column; gap: 10px;
+    height: calc(100vh - 190px); min-height: 620px;
+}
+.cpcm-shell.cpcm-fullscreen {
+    position: fixed; inset: 0; z-index: 2000; height: 100vh;
+    background: var(--bg, #f7f6f3); padding: 10px; gap: 8px;
+}
+.cpcm-toolbar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: 12px;
+    padding: 8px 10px;
+}
+.cpcm-icon-btn {
+    width: 36px; height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--gray-200); border-radius: 9px; background: var(--white); color: #334155;
+    cursor: pointer; font-size: 15px; transition: all .15s ease;
+}
+.cpcm-icon-btn:hover { border-color: var(--primary, #1e6b5c); color: var(--primary, #1e6b5c); }
+.cpcm-icon-btn.active { background: var(--primary, #1e6b5c); color: #fff; border-color: var(--primary, #1e6b5c); }
+.cpcm-search-wrap { position: relative; flex: 1 1 220px; min-width: 160px; }
+.cpcm-search-input, .cpcm-select {
+    width: 100%; height: 36px; border: 1px solid var(--gray-200); border-radius: 9px;
+    padding: 0 12px; font-size: 13px; font-family: 'Inter', sans-serif; background: var(--white);
+}
+.cpcm-select { flex: 0 1 170px; width: auto; }
+.cpcm-search-results {
+    position: absolute; top: 40px; left: 0; right: 0; z-index: 30;
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(20,20,10,.12); max-height: 280px; overflow-y: auto; display: none;
+}
+.cpcm-search-results.show { display: block; }
+.cpcm-search-results .r { padding: 8px 12px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid var(--gray-100, #f1f5f9); }
+.cpcm-search-results .r:hover { background: #f8fafc; }
+.cpcm-search-results .r .rn { font-weight: 600; }
+.cpcm-search-results .r .ra { color: #94a3b8; font-size: 11px; }
+
+/* Compact boxed cards (value on top, label below) in a dense grid — not a
+   single scrolling line, but tighter padding/font than the original so the
+   map still keeps most of the vertical space. */
+.cpcm-stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 6px;
+    max-height: 62px; overflow-y: auto;
+}
+.cpcm-stat-card {
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: 9px;
+    padding: 6px 10px; display: flex; flex-direction: column; gap: 1px;
+}
+.cpcm-stat-card .csv { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; color: #1b1e1f; line-height: 1.2; }
+.cpcm-stat-card .csk { font-size: 9.5px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+.cpcm-stat-card .css { font-size: 9.5px; color: #94a3b8; }
+.cpcm-stat-card.accent-horeca .csv { color: #16a34a; }
+.cpcm-stat-card.accent-rvm .csv { color: #0284c7; }
+.cpcm-stat-card.accent-coastal .csv { color: #0891b2; }
+.cpcm-scope-bar {
+    /* Deliberately NOT grid-column:1/-1 — spanning full width forces every stat
+       card onto a second row, so the strip grows taller only when a scope is
+       selected. Letting it sit as a normal (slightly wider) grid item keeps the
+       same row count/height whether something is selected or not. */
+    grid-column: span 2; display: flex; align-items: center; gap: 6px;
+    font-size: 11.5px; font-weight: 600; color: var(--primary, #1e6b5c);
+    background: #eef6f4; border: 1px solid #d3e8e2; border-radius: 9px; padding: 6px 10px;
+}
+.cpcm-scope-bar button {
+    margin-left: auto; border: none; background: none; color: #64748b; cursor: pointer;
+    font-size: 11.5px; font-weight: 600; text-decoration: underline;
+}
+
+.cpcm-body { flex: 1; min-height: 0; }
+.cpcm-sidebar { max-height: none !important; height: 100%; }
+.cpcm-map-wrap { height: 100%; }
+#cpcmap-container { height: 100% !important; }
+.cpcm-shell.cpcm-sidebar-collapsed .cpcm-sidebar { display: none; }
+
+@media (max-width: 900px) {
+    .cpcm-shell { height: calc(100vh - 260px); }
+    .cpcm-toolbar { flex-wrap: wrap; }
+    .cpcm-select { flex: 1 1 45%; }
+}
+
+/* On-map per-block stat tag: name + HoReCa%/RVM%, always-on (toggleable) label */
+/* No box/card, no text-shadow/halo — plain solid black text directly on the block. */
+.cpcm-block-tag {
+    font-family: 'Inter', sans-serif; white-space: nowrap; pointer-events: none;
+    transform: translate(-50%, -50%); text-align: center;
+}
+.cpcm-block-tag .cbt-name {
+    font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 13.5px;
+    color: #000; letter-spacing: -0.01em;
+}
+.cpcm-block-tag .cbt-row {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    font-size: 11.5px; font-weight: 600; color: #000;
+    font-variant-numeric: tabular-nums; line-height: 1.4;
+}
+.cpcm-block-tag .cbt-dot { display: none; }
+
 .hmap-summary {
     display: flex; height: 10px; border-radius: 5px; overflow: hidden;
     background: var(--gray-200);

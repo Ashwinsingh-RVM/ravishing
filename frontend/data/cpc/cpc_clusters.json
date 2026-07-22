@@ -1,0 +1,75 @@
+{
+  "_note": "DUMMY placeholder clusters for local dev — names taken from the reference cluster list (ashwinsingh-rvm.github.io/Cluster), block/pincode assignments are illustrative only. Canacona and Dharbandora folded into the nearest cluster (Durga Devi Enterprise) by adjacency. Replace once real CPC/warehouse allocation is confirmed.",
+  "clusters": [
+    {
+      "id": "cpc_sagar",
+      "name": "Sagar Industries",
+      "type": "CPC",
+      "region": "North Goa",
+      "block_names": ["Bardez", "Pernem"],
+      "pincodes": ["403507", "403512"],
+      "warehouse": {
+        "lat": 15.5937,
+        "lng": 73.8142,
+        "address": "Mapusa Industrial Estate, Bardez, North Goa"
+      },
+      "color": "#4338ca"
+    },
+    {
+      "id": "cpc_goabottle",
+      "name": "M/s Goa Bottle Supplier",
+      "type": "CPC",
+      "region": "North Goa",
+      "block_names": ["Bicholim", "Sattari"],
+      "pincodes": ["403504", "403506"],
+      "warehouse": {
+        "lat": 15.5937,
+        "lng": 73.9452,
+        "address": "Bicholim Industrial Estate, North Goa"
+      },
+      "color": "#b45309"
+    },
+    {
+      "id": "cpc_vilas",
+      "name": "Vilas Enterprise",
+      "type": "CPC",
+      "region": "Central Goa",
+      "block_names": ["Tiswadi", "Ponda"],
+      "pincodes": ["403001", "403401"],
+      "warehouse": {
+        "lat": 15.4460,
+        "lng": 73.9330,
+        "address": "Kundaim Industrial Estate, Ponda, Central Goa"
+      },
+      "color": "#0f766e"
+    },
+    {
+      "id": "cpc_goabottlewashing",
+      "name": "Goa Bottle Washing Company",
+      "type": "CPC",
+      "region": "South Goa",
+      "block_names": ["Mormugao", "Salcete"],
+      "pincodes": ["403802", "403601"],
+      "warehouse": {
+        "lat": 15.3570,
+        "lng": 73.9360,
+        "address": "Verna Industrial Estate, Salcete, South Goa"
+      },
+      "color": "#be123c"
+    },
+    {
+      "id": "cpc_durgadevi",
+      "name": "Durga Devi Enterprise",
+      "type": "CPC",
+      "region": "South Goa",
+      "block_names": ["Quepem", "Sanguem", "Canacona", "Dharbandora"],
+      "pincodes": ["403705", "403704", "403702", "403406"],
+      "warehouse": {
+        "lat": 15.2630,
+        "lng": 74.1050,
+        "address": "Curchorem, Quepem, South Goa"
+      },
+      "color": "#15803d"
+    }
+  ]
+}
