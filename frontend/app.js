@@ -666,9 +666,14 @@ async function initApp() {
 
 
 
-    // Load ALL data in parallel before setting up tabs
-
-    await Promise.all([loadVPData(), loadMeetingsData(), loadBDOData(), preloadDepData()]);
+    // Load ALL data in parallel before setting up tabs — but only fetch VP/BDO
+    // data for roles that actually have access to those tabs (e.g. horeca-only
+    // users never see VPs/Progress, so calling their APIs just produces a
+    // guaranteed 403 with no UI benefit).
+    const canSeeVPs = !!(currentUser && currentUser.allowed_tabs || []).includes('vps');
+    const loaders = [loadMeetingsData(), preloadDepData()];
+    if (canSeeVPs) loaders.push(loadVPData(), loadBDOData());
+    await Promise.all(loaders);
 
 
 
@@ -1072,7 +1077,9 @@ async function switchToTab(tabId) {
 
     if (tabId === 'dashboard') {
 
-        if (bdoData.length === 0) await loadBDOData();
+        // BDO is VP-side data; horeca-role users never see the Progress
+        // sub-tab that uses it, so skip the call (it would 403 for them).
+        if (bdoData.length === 0 && (!currentUser || currentUser.role !== 'horeca')) await loadBDOData();
 
         loadDashboard();
 
@@ -3218,11 +3225,19 @@ async function loadDashboard() {
 
     setupDashboardTabs();
 
-    loadProgressDashboard();
+    // Progress/RVM/Cost are VP-side views the horeca role never sees (its
+    // Dashboard sub-tabs are hidden by applyDashboardRBAC) — skip fetching
+    // their data for that role so opening Dashboard doesn't fire calls that
+    // are guaranteed to 403 (e.g. /api/bdo/all) with no UI benefit.
+    if (!currentUser || currentUser.role !== 'horeca') {
 
-    loadRvmDashboard();
+        loadProgressDashboard();
 
-    loadCostDashboard();
+        loadRvmDashboard();
+
+        loadCostDashboard();
+
+    }
 
 }
 
