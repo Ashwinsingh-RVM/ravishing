@@ -150,9 +150,10 @@ async def auth_middleware(request: Request, call_next):
 # ==================== API failure tracking (observability) ====================
 # Captures every /api failure — status, endpoint, user, reason, response time —
 # into an in-memory ring buffer (fast, always) and persists the notable ones
-# (5xx server errors + 403 permission denials) to the analytics sheet so they
-# survive restarts and show in the superadmin Activity + System Health views.
-# Login failures are tracked separately in the login handler (login_failed).
+# (5xx server errors, 403 permission denials, and 401 "unable to load"/session
+# expired) to the analytics sheet so they survive restarts and show in the
+# superadmin Activity + System Health views. 404/429 stay in-memory only (low
+# signal, mostly noise). Login failures are tracked separately (login_failed).
 _api_failure_buffer: list = []  # newest first, capped at 500
 
 
@@ -164,8 +165,8 @@ def _record_api_failure(request: Request, status: int, reason: str, user_email: 
     }
     _api_failure_buffer.insert(0, entry)
     del _api_failure_buffer[500:]
-    # Persist only meaningful failures to the sheet (avoid flooding on 401/404).
-    if status < 500 and status != 403:
+    # Persist meaningful failures to the sheet (skip 404/429 — low signal, noise).
+    if status not in (401, 403) and status < 500:
         return
 
     def _w():
