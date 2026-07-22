@@ -3742,6 +3742,8 @@ let cpcMapScope = null;                        // {type,label,filterFn} | null =
 let cpcMapAllClusterBounds = null;
 let cpcMapClusterBounds = {};   // id -> Leaflet LatLngBounds covering all its blocks
 let cpcMapBlockClusterColor = {}; // block/taluka name -> its cluster's color (single source of truth for block fill)
+let cpcMapRvmRawTotal = 0;   // total RVM locations tracked in the sheet, incl. ones with no GPS yet
+let cpcMapRvmNoCoords = 0;   // subset of the above that can't be plotted (no lat/lng yet)
 
 // Shoelace polygon area in km² using an equirectangular approximation centered
 // on each ring — accurate enough at Goa's scale (no external geo library).
@@ -3956,8 +3958,8 @@ async function initCpcMapTab() {
                     const col = c.color || '#4338ca';
                     const icon = L.divIcon({
                         className: '', iconSize: [30, 40], iconAnchor: [15, 38], popupAnchor: [0, -36],
-                        html: `<svg width="30" height="40" viewBox="0 0 30 40" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));">
-                            <path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 13 22.5 14.3 23.6a1 1 0 0 0 1.4 0C17 37.5 30 25.5 30 15 30 6.7 23.3 0 15 0z" fill="${col}"/>
+                        html: `<svg width="30" height="40" viewBox="0 0 30 40" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));">
+                            <path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 13 22.5 14.3 23.6a1 1 0 0 0 1.4 0C17 37.5 30 25.5 30 15 30 6.7 23.3 0 15 0z" fill="${col}" stroke="#fff" stroke-width="2.5"/>
                             <circle cx="15" cy="15" r="9.5" fill="#fff"/>
                             <path d="M10.5 19.5v-7l4.5-2.6 4.5 2.6v7h-3v-4.5h-3v4.5z" fill="${col}"/>
                         </svg>`,
@@ -3972,11 +3974,16 @@ async function initCpcMapTab() {
             cpcMapAllClusterBounds = clusterBoundsAll;
 
             // --- RVM Deployment: Installed (rvmDelivery = Yes) = green, Pending = red ---
+            // Some tracked locations are still "Pending Location confirmation" in the
+            // sheet (lat/lng literally the strings "Pending"/"#REF!") — they count
+            // toward Location Identified but can't be plotted since there's no GPS yet.
             const rvmInstalledPts = [], rvmPendingPts = [];
             cpcMapPoints.rvm = [];
+            cpcMapRvmRawTotal = (rvmData.locations || []).length;
+            cpcMapRvmNoCoords = 0;
             (rvmData.locations || []).forEach(l => {
                 const lat = parseFloat(l.lat), lng = parseFloat(l.lng);
-                if (!isFinite(lat) || !isFinite(lng) || !lat || !lng) return;
+                if (!isFinite(lat) || !isFinite(lng) || !lat || !lng) { cpcMapRvmNoCoords++; return; }
                 const installed = l.rvmDelivery === 'Yes';
                 const taluka = cpcmTalukaOf(lat, lng) || l.block || null;
                 const panchayat = cpcmPanchayatOf(lat, lng);
@@ -4188,7 +4195,7 @@ function cpcMapRenderStats(label, stats, meta) {
     el.innerHTML = scopeBar +
         card('horeca', '🍽️', stats.horecaTotal.toLocaleString(), 'HoReCa Total') +
         card('horeca', '✅', stats.horecaOnboarded.toLocaleString(), 'HoReCa Onboarded', `${stats.horecaPct}% of total`) +
-        card('rvm', '📍', stats.rvmTotal.toLocaleString(), 'RVM Location Identified') +
+        card('rvm', '📍', stats.rvmTotal.toLocaleString(), 'RVM Location Identified', meta.rvmNoCoords ? `${meta.rvmNoCoords} awaiting GPS` : null) +
         card('rvm', '♻️', stats.rvmInstalled.toLocaleString(), 'RVM Installed', `${stats.rvmPct}% &middot; ${stats.rvmPending} pending`) +
         card('coastal', '🏖️', stats.coastalHoreca.toLocaleString(), 'Coastal HoReCa', `within ${CPCM_COASTAL_KM}km of beach`) +
         card('coastal', '🌊', stats.coastalHorecaTight.toLocaleString(), 'Coastal HoReCa (tight)', `within ${CPCM_COASTAL_KM_TIGHT}km of beach`) +
@@ -4202,7 +4209,14 @@ function cpcMapClearScope() {
     cpcMapScope = null;
     const allTaluka = (cpcMapTalukaGeo && cpcMapTalukaGeo.features) || [];
     const areaKm2 = allTaluka.reduce((s, f) => s + cpcmGeometryAreaKm2(f.geometry), 0);
-    cpcMapRenderStats(null, cpcMapComputeStats(() => true), { areaKm2 });
+    const stats = cpcMapComputeStats(() => true);
+    // Global view only: show the TRUE sheet total (incl. the handful still
+    // "Pending Location confirmation" with no GPS yet), not just the plottable
+    // count — those still-unmapped ones are real locations, just not pins yet.
+    stats.rvmTotal = cpcMapRvmRawTotal;
+    stats.rvmPending = cpcMapRvmRawTotal - stats.rvmInstalled;
+    stats.rvmPct = stats.rvmTotal ? Math.round(stats.rvmInstalled / stats.rvmTotal * 100) : 0;
+    cpcMapRenderStats(null, stats, { areaKm2, rvmNoCoords: cpcMapRvmNoCoords });
     const bs = document.getElementById('cpcm-block-select'); if (bs) bs.value = '';
     const ps = document.getElementById('cpcm-panchayat-select'); if (ps) ps.value = '';
     cpcMapPopulatePanchayatDatalist(null);

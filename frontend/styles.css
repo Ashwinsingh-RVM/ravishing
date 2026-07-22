@@ -7224,7 +7224,7 @@ tr.zero-r:hover { opacity: 1; }
    map still keeps most of the vertical space. */
 .cpcm-stats {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 6px;
-    max-height: 62px; overflow-y: auto;
+    max-height: 128px; overflow-y: auto;
 }
 /* Matches the established .dep-kpi pattern from the RVM Deployment / Progress
    dashboards: solid white card, 2px border, thick colored left border, bold
