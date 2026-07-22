@@ -6,7 +6,7 @@
     <title>Goa DRS Tracker</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='white' stroke='%230b6b4f' stroke-width='2'/%3E%3Ctext x='32' y='30' font-family='DM Sans,Arial,sans-serif' font-size='19' font-weight='700' fill='%230b6b4f' text-anchor='middle'%3EGOA%3C/text%3E%3Ctext x='32' y='51' font-family='DM Sans,Arial,sans-serif' font-size='19' font-weight='700' fill='%230b6b4f' text-anchor='middle'%3EDRS%3C/text%3E%3C/svg%3E">
     <meta name="theme-color" content="#1e6b5c">
-    <link rel="stylesheet" href="/static/styles.css?v=85">
+    <link rel="stylesheet" href="/static/styles.css?v=87">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -640,7 +640,7 @@
                     <!-- Overview -->
                     <div id="horeca-dash-overview-view">
                         <div id="dash-horeca-content">
-                            <div class="hcrm-dash-loading">Loading HoReCa dashboard...</div>
+                            <div class="hcrm-dash-loading">🍽️ Onboarding is happening — loading HoReCa data...</div>
                         </div>
                     </div>
 
@@ -758,6 +758,7 @@
                                 placeholder="All Panchayats — type to search" autocomplete="off"
                                 oninput="cpcMapPanchayatInput(this.value)">
                             <datalist id="cpcm-panchayat-datalist"></datalist>
+                            <div class="cpcm-toolbar-divider"></div>
                             <button class="cpcm-icon-btn" id="cpcm-heat-btn" title="Toggle HoReCa heatmap" onclick="cpcMapToggleHeat()">🔥</button>
                             <button class="cpcm-icon-btn" id="cpcm-summary-btn" title="Block summary view — hides pins, shows just block totals" onclick="cpcMapToggleSummaryView()">📊</button>
                             <button class="cpcm-icon-btn" id="cpcm-fullscreen-btn" title="Fullscreen" onclick="cpcMapToggleFullscreen()">
@@ -782,7 +783,7 @@
                             </aside>
                             <div class="hmap-map-wrap cpcm-map-wrap">
                                 <div id="cpcmap-container">
-                                    <div class="hcrm-dash-loading">Loading Maps...</div>
+                                    <div class="hcrm-dash-loading">🗺️ Goa DRS is loading with collection points...</div>
                                 </div>
                             </div>
                         </div>
@@ -798,7 +799,7 @@
                 <div id="dash-ct" class="dash-content">
                     <div id="dash-ct-content">
                         <!-- Loading state -->
-                        <div id="ct-loading" class="hcrm-dash-loading">Loading RVM Deployment...</div>
+                        <div id="ct-loading" class="hcrm-dash-loading">♻️ Machine is getting installed — wait for it...</div>
 
                         <!-- Main content (hidden until loaded) -->
                         <div id="ct-main" style="display:none">
@@ -1821,6 +1822,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=145"></script>
+    <script src="/static/app.js?v=148"></script>
 </body>
 </html>

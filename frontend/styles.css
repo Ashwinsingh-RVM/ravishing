@@ -7201,6 +7201,7 @@ tr.zero-r:hover { opacity: 1; }
 }
 .cpcm-icon-btn:hover { border-color: var(--primary, #1e6b5c); color: var(--primary, #1e6b5c); }
 .cpcm-icon-btn.active { background: var(--primary, #1e6b5c); color: #fff; border-color: var(--primary, #1e6b5c); }
+.cpcm-toolbar-divider { width: 1px; align-self: stretch; background: var(--gray-200); flex-shrink: 0; margin: 2px 2px; }
 .cpcm-search-wrap { position: relative; flex: 1 1 220px; min-width: 160px; }
 .cpcm-search-input, .cpcm-select {
     width: 100%; height: 36px; border: 1px solid var(--gray-200); border-radius: 9px;
@@ -7225,16 +7226,24 @@ tr.zero-r:hover { opacity: 1; }
     display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 6px;
     max-height: 62px; overflow-y: auto;
 }
+/* Matches the established .dep-kpi pattern from the RVM Deployment / Progress
+   dashboards: solid white card, 2px border, thick colored left border, bold
+   value, uppercase label — same design language, just sized for a denser grid. */
 .cpcm-stat-card {
-    background: var(--white); border: 1px solid var(--gray-200); border-radius: 9px;
-    padding: 6px 10px; display: flex; flex-direction: column; gap: 1px;
+    background: #fff; border: 2px solid #94a3b8; border-left: 4px solid #94a3b8;
+    color: #1a2332; border-radius: var(--radius, 8px); padding: 6px 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); display: flex; flex-direction: column; gap: 1px;
 }
-.cpcm-stat-card .csv { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; color: #1b1e1f; line-height: 1.2; }
-.cpcm-stat-card .csk { font-size: 9.5px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
-.cpcm-stat-card .css { font-size: 9.5px; color: #94a3b8; }
+.cpcm-stat-card .csv { font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 18px; line-height: 1.15; color: #1a2332; }
+.cpcm-stat-card .csk { font-size: 9.5px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.cpcm-stat-card .css { font-size: 9.5px; color: #94a3b8; margin-top: 1px; }
+.cpcm-stat-card.accent-horeca { border-left-color: #16a34a; }
 .cpcm-stat-card.accent-horeca .csv { color: #16a34a; }
+.cpcm-stat-card.accent-rvm { border-left-color: #0284c7; }
 .cpcm-stat-card.accent-rvm .csv { color: #0284c7; }
+.cpcm-stat-card.accent-coastal { border-left-color: #0891b2; }
 .cpcm-stat-card.accent-coastal .csv { color: #0891b2; }
+.cpcm-stat-card.accent-neutral { border-left-color: #64748b; }
 .cpcm-scope-bar {
     /* Deliberately NOT grid-column:1/-1 — spanning full width forces every stat
        card onto a second row, so the strip grows taller only when a scope is

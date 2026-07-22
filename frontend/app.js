@@ -3530,7 +3530,7 @@ const HOV_SEG_META = {
 function hovMapLoadAsset(tag, url) {
     return new Promise(resolve => {
         const el = document.createElement(tag);
-        if (tag === 'link') { el.rel = 'stylesheet'; el.href = url; resolve(); }
+        if (tag === 'link') { el.rel = 'stylesheet'; el.href = url; el.onload = resolve; el.onerror = resolve; }
         else { el.src = url; el.onload = resolve; el.onerror = resolve; }
         document.head.appendChild(el);
     });
@@ -4116,8 +4116,7 @@ function cpcMapRenderSidebar(counts) {
                 🗺️ View all clusters
             </div>` +
             cpcMapClustersData.map(c => `
-            <div class="hmap-seg-row on" style="cursor:pointer;" onclick="cpcMapFocusCluster('${c.id}')">
-                <span class="hmap-seg-dot" style="background:${c.color || '#7c3aed'};"></span>
+            <div class="hmap-seg-row on" style="cursor:pointer;border-left:4px solid ${c.color || '#4338ca'};" onclick="cpcMapFocusCluster('${c.id}')">
                 <span class="hmap-seg-label">${escapeHtml(c.name)}<br><span class="hint" style="font-size:10.5px;">${escapeHtml((c.block_names || []).join(' + '))} &middot; PIN ${escapeHtml((c.pincodes || []).join(', '))}</span></span>
             </div>`).join('') || '<p class="hint" style="padding:8px;">No clusters defined</p>';
     }
@@ -4182,18 +4181,21 @@ function cpcMapRenderStats(label, stats, meta) {
     meta = meta || {};
     const scopeBar = label ? `<div class="cpcm-scope-bar">📍 ${escapeHtml(label)}<button onclick="cpcMapClearScope()">Clear ✕</button></div>` : '';
     const areaStr = meta.areaKm2 != null ? meta.areaKm2.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
-    el.innerHTML = scopeBar + `
-        <div class="cpcm-stat-card accent-horeca"><span class="csv">${stats.horecaTotal.toLocaleString()}</span><span class="csk">HoReCa Total</span></div>
-        <div class="cpcm-stat-card accent-horeca"><span class="csv">${stats.horecaOnboarded.toLocaleString()}</span><span class="csk">HoReCa Onboarded</span><span class="css">${stats.horecaPct}% of total</span></div>
-        <div class="cpcm-stat-card accent-rvm"><span class="csv">${stats.rvmTotal.toLocaleString()}</span><span class="csk">RVM Location Identified</span></div>
-        <div class="cpcm-stat-card accent-rvm"><span class="csv">${stats.rvmInstalled.toLocaleString()}</span><span class="csk">RVM Installed</span><span class="css">${stats.rvmPct}% &middot; ${stats.rvmPending} pending</span></div>
-        <div class="cpcm-stat-card accent-coastal"><span class="csv">${stats.coastalHoreca.toLocaleString()}</span><span class="csk">Coastal HoReCa</span><span class="css">within ${CPCM_COASTAL_KM}km of beach</span></div>
-        <div class="cpcm-stat-card accent-coastal"><span class="csv">${stats.coastalHorecaTight.toLocaleString()}</span><span class="csk">Coastal HoReCa (tight)</span><span class="css">within ${CPCM_COASTAL_KM_TIGHT}km of beach</span></div>
-        <div class="cpcm-stat-card accent-coastal"><span class="csv">${stats.coastalRvm.toLocaleString()}</span><span class="csk">Coastal RVM</span><span class="css">within ${CPCM_COASTAL_RVM_KM * 1000}m of beach</span></div>
-        <div class="cpcm-stat-card"><span class="csv">${stats.blocksCovered}</span><span class="csk">Blocks Covered</span></div>
-        <div class="cpcm-stat-card"><span class="csv">${stats.panchayatsCovered}</span><span class="csk">Panchayats Covered</span></div>
-        <div class="cpcm-stat-card"><span class="csv">${areaStr}</span><span class="csk">Area Covered (km²)</span></div>
-    `;
+    const card = (accent, icon, val, label, sub) => `
+        <div class="cpcm-stat-card accent-${accent}">
+            <span class="csv">${val}</span><span class="csk">${label}</span>${sub ? `<span class="css">${sub}</span>` : ''}
+        </div>`;
+    el.innerHTML = scopeBar +
+        card('horeca', '🍽️', stats.horecaTotal.toLocaleString(), 'HoReCa Total') +
+        card('horeca', '✅', stats.horecaOnboarded.toLocaleString(), 'HoReCa Onboarded', `${stats.horecaPct}% of total`) +
+        card('rvm', '📍', stats.rvmTotal.toLocaleString(), 'RVM Location Identified') +
+        card('rvm', '♻️', stats.rvmInstalled.toLocaleString(), 'RVM Installed', `${stats.rvmPct}% &middot; ${stats.rvmPending} pending`) +
+        card('coastal', '🏖️', stats.coastalHoreca.toLocaleString(), 'Coastal HoReCa', `within ${CPCM_COASTAL_KM}km of beach`) +
+        card('coastal', '🌊', stats.coastalHorecaTight.toLocaleString(), 'Coastal HoReCa (tight)', `within ${CPCM_COASTAL_KM_TIGHT}km of beach`) +
+        card('coastal', '🚤', stats.coastalRvm.toLocaleString(), 'Coastal RVM', `within ${CPCM_COASTAL_RVM_KM * 1000}m of beach`) +
+        card('neutral', '🧭', stats.blocksCovered, 'Blocks Covered') +
+        card('neutral', '🏘️', stats.panchayatsCovered, 'Panchayats Covered') +
+        card('neutral', '📐', areaStr, 'Area Covered (km²)');
 }
 
 function cpcMapClearScope() {
@@ -12560,24 +12562,29 @@ function loadLeaflet(callback) {
 
     if (window.L) { callback(); return; }
 
-    const link = document.createElement('link');
+    // Wait for BOTH the stylesheet and the script before invoking callback —
+    // if leaflet.css hasn't applied yet when L.map() runs, the panes/tiles
+    // lack the position:absolute/overflow:hidden they need and the map
+    // renders as a blank area instead of tiles+pins (found 2026-07-22: this
+    // race silently broke the very first Leaflet tab opened in a session).
+    const cssDone = new Promise(resolve => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.onload = resolve;
+        link.onerror = resolve;
+        document.head.appendChild(link);
+    });
 
-    link.rel = 'stylesheet';
+    const jsDone = new Promise(resolve => {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = resolve;
+        script.onerror = resolve;
+        document.head.appendChild(script);
+    });
 
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-
-    document.head.appendChild(link);
-
-
-
-    const script = document.createElement('script');
-
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-
-    script.onload = callback;
-
-    document.head.appendChild(script);
-
+    Promise.all([cssDone, jsDone]).then(callback);
 }
 
 
