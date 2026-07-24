@@ -5406,6 +5406,86 @@ class GoogleSheetsService:
         _horeca_crm_cache['expiry'] = None
         return result
 
+    # app_sheet's 'Lead Stage' is coarse (4 values) vs Enhanced's Outreach_Status
+    # enum (13 values) -- 'Lead Created' maps to nothing (no real engagement
+    # yet, matches the "No Status" bucket almost exactly); the other three
+    # stages map onto the closest Outreach_Status value. Confirmed against a
+    # live sample 2026-07-24 before building (see chat).
+    APPSHEET_STATUS_MAP = {
+        'Meeting Scheduled': 'Meeting aligned',
+        'Meeting Completed': 'Meeting done',
+        'OB Form Filled': 'OB Form Filled',
+    }
+
+    def sync_appsheet_status_to_enhanced(self, dry_run=False):
+        """Copy app_sheet's 'Lead Stage' engagement signal into Enhanced's
+        Outreach_Status, via the AppSheet_Lead_ID crosswalk (same deterministic
+        pattern as sync_appsheet_documents_to_enhanced). Only fills BLANK
+        Outreach_Status cells -- never overwrites an existing value, since a
+        status set via the CRM UI is more specific and should win.
+
+        Without this, associates updating app_sheet's Lead Stage in the field
+        had no effect on Outreach_Status at all -- the auto-sync job only ever
+        copied PAN/GST/FSSAI documents, never engagement status."""
+        app_rows, app_headers = self._get_appsheet_cache()
+        ah = {hdr: i for i, hdr in enumerate(app_headers)}
+        id_idx = ah.get('ID')
+        stage_idx = ah.get('Lead Stage')
+
+        def ag(row, idx):
+            return row[idx].strip() if idx is not None and idx < len(row) else ''
+
+        stage_by_lead = {}
+        for arow in app_rows:
+            app_id = ag(arow, id_idx)
+            mapped = self.APPSHEET_STATUS_MAP.get(ag(arow, stage_idx))
+            if app_id and mapped:
+                stage_by_lead[app_id] = mapped
+
+        enh_rows, enh_headers = self._get_horeca_crm_cache()
+        eh = {hdr: i for i, hdr in enumerate(enh_headers)}
+        appsheet_idx = eh.get('AppSheet_Lead_ID')
+        status_idx = eh.get('Outreach_Status', 53)
+        name_idx = eh.get('Name', 1)
+
+        would_write = []
+        skipped_filled = 0
+        for row_pos, erow in enumerate(enh_rows):
+            app_id = erow[appsheet_idx].strip() if appsheet_idx is not None and appsheet_idx < len(erow) else ''
+            if not app_id or app_id not in stage_by_lead:
+                continue
+            existing = erow[status_idx].strip() if status_idx is not None and status_idx < len(erow) else ''
+            if existing:
+                skipped_filled += 1
+                continue
+            bname = erow[name_idx] if name_idx < len(erow) else ''
+            would_write.append((row_pos + 2, stage_by_lead[app_id], bname))
+
+        result = {
+            'dry_run': dry_run,
+            'would_write' if dry_run else 'written': len(would_write),
+            'already_filled_skipped': skipped_filled,
+            'sample': [{'row': r, 'value': v, 'business': b} for r, v, b in would_write[:20]],
+            'errors': [],
+        }
+        if dry_run or not would_write:
+            return result
+
+        spreadsheet = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID)
+        worksheet = spreadsheet.sheet1
+        col_num = status_idx + 1
+        cells = [gspread.Cell(row_num, col_num, value) for row_num, value, _ in would_write]
+        CHUNK_SIZE = 1000
+        for i in range(0, len(cells), CHUNK_SIZE):
+            try:
+                worksheet.update_cells(cells[i:i + CHUNK_SIZE])
+            except Exception as e:
+                result['errors'].append(f'status batch {i}: {e}')
+
+        global _horeca_crm_cache
+        _horeca_crm_cache['expiry'] = None
+        return result
+
     def add_horeca_crm_headers(self):
         """One-time migration: add outreach column headers to BB1-BM1
         (originally BI-BT, shifted after deleting 7 micro zone columns)"""

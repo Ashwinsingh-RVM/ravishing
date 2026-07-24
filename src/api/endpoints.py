@@ -283,16 +283,22 @@ _auto_sync_thread = None
 
 
 def _auto_sync_run_once():
-    """One scheduled sync pass: documents copy first, then new-lead mirror."""
+    """One scheduled sync pass: documents copy, status copy, then new-lead mirror."""
     entry = {'started_at': datetime.now().isoformat(timespec='seconds')}
     try:
         svc = GoogleSheetsService()
         docs = svc.sync_appsheet_documents_to_enhanced(dry_run=False)
+        status = svc.sync_appsheet_status_to_enhanced(dry_run=False)
         leads = svc.sync_new_horeca_leads(dry_run=False)
         entry['documents'] = {
             'written': docs.get('written', docs.get('would_write', 0)),
             'already_filled_skipped': docs.get('already_filled_skipped', 0),
             'errors': docs.get('errors', []),
+        }
+        entry['status_sync'] = {
+            'written': status.get('written', status.get('would_write', 0)),
+            'already_filled_skipped': status.get('already_filled_skipped', 0),
+            'errors': status.get('errors', []),
         }
         entry['new_leads'] = {
             'created': leads.get('created', 0),
