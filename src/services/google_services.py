@@ -4749,30 +4749,16 @@ class GoogleSheetsService:
                          | pending_ids['dup_fssai'])
         qa_pending_breakdown = {q: len(ids) for q, ids in pending_ids.items()}
 
-        # 'PAN/GST/FSSAI not updated in Superset' = businesses that are
-        # onboarded (ACTIVE in the daily Superset_v1 tab) but whose identity
-        # is not yet present in the 'Superset' matching tab (name has no
-        # doc-bearing row there). This is the sheet-refresh lag â€” surfaced so
-        # it isn't mistaken for a real matching gap.
-        try:
-            _sup_names_withdoc = set()
-            for r in sup_rows:
-                nm = self._normalize_horeca_name(sg(r, 'business_name'))
-                if nm and (sg(r, 'pan_number') or sg(r, 'gstin_number') or sg(r, 'fssai_number')):
-                    _sup_names_withdoc.add(nm)
-            _v1_rows, _v1_headers = self._get_superset_v1_cache()
-            _vhx = {h: i for i, h in enumerate(_v1_headers)}
-            _vn, _vs = _vhx.get('business_name'), _vhx.get('status')
-            docs_not_updated = 0
-            for r in _v1_rows:
-                st = r[_vs].strip().upper() if _vs is not None and _vs < len(r) else ''
-                if st != 'ACTIVE':
-                    continue
-                nm = self._normalize_horeca_name(r[_vn] if _vn is not None and _vn < len(r) else '')
-                if nm and nm not in _sup_names_withdoc:
-                    docs_not_updated += 1
-        except Exception:
-            docs_not_updated = 0
+        # 'Not yet in Superset tab' = businesses ACTIVE in Superset_v1 that this
+        # loop never saw at all, because it only iterates the separate
+        # 'Superset' identity tab. Computed as a RESIDUAL (active_total minus
+        # every bucket this loop actually produced) instead of an independent
+        # name-matching estimate, so organic + inorganic + pending_doc_update +
+        # docs_not_updated always reconciles to active_total - offboarded
+        # EXACTLY -- no more small mismatches from two separately-approximated
+        # counts (fixed 2026-07-24, was off by ~2 previously).
+        docs_not_updated = max(0, active_total - len(offboarded) - len(organic)
+                                - len(inorganic) - len(pending_doc_update))
 
         return {
             'total_onboarded': active_total,
