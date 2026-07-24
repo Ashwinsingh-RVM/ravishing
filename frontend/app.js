@@ -7617,7 +7617,7 @@ function renderHsvMethodBar() {
 
     </div></div>
 
-    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${organicPlusUnsynced.toLocaleString()}${c.pending_doc_update_count ? ` + ${c.pending_doc_update_count.toLocaleString()}` : ''} &asymp; ${afterQa.toLocaleString()} — every onboarded business is Inorganic or Organic (Organic includes businesses not yet synced into the Superset identity tab). A small residual mismatch can remain from independent fuzzy-name matching between the two counts.</p>`;
+    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${organicPlusUnsynced.toLocaleString()}${c.pending_doc_update_count ? ` + ${c.pending_doc_update_count.toLocaleString()}` : ''} = ${afterQa.toLocaleString()} — every onboarded business is exactly one of Inorganic or Organic (Organic includes businesses not yet synced into the Superset identity tab).</p>`;
 
     const qaTotal = (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length + (c.qa_dup_fssai || []).length + (c.qa_name_both || c.qa_name_matches || []).length;
 
