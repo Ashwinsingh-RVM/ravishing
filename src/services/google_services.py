@@ -4389,6 +4389,18 @@ class GoogleSheetsService:
         onboarded_after_qa = ACTIVE - offboarded. Approved rows stay
         counted and leave qa_pending. Read-only; nothing is written back.
         """
+        # app_sheet's own "OB Form Filled" confirmation is associate-driven proof
+        # on its own, even without a PAN/GST match yet -- feeds into the
+        # Inorganic decision below via each business's appsheet_id (2026-07-24).
+        _app_rows, _app_headers = self._get_appsheet_cache()
+        _ah = {hdr: i for i, hdr in enumerate(_app_headers)}
+        _aid_i, _stage_i = _ah.get('ID'), _ah.get('Lead Stage')
+        appsheet_ob_filled_ids = {
+            r[_aid_i].strip() for r in _app_rows
+            if _aid_i is not None and _aid_i < len(r) and _stage_i is not None and _stage_i < len(r)
+            and r[_stage_i].strip() == 'OB Form Filled' and r[_aid_i].strip()
+        }
+
         # --- associate ID pool: Enhanced + app_sheet ---
         # Alongside membership, remember OUR side's record per ID:
         # app_sheet ID, business name and status â€” so every row can show
@@ -4681,10 +4693,16 @@ class GoogleSheetsService:
                     pending_doc_update.append({**item, 'queue': 'pending_doc_update'})
                     continue
 
-            # Base bucket: inorganic (ID on both sides) vs organic
+            # Base bucket: inorganic (ID on both sides, OR app_sheet itself
+            # confirms "OB Form Filled" for this business -- associate-driven
+            # proof even before PAN/GST lands) vs organic.
+            ours_appsheet_id = (ours or {}).get('appsheet_id', '')
+            appsheet_confirmed = bool(ours_appsheet_id) and ours_appsheet_id in appsheet_ob_filled_ids
             if (span and span in pool_pan) or (sgst and sgst in pool_gst):
                 inorganic.append({**item,
                                   'matched_via': 'PAN' if (span and span in pool_pan) else 'GST'})
+            elif appsheet_confirmed:
+                inorganic.append({**item, 'matched_via': 'app_sheet OB Form Filled'})
             else:
                 organic.append(item)
 
