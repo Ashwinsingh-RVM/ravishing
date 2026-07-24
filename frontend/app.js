@@ -7489,7 +7489,7 @@ function renderHsvKPIs() {
 
     const cards = [
 
-        renderHovKpiCard('Onboarded (after QA)', n(c.onboarded_after_qa ?? c.total_onboarded ?? d.onboarded_active), 'Superset ACTIVE &minus; offboarded', 'outcome'),
+        renderHovKpiCard('Onboarded', n(c.total_onboarded ?? d.onboarded_active), 'Superset_v1 ACTIVE total', 'outcome'),
 
         renderHovKpiCard('Onboarding In Progress', n(c.onboarding_in_progress_count ?? d.pending_draft), 'DRAFT — started, not completed', 'runrate'),
 
@@ -7530,7 +7530,10 @@ function renderHsvMethodBar() {
 
     const c = hsvData.classification || {};
 
-    const afterQa = c.onboarded_after_qa ?? c.total_onboarded ?? 0;
+    // Per feedback 2026-07-24: show the raw Superset_v1 ACTIVE total, not
+    // ACTIVE-minus-offboarded (offboarded_count is currently 0 so this is a
+    // no-op today, but stays correct if it's ever non-zero).
+    const afterQa = c.total_onboarded ?? 0;
 
     // Composition: onboarded-after-QA (from the daily Superset_v1 tab) splits
     // into FOUR buckets, not two — Inorganic/Organic only classify rows that
@@ -7589,7 +7592,7 @@ function renderHsvMethodBar() {
 
     const splitSteps = [
 
-        { label: 'Onboarded (after QA)', value: afterQa, icon: '✅', cls: 'step-installed' },
+        { label: 'Onboarded', value: afterQa, icon: '✅', cls: 'step-installed' },
 
         { label: 'Inorganic (associate-driven)', value: c.inorganic_count || 0, icon: '🤝', cls: 'step-unlocked' },
 
@@ -7602,7 +7605,7 @@ function renderHsvMethodBar() {
 
     const splitFunnel = `<div class="holistic-funnel" style="margin-bottom:14px;"><div class="funnel-flow">${splitSteps.map((s, i) => `
 
-        <div class="funnel-step ${s.cls}" title="${i === 0 ? 'Superset ACTIVE minus offboarded' : ((s.value / Math.max(1, splitSteps[0].value)) * 100).toFixed(1) + '% of onboarded'}">
+        <div class="funnel-step ${s.cls}" title="${i === 0 ? 'Superset_v1 ACTIVE total' : ((s.value / Math.max(1, splitSteps[0].value)) * 100).toFixed(1) + '% of onboarded'}">
 
             <div class="funnel-step-icon">${s.icon}</div>
 
@@ -7614,7 +7617,7 @@ function renderHsvMethodBar() {
 
     </div></div>
 
-    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${organicPlusUnsynced.toLocaleString()}${c.pending_doc_update_count ? ` + ${c.pending_doc_update_count.toLocaleString()}` : ''} &asymp; ${afterQa.toLocaleString()} — every onboarded business (after QA) is Inorganic or Organic (Organic includes businesses not yet synced into the Superset identity tab). A small residual mismatch can remain from independent fuzzy-name matching between the two counts.</p>`;
+    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${organicPlusUnsynced.toLocaleString()}${c.pending_doc_update_count ? ` + ${c.pending_doc_update_count.toLocaleString()}` : ''} &asymp; ${afterQa.toLocaleString()} — every onboarded business is Inorganic or Organic (Organic includes businesses not yet synced into the Superset identity tab). A small residual mismatch can remain from independent fuzzy-name matching between the two counts.</p>`;
 
     const qaTotal = (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length + (c.qa_dup_fssai || []).length + (c.qa_name_both || c.qa_name_matches || []).length;
 
