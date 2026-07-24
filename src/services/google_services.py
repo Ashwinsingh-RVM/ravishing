@@ -2930,7 +2930,16 @@ class GoogleSheetsService:
         # fall below onboarded. But every onboarded business logically passed
         # through each earlier stage, so floor each stage at the one below it:
         # touch_base >= reached >= ob_opened >= ob_filled >= onboarded.
-        ob_filled = max(ob_filled, onboarded_real)
+        #
+        # ob_filled is PINNED (not just floored) to onboarded_real, per
+        # feedback 2026-07-24: "OB Form Filled" should match "Onboarded"
+        # exactly. Enhanced's raw Outreach_Status=='OB Form Filled' count can
+        # exceed onboarded_real (some rows are manually marked OB Form Filled
+        # in the CRM for a business that isn't actually ACTIVE in Superset_v1
+        # yet -- e.g. still DRAFT, or a data-entry ahead of the real system of
+        # record) which broke the "can't have more OB-filled than onboarded"
+        # invariant. Onboarded (Superset_v1) is the ceiling now, not just floor.
+        ob_filled = onboarded_real
         ob_opened = max(ob_opened, ob_filled)
         reached = max(reached, ob_opened)
         touch_base = max(touch_base, reached)
