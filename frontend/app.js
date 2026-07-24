@@ -7540,25 +7540,26 @@ function renderHsvMethodBar() {
     // not a real matching gap) — folding it in here is what makes the total
     // actually reconcile instead of silently undercounting by ~150.
 
+    // "Not yet in Superset tab" folds into Organic (no PAN/GST proof it's
+    // associate-driven, same as any other Organic row) rather than its own
+    // bucket. "Pending doc update" is dropped from the visible split when
+    // empty — it's a transient bucket, not worth a permanent row at 0.
+    const organicPlusUnsynced = (c.organic_count || 0) + (c.docs_not_updated_count || 0);
     const groups = [
 
         { label: 'Inorganic — PAN/GST on both sides', value: (c.inorganic_count || 0), color: '#059669',
 
           desc: 'The tax ID the associate captured matches the Superset record exactly — proven associate-driven.' },
 
-        { label: 'Organic — everything else', value: (c.organic_count || 0), color: '#a8a29e',
+        { label: 'Organic — everything else', value: organicPlusUnsynced, color: '#a8a29e',
 
           desc: 'No PAN/GST link between Superset and our records — likely came on their own.' },
 
-        { label: 'Pending doc update', value: (c.pending_doc_update_count || 0), color: '#f59e0b',
-
-          desc: 'Onboarded recently — PAN/GST/FSSAI hasn’t synced into Superset yet, so it can’t be classified. Reclassifies automatically once the docs land.' },
-
-        { label: 'Not yet in Superset tab', value: (c.docs_not_updated_count || 0), color: '#94a3b8',
-
-          desc: 'ACTIVE in the daily Superset_v1 tab but this business hasn’t appeared in the separate Superset identity-matching tab yet — a tab-sync lag, not a real gap. Reclassifies once it lands there.' },
-
     ];
+    if (c.pending_doc_update_count) {
+        groups.push({ label: 'Pending doc update', value: c.pending_doc_update_count, color: '#f59e0b',
+          desc: 'Onboarded recently — PAN/GST/FSSAI hasn’t synced into Superset yet, so it can’t be classified. Reclassifies automatically once the docs land.' });
+    }
 
     const total = Math.max(1, groups.reduce((a, g) => a + g.value, 0));
 
@@ -7592,13 +7593,12 @@ function renderHsvMethodBar() {
 
         { label: 'Inorganic (associate-driven)', value: c.inorganic_count || 0, icon: '🤝', cls: 'step-unlocked' },
 
-        { label: 'Organic (on their own)', value: c.organic_count || 0, icon: '🌱', cls: 'step-vps' },
-
-        { label: 'Pending doc update', value: c.pending_doc_update_count || 0, icon: '⏳', cls: 'step-vps' },
-
-        { label: 'Not yet in Superset tab', value: c.docs_not_updated_count || 0, icon: '🔄', cls: 'step-vps' },
+        { label: 'Organic (on their own)', value: organicPlusUnsynced, icon: '🌱', cls: 'step-vps' },
 
     ];
+    if (c.pending_doc_update_count) {
+        splitSteps.push({ label: 'Pending doc update', value: c.pending_doc_update_count, icon: '⏳', cls: 'step-vps' });
+    }
 
     const splitFunnel = `<div class="holistic-funnel" style="margin-bottom:14px;"><div class="funnel-flow">${splitSteps.map((s, i) => `
 
@@ -7614,7 +7614,7 @@ function renderHsvMethodBar() {
 
     </div></div>
 
-    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${(c.organic_count || 0).toLocaleString()} + ${(c.pending_doc_update_count || 0).toLocaleString()} + ${(c.docs_not_updated_count || 0).toLocaleString()} &asymp; ${afterQa.toLocaleString()} — every onboarded business (after QA) falls into one of these four (the last two are sync-lag buckets, not real gaps; a small residual mismatch can remain from independent fuzzy-name matching between the two counts).</p>`;
+    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${organicPlusUnsynced.toLocaleString()}${c.pending_doc_update_count ? ` + ${c.pending_doc_update_count.toLocaleString()}` : ''} &asymp; ${afterQa.toLocaleString()} — every onboarded business (after QA) is Inorganic or Organic (Organic includes businesses not yet synced into the Superset identity tab). A small residual mismatch can remain from independent fuzzy-name matching between the two counts.</p>`;
 
     const qaTotal = (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length + (c.qa_dup_fssai || []).length + (c.qa_name_both || c.qa_name_matches || []).length;
 
