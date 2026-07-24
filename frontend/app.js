@@ -7532,9 +7532,13 @@ function renderHsvMethodBar() {
 
     const afterQa = c.onboarded_after_qa ?? c.total_onboarded ?? 0;
 
-    // Composition: every onboarded-after-QA business is EXACTLY ONE of
-    // Inorganic (PAN/GST captured on both sides) or Organic (everything
-    // else). QA queues are overlays and are shown separately below.
+    // Composition: onboarded-after-QA (from the daily Superset_v1 tab) splits
+    // into FOUR buckets, not two — Inorganic/Organic only classify rows that
+    // already exist in the separate 'Superset' identity-matching tab.
+    // docs_not_updated_count catches businesses ACTIVE in Superset_v1 that
+    // haven't landed in the 'Superset' tab AT ALL yet (a tab-to-tab sync lag,
+    // not a real matching gap) — folding it in here is what makes the total
+    // actually reconcile instead of silently undercounting by ~150.
 
     const groups = [
 
@@ -7545,6 +7549,14 @@ function renderHsvMethodBar() {
         { label: 'Organic — everything else', value: (c.organic_count || 0), color: '#a8a29e',
 
           desc: 'No PAN/GST link between Superset and our records — likely came on their own.' },
+
+        { label: 'Pending doc update', value: (c.pending_doc_update_count || 0), color: '#f59e0b',
+
+          desc: 'Onboarded recently — PAN/GST/FSSAI hasn’t synced into Superset yet, so it can’t be classified. Reclassifies automatically once the docs land.' },
+
+        { label: 'Not yet in Superset tab', value: (c.docs_not_updated_count || 0), color: '#94a3b8',
+
+          desc: 'ACTIVE in the daily Superset_v1 tab but this business hasn’t appeared in the separate Superset identity-matching tab yet — a tab-sync lag, not a real gap. Reclassifies once it lands there.' },
 
     ];
 
@@ -7582,6 +7594,10 @@ function renderHsvMethodBar() {
 
         { label: 'Organic (on their own)', value: c.organic_count || 0, icon: '🌱', cls: 'step-vps' },
 
+        { label: 'Pending doc update', value: c.pending_doc_update_count || 0, icon: '⏳', cls: 'step-vps' },
+
+        { label: 'Not yet in Superset tab', value: c.docs_not_updated_count || 0, icon: '🔄', cls: 'step-vps' },
+
     ];
 
     const splitFunnel = `<div class="holistic-funnel" style="margin-bottom:14px;"><div class="funnel-flow">${splitSteps.map((s, i) => `
@@ -7598,7 +7614,7 @@ function renderHsvMethodBar() {
 
     </div></div>
 
-    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${(c.organic_count || 0).toLocaleString()} = ${afterQa.toLocaleString()} — every onboarded business (after QA) is exactly one of the two.</p>`;
+    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${(c.organic_count || 0).toLocaleString()} + ${(c.pending_doc_update_count || 0).toLocaleString()} + ${(c.docs_not_updated_count || 0).toLocaleString()} &asymp; ${afterQa.toLocaleString()} — every onboarded business (after QA) falls into one of these four (the last two are sync-lag buckets, not real gaps; a small residual mismatch can remain from independent fuzzy-name matching between the two counts).</p>`;
 
     const qaTotal = (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length + (c.qa_dup_fssai || []).length + (c.qa_name_both || c.qa_name_matches || []).length;
 
