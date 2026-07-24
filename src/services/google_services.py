@@ -5431,6 +5431,7 @@ class GoogleSheetsService:
         ah = {hdr: i for i, hdr in enumerate(app_headers)}
         id_idx = ah.get('ID')
         stage_idx = ah.get('Lead Stage')
+        dup_status_idx = ah.get('Duplicate_Status')
 
         def ag(row, idx):
             return row[idx].strip() if idx is not None and idx < len(row) else ''
@@ -5438,8 +5439,16 @@ class GoogleSheetsService:
         stage_by_lead = {}
         for arow in app_rows:
             app_id = ag(arow, id_idx)
+            if not app_id:
+                continue
+            # Rejected (QC flagged this as a bad/duplicate lead) beats any
+            # Lead Stage progress -- confirmed 2026-07-24: rare (~3 rows) but
+            # should win over e.g. a stale "Meeting Completed" from before rejection.
+            if ag(arow, dup_status_idx) == 'Rejected':
+                stage_by_lead[app_id] = 'De-listed'
+                continue
             mapped = self.APPSHEET_STATUS_MAP.get(ag(arow, stage_idx))
-            if app_id and mapped:
+            if mapped:
                 stage_by_lead[app_id] = mapped
 
         enh_rows, enh_headers = self._get_horeca_crm_cache()
