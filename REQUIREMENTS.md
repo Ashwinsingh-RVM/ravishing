@@ -52,6 +52,7 @@
 
 | Rank | # | Requirement | I | E | Est. Tokens | I/E | Status |
 |------|---|-------------|---|---|-------------|-----|--------|
+| 0 | **32** | **🔐 Service account for Sheets auth** - Login broke when GOOGLE_REFRESH_TOKEN expired; migrate Sheets/Drive to a non-expiring service account, keep Gmail on OAuth | 3 | 1 | ~12K | **3.0** | **DONE (code) - awaiting key** |
 | 1 | **25** | **🐛 BUG: Mobile scroll stuck** - VPs tab not scrolling on mobile | 3 | 1 | ~5K | **3.0** | **NEW - BUG** |
 | 2 | **30** | **🐛 BUG: Schedule Meeting broken** - Button on Meetings tab not working | 3 | 1 | ~5K | **3.0** | **NEW - BUG** |
 | 3 | **28** | **Evaluate: Schedule Meeting vs Follow-up** - Are both needed? Confusing? | 1.5 | 0.5 | ~3K | **3.0** | **NEW - EVAL** |

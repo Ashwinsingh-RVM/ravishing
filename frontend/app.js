@@ -7497,9 +7497,9 @@ function renderHsvKPIs() {
 
         renderHovKpiCard('New Leads', n(c.new_leads), 'Walk-In / Referral / other non-Google'),
 
-        renderHovKpiCard('Organic', n(c.organic_count), 'no PAN/GST captured on our side — came on their own', 'outcome'),
+        renderHovKpiCard('Organic', n(c.organic_count), 'PAN not found in app_sheet — came on their own', 'outcome'),
 
-        renderHovKpiCard('Inorganic', n(c.inorganic_count), 'PAN/GST captured on BOTH sides — associate-driven', 'outcome'),
+        renderHovKpiCard('Inorganic', n(c.inorganic_count), 'PAN found in app_sheet — associate-driven', 'outcome'),
 
         renderHovKpiCard('QA Review Pending', n(c.qa_pending), 'unique businesses with duplicate-ID issues'),
 
@@ -7550,9 +7550,9 @@ function renderHsvMethodBar() {
     const organicPlusUnsynced = (c.organic_count || 0) + (c.docs_not_updated_count || 0);
     const groups = [
 
-        { label: 'Inorganic — PAN/GST on both sides', value: (c.inorganic_count || 0), color: '#059669',
+        { label: 'Inorganic — PAN found in app_sheet', value: (c.inorganic_count || 0), color: '#059669',
 
-          desc: 'The tax ID the associate captured matches the Superset record exactly — proven associate-driven.' },
+          desc: 'The PAN on this business also appears in app_sheet, so an associate worked it — proven associate-driven.' },
 
         { label: 'Organic — everything else', value: organicPlusUnsynced, color: '#a8a29e',
 
@@ -7617,7 +7617,7 @@ function renderHsvMethodBar() {
 
     </div></div>
 
-    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${organicPlusUnsynced.toLocaleString()}${c.pending_doc_update_count ? ` + ${c.pending_doc_update_count.toLocaleString()}` : ''} = ${afterQa.toLocaleString()} — every onboarded business is exactly one of Inorganic or Organic (Organic includes businesses not yet synced into the Superset identity tab).</p>`;
+    <p class="hint" style="margin-bottom:14px;">${(c.inorganic_count || 0).toLocaleString()} + ${organicPlusUnsynced.toLocaleString()}${c.pending_doc_update_count ? ` + ${c.pending_doc_update_count.toLocaleString()}` : ''} = ${afterQa.toLocaleString()} — every onboarded business in Superset_v1 is exactly one of Inorganic (PAN found in app_sheet) or Organic (PAN not found).</p>`;
 
     const qaTotal = (c.qa_dup_pan || []).length + (c.qa_dup_gst || []).length + (c.qa_dup_fssai || []).length + (c.qa_name_both || c.qa_name_matches || []).length;
 

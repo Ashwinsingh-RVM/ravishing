@@ -7,6 +7,7 @@ import json
 import re
 import urllib.request
 import urllib.parse
+import urllib.error
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import gspread
@@ -112,8 +113,72 @@ def get_access_token() -> str:
                 seconds=token_json.get('expires_in', 3600) - 300
             )
             return _access_token_cache['token']
+    except urllib.error.HTTPError as e:
+        # Google returns the real reason in the response body; urllib's str(e) is
+        # only "HTTP Error 400: Bad Request", which is undiagnosable on its own.
+        # Surface the body so invalid_grant (dead/revoked refresh token) is obvious.
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "<no response body>"
+        raise RuntimeError(
+            f"Failed to get access token: HTTP {e.code} {detail} "
+            "(invalid_grant usually means GOOGLE_REFRESH_TOKEN is expired or revoked "
+            "- re-mint it with scripts/reauth_google.py)"
+        )
     except Exception as e:
         raise RuntimeError(f"Failed to get access token: {e}")
+
+
+# Scopes for the service-account path. Deliberately narrower than SCOPES: a
+# service account cannot send Gmail as a user without domain-wide delegation, and
+# Calendar is no longer used. Sheets + Drive is everything the data layer needs.
+SA_SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive',
+]
+
+
+def _service_account_info() -> Optional[dict]:
+    """Parse GOOGLE_SERVICE_ACCOUNT_JSON if it is configured.
+
+    Railway env vars are single-line, so the key JSON is stored inline rather than
+    as a file on disk. Returns None when unset, which makes the service account
+    purely opt-in - local dev keeps working on the OAuth refresh token untouched.
+    """
+    raw = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+    if not raw or not raw.strip():
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"GOOGLE_SERVICE_ACCOUNT_JSON is set but is not valid JSON: {e}. "
+            "Paste the downloaded key file's contents verbatim."
+        )
+
+
+def using_service_account() -> bool:
+    """True when the Sheets/Drive layer authenticates as a service account."""
+    return _service_account_info() is not None
+
+
+def get_sheets_credentials():
+    """Credentials for Sheets and Drive.
+
+    Prefers a service account, which has no refresh token and therefore cannot
+    expire - this is what keeps LOGIN working indefinitely. Falls back to the
+    OAuth refresh token when no service account is configured.
+
+    Gmail deliberately does NOT use this: sending mail as a user requires
+    domain-wide delegation, so GmailService stays on get_google_credentials().
+    """
+    info = _service_account_info()
+    if info is None:
+        return get_google_credentials()
+
+    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+    return ServiceAccountCredentials.from_service_account_info(info, scopes=SA_SCOPES)
 
 
 def get_google_credentials():
@@ -171,7 +236,7 @@ class GoogleSheetsService:
 
     def __init__(self):
         """Initialize Google Sheets client"""
-        creds = get_google_credentials()
+        creds = get_sheets_credentials()
         self.gc = gspread.authorize(creds)
         self.spreadsheet_id = settings.google_sheets_id
 
@@ -4347,6 +4412,36 @@ class GoogleSheetsService:
         classification = self._classify_superset_rows(
             sup_rows, sg, matches, eh, eg, active_total, draft_total)
 
+        # The QA layer above (duplicate/name queues, offboarding decisions) keeps
+        # indexing off the 'Superset' identity tab, which is correct - those checks
+        # need PAN/GST/FSSAI columns that only live there. But the Organic/Inorganic
+        # split must cover EVERY onboarded business, so it is recomputed over
+        # Superset_v1 and overrides the identity-tab-only figures. See
+        # _compute_organic_split for why the old numbers under-counted Inorganic.
+        try:
+            _off_keys = set()
+            for _o in classification.get('offboarded', []) or []:
+                for _k in (_o.get('id'), _o.get('business_name')):
+                    if _k:
+                        _off_keys.add(str(_k).strip())
+            _organic, _inorganic = self._compute_organic_split(_off_keys)
+            classification.update({
+                'organic': _organic,
+                'inorganic': _inorganic,
+                'organic_count': len(_organic),
+                'inorganic_count': len(_inorganic),
+                # Both buckets now cover the whole universe, so neither the
+                # identity-tab lag bucket nor the unclassified residual applies.
+                'pending_doc_update': [],
+                'pending_doc_update_count': 0,
+                'docs_not_updated_count': 0,
+                'split_basis': 'Superset_v1 PAN vs app_sheet Document_Number',
+            })
+        except Exception as e:
+            # Never let the split break the whole validation payload; fall back
+            # to the identity-tab figures the classifier already produced.
+            classification['split_error'] = str(e)
+
         result = {
             'classification': classification,
             'superset_total': len(sup_rows),
@@ -4374,6 +4469,109 @@ class GoogleSheetsService:
         _superset_validation_cache['data'] = result
         _superset_validation_cache['expiry'] = now + _HORECA_CACHE_TTL
         return result
+
+    # A GSTIN embeds its PAN at characters 3-12: 2-digit state code, then the
+    # 10-char PAN, then 3 check characters. Associates record either form in
+    # app_sheet's Document_Number, so both must resolve to the same PAN.
+    _PAN_RE = re.compile(r'^[A-Z]{5}[0-9]{4}[A-Z]$')
+    _GST_RE = re.compile(r'^[0-9]{2}([A-Z]{5}[0-9]{4}[A-Z])[0-9A-Z]{3}$')
+
+    @classmethod
+    def _pan_of(cls, value):
+        """Return the PAN a cell represents: the PAN itself, or the PAN inside
+        a GSTIN. None when the cell holds neither."""
+        v = str(value or '').strip().upper().replace(' ', '')
+        if not v:
+            return None
+        if cls._PAN_RE.match(v):
+            return v
+        m = cls._GST_RE.match(v)
+        return m.group(1) if m else None
+
+    def _compute_organic_split(self, offboarded_keys=frozenset()):
+        """Organic vs Inorganic over the FULL onboarded universe.
+
+        Universe is Superset_v1 (the daily Superset dump - the system of record
+        for what is actually onboarded), NOT the smaller 'Superset' identity
+        tab. A business whose PAN also appears in app_sheet was worked by an
+        associate -> INORGANIC; otherwise it came in on its own -> ORGANIC.
+
+        This replaces the previous approach, which only walked the identity tab
+        and dumped every business missing from it into a 'docs_not_updated'
+        residual - 1,328 of 2,516 businesses went unclassified that way, so
+        Inorganic read 1,101 when the true figure is 2,351.
+        """
+        app_rows, app_headers = self._get_appsheet_cache()
+        ai = {hdr: i for i, hdr in enumerate(app_headers)}
+
+        def ag(row, col):
+            i = ai.get(col)
+            return str(row[i]).strip() if i is not None and i < len(row) else ''
+
+        # PAN -> the app_sheet record that proves an associate worked it.
+        pool = {}
+        for arow in app_rows:
+            pan = self._pan_of(ag(arow, 'Document_Number'))
+            if pan and pan not in pool:
+                pool[pan] = {
+                    'app_sheet_name': ag(arow, 'HoReCa Name'),
+                    'lead_poc': ag(arow, 'Lead POC'),
+                    'lead_stage': ag(arow, 'Lead Stage'),
+                    'lead_source': ag(arow, 'Lead Source'),
+                    'appsheet_id': ag(arow, 'ID'),
+                }
+
+        v1_rows, v1_headers = self._get_superset_v1_cache()
+        vi = {hdr: i for i, hdr in enumerate(v1_headers)}
+
+        def vg(row, col):
+            i = vi.get(col)
+            return str(row[i]).strip() if i is not None and i < len(row) else ''
+
+        organic, inorganic = [], []
+        for vrow in v1_rows:
+            name = vg(vrow, 'business_name')
+            if not name or vg(vrow, 'status').upper() != 'ACTIVE':
+                continue
+            key = vg(vrow, 'id') or name
+            # A business disapproved in QA is offboarded: it belongs to neither
+            # bucket, so the buckets still reconcile to onboarded_after_qa.
+            if key in offboarded_keys or name in offboarded_keys:
+                continue
+            pan = self._pan_of(vg(vrow, 'pan')) or self._pan_of(vg(vrow, 'gstin'))
+            hit = pool.get(pan) if pan else None
+            # Key names here are load-bearing, not cosmetic: the Associates tab
+            # (get_horeca_associate_performance) reads 'onboarded_date',
+            # 'appsheet_id', 'pan', 'gst' and 'fssai' off these items, and gates
+            # on onboarded_date parsing before it attributes anything. Renaming
+            # or dropping any of them silently zeroes that whole tab.
+            item = {
+                'row_id': vg(vrow, 'id'),
+                'id': vg(vrow, 'id'),
+                'superset_name': name,
+                'business_name': name,
+                'superset_status': 'ACTIVE',
+                'appsheet_id': (hit or {}).get('appsheet_id', ''),
+                'pan': vg(vrow, 'pan'),
+                'gst': vg(vrow, 'gstin'),
+                'gstin': vg(vrow, 'gstin'),
+                'fssai': '',
+                'matched_name': (hit or {}).get('app_sheet_name', ''),
+                'matched_status': (hit or {}).get('lead_stage', ''),
+                'created_day': vg(vrow, 'created_day'),
+                # Superset updated_day = the onboarding date (team convention)
+                'onboarded_date': vg(vrow, 'updated_day'),
+            }
+            if hit:
+                inorganic.append({**item, 'matched_via': 'PAN in app_sheet',
+                                  'lead_poc': hit.get('lead_poc', ''),
+                                  'lead_source': hit.get('lead_source', ''),
+                                  'lead_stage': hit.get('lead_stage', ''),
+                                  'app_sheet_name': hit.get('app_sheet_name', '')})
+            else:
+                organic.append(item)
+
+        return organic, inorganic
 
     def _classify_superset_rows(self, sup_rows, sg, matches, eh, eg,
                                 active_total, draft_total):
@@ -5583,7 +5781,7 @@ class AuthService:
 
     def __init__(self):
         """Initialize Google Sheets client"""
-        creds = get_google_credentials()
+        creds = get_sheets_credentials()
         self.gc = gspread.authorize(creds)
         self.spreadsheet_id = settings.google_sheets_id
 
