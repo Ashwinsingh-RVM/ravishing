@@ -7909,6 +7909,14 @@ function downloadSupersetExport() {
     window.location.href = `${API_BASE}/horeca/superset/export`;
 }
 
+let hsupersetForceRefresh = false;
+
+function refreshSupersetList() {
+    // Bypass the 15-minute server cache and re-read the sheet.
+    hsupersetForceRefresh = true;
+    loadHSupersetList(1);
+}
+
 async function loadHSupersetList(page) {
 
     hsupersetCurrentPage = page;
@@ -7921,7 +7929,8 @@ async function loadHSupersetList(page) {
 
     try {
 
-        const res = await fetch(`${API_BASE}/horeca/superset/list?page=${page}&page_size=50&search=${encodeURIComponent(search)}`);
+        const res = await fetch(`${API_BASE}/horeca/superset/list?page=${page}&page_size=50&search=${encodeURIComponent(search)}${hsupersetForceRefresh ? '&refresh=true' : ''}`);
+        hsupersetForceRefresh = false;
 
         if (!res.ok) throw new Error('Failed to load');
 
@@ -7942,58 +7951,36 @@ async function loadHSupersetList(page) {
 
 
 function renderHSupersetTable(data) {
-
     const container = document.getElementById('hsuperset-table');
-
     const countLine = document.getElementById('hsuperset-count-line');
 
-    countLine.textContent = `${data.total} businesses from Superset export`;
+    // Columns come from the sheet itself, so a new column in Superset_v1 shows
+    // up here with no code change.
+    const cols = data.columns || [];
+    const stamp = data.last_updated ? ` — ${escapeHtml(data.last_updated)}` : '';
+    countLine.innerHTML = `${data.total} businesses from ${escapeHtml(data.source_tab || 'Superset_v1')}`
+        + `<span class="hint">${stamp}</span>`;
 
-    if (!data.records.length) {
-
+    if (!data.records.length || !cols.length) {
         container.innerHTML = '<p class="hint">No records found</p>';
-
         renderHSupersetPagination();
-
         return;
-
     }
 
-    let html = '<table class="hdaily-table"><thead><tr>' +
-
-        '<th>Business Name</th><th>Status</th><th>PAN</th><th>GST</th><th>FSSAI</th><th>Kind</th><th>City</th></tr></thead><tbody>';
+    let html = '<table class="hdaily-table"><thead><tr>'
+        + cols.map(c => `<th>${escapeHtml(c)}</th>`).join('')
+        + '</tr></thead><tbody>';
 
     data.records.forEach(r => {
-
-        html += `<tr>
-
-            <td style="text-align:left;">${escapeHtml(r.business_name)}</td>
-
-            <td>${escapeHtml(r.status)}</td>
-
-            <td>${escapeHtml(r.pan_number)}</td>
-
-            <td>${escapeHtml(r.gstin_number)}</td>
-
-            <td>${escapeHtml(r.fssai_number)}</td>
-
-            <td>${escapeHtml(r.kind_of_business)}</td>
-
-            <td>${escapeHtml(r.city)}</td>
-
-        </tr>`;
-
+        html += '<tr>' + cols.map((c, i) =>
+            `<td style="text-align:${i === 1 ? 'left' : 'center'};">${escapeHtml(r[c] == null ? '' : String(r[c]))}</td>`
+        ).join('') + '</tr>';
     });
 
     html += '</tbody></table>';
-
     container.innerHTML = html;
-
     renderHSupersetPagination();
-
 }
-
-
 
 function renderHSupersetPagination() {
 

@@ -688,6 +688,7 @@
                                 <div class="horeca-crm-master-header" style="margin-bottom:12px;">
                                     <input type="text" id="hsuperset-search" class="input" placeholder="Search business name..." onkeyup="if(event.key==='Enter') loadHSupersetList(1)">
                                     <button class="btn btn-secondary btn-small" onclick="loadHSupersetList(1)">Search</button>
+                                    <button class="btn btn-secondary btn-small" onclick="refreshSupersetList()">↻ Refresh</button>
                                     <button class="btn btn-secondary btn-small" onclick="downloadSupersetExport()">⬇ Download Excel</button>
                                     <span id="hsuperset-count-line" class="profile-hint" style="margin-left: 12px;"></span>
                                 </div>
@@ -1823,6 +1824,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=156"></script>
+    <script src="/static/app.js?v=157"></script>
 </body>
 </html>

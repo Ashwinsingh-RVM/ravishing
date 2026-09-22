@@ -4098,76 +4098,67 @@ class GoogleSheetsService:
         _excise_cache.update(data=result, expiry=now + _HORECA_CACHE_TTL)
         return result
 
-    def get_horeca_superset_data(self, search='', page=1, page_size=50):
-        """Paginated read of the Superset export tab â€” a raw viewer only,
-        no matching against Enhanced/app_sheet yet."""
-        rows, headers = self._get_superset_cache()
+    def get_horeca_superset_data(self, search='', page=1, page_size=50,
+                                 refresh=False):
+        """Paginated raw view of the Superset_v1 tab, with every column.
+
+        Reads Superset_v1 - the daily Superset dump that is the system of record
+        for what is onboarded - rather than the 'Superset' identity tab, which is
+        a manual paste last refreshed 2026-07-20 and missing ~half the onboarded
+        businesses. Columns are returned exactly as the sheet has them, so a new
+        column appears here without a code change.
+
+        refresh=True drops the 15-minute cache so the view can be forced to
+        re-read the sheet on demand.
+        """
+        global _superset_v1_cache
+        if refresh:
+            _superset_v1_cache['data'] = None
+            _superset_v1_cache['expiry'] = None
+
+        rows, headers = self._get_superset_v1_cache()
         if not rows:
-            return {'records': [], 'total': 0, 'page': 1, 'total_pages': 0}
+            return {'records': [], 'columns': [], 'total': 0,
+                    'page': 1, 'total_pages': 0, 'last_updated': ''}
 
-        h = {hdr: i for i, hdr in enumerate(headers)}
-
-        def g(row, col):
-            i = h.get(col)
-            return row[i].strip() if i is not None and i < len(row) else ''
+        columns = [str(h).strip() for h in headers if str(h).strip()]
 
         search_lower = search.lower().strip()
         filtered = rows
         if search_lower:
-            name_idx = h.get('business_name')
-            filtered = [r for r in rows if name_idx is not None and name_idx < len(r)
-                        and search_lower in r[name_idx].lower()]
+            # Search every column, not just the name - users paste PANs in here.
+            filtered = [r for r in rows
+                        if any(search_lower in str(c).lower() for c in r)]
 
         total = len(filtered)
         total_pages = max(1, (total + page_size - 1) // page_size)
         page = min(max(page, 1), total_pages)
-        start = (page - 1) * page_size
-        page_rows = filtered[start:start + page_size]
+        start_i = (page - 1) * page_size
+        page_rows = filtered[start_i:start_i + page_size]
 
-        records = [{
-            'business_name': g(r, 'business_name'),
-            'status': g(r, 'status'),
-            'pan_number': g(r, 'pan_number'),
-            'gstin_number': g(r, 'gstin_number'),
-            'fssai_number': g(r, 'fssai_number'),
-            'kind_of_business': g(r, 'kind_of_business'),
-            'city': g(r, 'city') or g(r, 'region_name'),
-            'street': g(r, 'street'),
-            'pin_code': g(r, 'pin_code'),
-        } for r in page_rows]
+        records = []
+        for r in page_rows:
+            records.append({col: (str(r[i]).strip() if i < len(r) else '')
+                            for i, col in enumerate(columns)})
 
         return {
             'records': records,
+            'columns': columns,
             'total': total,
             'page': page,
             'total_pages': total_pages,
+            'source_tab': self.SUPERSET_V1_TAB_NAME,
+            'last_updated': self._superset_v1_last_updated(),
         }
 
-    # ==================== Superset <-> Enhanced validation ====================
-    # Words that carry no identity in a Goan hospitality business name â€”
-    # generic industry terms plus locality/place names. Two unrelated
-    # businesses routinely share these, so they must not count as evidence
-    # of a match (verified live: "Baga 24 Bar" wrongly matched "De baga
-    # deck" on the shared neighbourhood name alone before this list).
-    HORECA_NAME_STOPWORDS = frozenset({
-        'bar', 'restaurant', 'restaurants', 'cafe', 'kitchen', 'resort', 'resorts',
-        'hotel', 'hotels', 'and', 'the', 'by', 'pub', 'lounge', 'grill', 'food',
-        'foods', 'family', 'multi', 'cuisine', 'dine', 'dining', 'deck', 'house',
-        'garden', 'palace', 'corner', 'view', 'point', 'side', 'beach', 'club',
-        'inn', 'bakery', 'bistro', 'shack', 'joint', 'eatery', 'grille', 'grub',
-        'goa', 'goan', 'of', 'at', 'in', 'to', 'near', 'opp', 'road', 'wine',
-        'shop', 'spot', 'zone', 'hub', 'place', 'stop', 'sea', 'ocean',
-        'baga', 'anjuna', 'calangute', 'candolim', 'panaji', 'panjim', 'vagator',
-        'arpora', 'assagao', 'siolim', 'mapusa', 'margao', 'madgaon', 'colva',
-        'benaulim', 'cavelossim', 'varca', 'majorda', 'betalbatim', 'sinquerim',
-        'morjim', 'ashwem', 'mandrem', 'arambol', 'chapora', 'ponda', 'verna',
-        'cortalim', 'bicholim', 'bardez', 'salcete', 'tiswadi', 'pernem',
-        'canacona', 'quepem', 'sanguem', 'dabolim', 'vasco', 'sangolda',
-        'corjuem', 'bambolim', 'mormugaon', 'sancoale', 'upasnagar', 'aldona',
-        'saligao', 'porvorim', 'reis', 'magos', 'santa', 'cruz', 'dona', 'paula',
-    })
-    SUPERSET_NAME_SIM_THRESHOLD = 0.6
-    SUPERSET_MIN_SHARED_TOKENS = 2
+    def _superset_v1_last_updated(self):
+        """The 'Last updated: ...' stamp Superset writes into row 1 of the tab."""
+        try:
+            ws = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID).worksheet(
+                self.SUPERSET_V1_TAB_NAME)
+            return str(_gs_retry(ws.acell, 'A1').value or '').strip()
+        except Exception:
+            return ''
 
     @classmethod
     def _distinctive_name_tokens(cls, name):

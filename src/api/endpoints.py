@@ -1968,12 +1968,17 @@ async def get_horeca_associate_events_endpoint(request: Request, start: str, end
 
 
 @app.get("/api/horeca/superset/list")
-async def get_horeca_superset_list(request: Request, search: str = '', page: int = 1, page_size: int = 50):
-    """Raw viewer for the Superset export tab — no matching logic yet"""
+async def get_horeca_superset_list(request: Request, search: str = '', page: int = 1,
+                                   page_size: int = 50, refresh: bool = False):
+    """Raw viewer for the Superset_v1 tab — every column, straight from the sheet.
+
+    refresh=true forces a re-read instead of serving the 15-minute cache.
+    """
     require_role(request, {'admin'})
     try:
         sheets_service = GoogleSheetsService()
-        return sheets_service.get_horeca_superset_data(search=search, page=page, page_size=page_size)
+        return sheets_service.get_horeca_superset_data(
+            search=search, page=page, page_size=page_size, refresh=refresh)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
