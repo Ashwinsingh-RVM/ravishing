@@ -1978,6 +1978,56 @@ async def get_horeca_superset_list(request: Request, search: str = '', page: int
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/horeca/superset/export")
+async def export_horeca_superset(request: Request):
+    """Download the raw Superset_v1 export as a spreadsheet.
+
+    Served as CSV with an .xls filename and the Excel content type: Excel opens
+    it natively and no extra dependency (openpyxl/xlsxwriter) is needed on the
+    server. Each row also carries its Organic/Inorganic tag so the download
+    matches what the dashboard shows.
+    """
+    require_role(request, {'admin', 'horeca'})
+    try:
+        import csv
+        import io as _io
+
+        svc = GoogleSheetsService()
+        rows, headers = svc._get_superset_v1_cache()
+        hi = {h: i for i, h in enumerate(headers)}
+
+        # Tag each business with its lead type, same rule as the dashboard.
+        lead_type = {}
+        try:
+            cls = (svc.get_horeca_superset_validation() or {}).get('classification') or {}
+            for bucket, label in (('organic', 'Organic'), ('inorganic', 'Inorganic')):
+                for it in (cls.get(bucket) or []):
+                    key = str(it.get('id') or it.get('business_name') or '').strip()
+                    if key:
+                        lead_type[key] = label
+        except Exception:
+            pass
+
+        buf = _io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(list(headers) + ['Lead_Type'])
+        for r in rows:
+            key = str(r[hi['id']]).strip() if 'id' in hi and hi['id'] < len(r) else ''
+            if not key and 'business_name' in hi and hi['business_name'] < len(r):
+                key = str(r[hi['business_name']]).strip()
+            w.writerow(list(r) + [lead_type.get(key, '')])
+
+        stamp = datetime.now().strftime('%Y-%m-%d')
+        return Response(
+            content=buf.getvalue().encode('utf-8-sig'),
+            media_type='application/vnd.ms-excel',
+            headers={'Content-Disposition':
+                     f'attachment; filename="superset_export_{stamp}.xls"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/horeca/superset/validation")
 async def get_horeca_superset_validation_endpoint(request: Request):
     """Superset vs Enhanced validation: KPIs, match tiers, discrepancy audits.

@@ -3004,10 +3004,33 @@ class GoogleSheetsService:
         # yet -- e.g. still DRAFT, or a data-entry ahead of the real system of
         # record) which broke the "can't have more OB-filled than onboarded"
         # invariant. Onboarded (Superset_v1) is the ceiling now, not just floor.
-        ob_filled = onboarded_real
-        ob_opened = max(ob_opened, ob_filled)
-        reached = max(reached, ob_opened)
-        touch_base = max(touch_base, reached)
+        # Funnel rebuilt on app_sheet (2026-09-22). The previous version floored
+        # every earlier stage up to onboarded_real, which made four of six stages
+        # display the onboarded number and hid a two-month gap in Reached: Aug
+        # had 0 real reach events while the dashboard showed 538.
+        #   Touch Base = every lead in app_sheet
+        #   Reached    = any lead whose stage moved past "Lead Created"
+        #   Onboarded  = Superset_v1 ACTIVE (unchanged, the system of record)
+        # No flooring: a stage now shows its own data even when that is bad news.
+        try:
+            _app_rows, _app_headers = self._get_appsheet_cache()
+            _ai = {hdr: i for i, hdr in enumerate(_app_headers)}
+
+            def _agv(row, col):
+                i = _ai.get(col)
+                return str(row[i]).strip() if i is not None and i < len(row) else ''
+
+            _leads = [r for r in _app_rows if _agv(r, 'ID')]
+            touch_base = len(_leads)
+            _stages = [_agv(r, 'Lead Stage') for r in _leads]
+            reached = sum(1 for s in _stages if s and s != 'Lead Created')
+            ob_opened = sum(1 for s in _stages if s in ('OB Form Opened', 'OB Form Filled'))
+            ob_filled = sum(1 for s in _stages if s == 'OB Form Filled')
+            funnel_basis = 'app_sheet'
+        except Exception:
+            # Fall back to the previous Enhanced-derived figures rather than
+            # showing nothing if app_sheet is unreadable.
+            funnel_basis = 'enhanced_fallback'
 
         # Run rate: total onboarded Ã· days since onboarding first began.
         # first_onboard_date comes from the earliest "Updated Date" among
@@ -3034,7 +3057,9 @@ class GoogleSheetsService:
                 # business was necessarily reached in that same period, so
                 # floor reached at onboarded (reached is sourced from Enhanced
                 # statuses, which under-count vs Superset onboardings).
-                period_reached = max(b['reached'], b['onboarded'])
+                # No flooring: show the real reach count for the period even when
+                # it is zero. Flooring to onboarded hid a two-month data outage.
+                period_reached = b['reached']
                 out.append({
                     'period': key,
                     'reached': period_reached,
@@ -3059,6 +3084,7 @@ class GoogleSheetsService:
             'superset_confirmed': superset_confirmed,
             'onboarded_reported': onboarded_reported,
             'touch_base': touch_base,
+            'funnel_basis': funnel_basis,
             'conversion_vs_touch_base': round(onboarded_real / touch_base * 100, 1) if touch_base else 0,
             'conversion_vs_overall': round(onboarded_real / total_db * 100, 1) if total_db else 0,
             'run_rate': {
@@ -3708,85 +3734,51 @@ class GoogleSheetsService:
                 email, {'reached': 0, 'onboarded': 0})[field] += 1
             alltime.setdefault(email, {'reached': 0, 'onboarded': 0})[field] += 1
 
-        # --- Reached: real tracked events preferred; if the sheet has NO
-        # real STATUS_CHANGE history at all yet (verified live 2026-07:
-        # zero real events), fall back to the approximate events (current
-        # status @ Last_Updated) â€” same fallback the Overview uses.
-        all_events = self._collect_horeca_status_events()
-        real_events = [e for e in all_events if not e.get('approximate')]
-        reached_source = 'real'
-        events = real_events
-        if not real_events:
-            events = all_events
-            reached_source = 'approximate_fallback'
-        for ev in events:
-            if rank(ev.get('to_status', '')) < reached_bar:
-                continue
-            d = parse_d(ev.get('date'))
-            if d is None:
-                continue
-            bump(d, resolve(ev.get('associate')), 'reached')
+        # --- Reached + Onboarded, both from app_sheet (2026-09-22) ---
+        # Previously Reached came from parsing STATUS_CHANGE lines out of the
+        # Enhanced notes column, which captured only 51 of 1,787 events, and
+        # Onboarded came from the Superset classification keyed by app_sheet ID.
+        # The team asked for one source of truth: app_sheet itself.
+        #   Reached   = the lead moved past "Lead Created"
+        #   Onboarded = Onboarding Status "Onboarded", or stage "OB Form Filled"
+        # Dates come from "Last updated Date", which the Sheets API returns
+        # formatted as M/D/YYYY H:MM:SS.
+        reached_source = 'app_sheet'
 
-        # --- Onboarded: Superset ACTIVE via classification ---
-        active_items = []
-        try:
-            validation = self.get_horeca_superset_validation() or {}
-            cls = validation.get('classification') or {}
-            active_items = (cls.get('organic') or []) + (cls.get('inorganic') or [])
-        except Exception:
-            pass
-
-        # Attribution maps
-        app_poc_by_id = {}
-        try:
-            app_rows, app_headers = self._get_appsheet_cache()
-            ah = {hdr: i for i, hdr in enumerate(app_headers)}
-            aid_i, apoc_i = ah.get('ID'), ah.get('Lead POC')
-            for arow in app_rows:
-                aid = arow[aid_i].strip() if aid_i is not None and aid_i < len(arow) else ''
-                poc = arow[apoc_i].strip() if apoc_i is not None and apoc_i < len(arow) else ''
-                if aid and poc:
-                    app_poc_by_id[aid] = poc
-        except Exception:
-            pass
-
-        assigned_by_key = {}  # ('A'|'P'|'G'|'F', id) -> Assigned_To
-        try:
-            enh_rows, enh_headers = self._get_horeca_crm_cache()
-            eh = {hdr: i for i, hdr in enumerate(enh_headers)}
-
-            def ev_(row, col, dflt=None):
-                i = eh.get(col, dflt)
-                return row[i].strip() if i is not None and i < len(row) else ''
-
-            for erow in enh_rows:
-                assignee = ev_(erow, 'Assigned_To', 65)
-                if not assignee:
+        def _parse_app_date(v):
+            v = str(v or '').strip()
+            if not v:
+                return None
+            head = v.split(' ')[0]
+            for fmt in ('%m/%d/%Y', '%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(head, fmt).date()
+                except ValueError:
                     continue
-                for tag, v in (('A', ev_(erow, 'AppSheet_Lead_ID')),
-                               ('P', ev_(erow, 'PAN_Number').upper()),
-                               ('G', ev_(erow, 'GST_Number').upper()),
-                               ('F', ev_(erow, 'FSSAI_Number'))):
-                    if v:
-                        assigned_by_key.setdefault((tag, v), assignee)
-        except Exception:
-            pass
+            return None
 
-        for it in active_items:
-            d = parse_d(it.get('onboarded_date'))
-            if d is None:
-                continue
-            appid = (it.get('appsheet_id') or '').strip()
-            email = resolve(app_poc_by_id.get(appid)) if appid else None
-            if not email:
-                for tag, field in (('A', 'appsheet_id'), ('P', 'pan'),
-                                   ('G', 'gst'), ('F', 'fssai')):
-                    v = (it.get(field) or '').strip()
-                    if v and (tag, v) in assigned_by_key:
-                        email = resolve(assigned_by_key[(tag, v)])
-                        if email:
-                            break
-            bump(d, email, 'onboarded')
+        try:
+            app_rows2, app_headers2 = self._get_appsheet_cache()
+            a2 = {hdr: i for i, hdr in enumerate(app_headers2)}
+
+            def _a2(row, col):
+                i = a2.get(col)
+                return str(row[i]).strip() if i is not None and i < len(row) else ''
+
+            for arow in app_rows2:
+                if not _a2(arow, 'ID'):
+                    continue
+                d = _parse_app_date(_a2(arow, 'Last updated Date'))
+                if d is None:
+                    continue
+                email = resolve(_a2(arow, 'Lead POC'))
+                stage = _a2(arow, 'Lead Stage')
+                if stage and stage != 'Lead Created':
+                    bump(d, email, 'reached')
+                if _a2(arow, 'Onboarding Status') == 'Onboarded' or stage == 'OB Form Filled':
+                    bump(d, email, 'onboarded')
+        except Exception:
+            reached_source = 'unavailable'
 
         # --- Shape the response ---
         display = {email: self._associate_display_name(email)
@@ -3794,11 +3786,11 @@ class GoogleSheetsService:
         associates = [display[e] for e in self.HORECA_ASSOCIATE_WHITELIST] + ['Other']
 
         def _floor(cell):
-            # An onboarded business was necessarily reached by that associate,
-            # so keep reached >= onboarded (reached is sourced from Enhanced
-            # STATUS_CHANGE events, which under-count vs Superset onboardings).
-            reached = max(cell.get('reached', 0), cell.get('onboarded', 0))
-            return {'reached': reached, 'onboarded': cell.get('onboarded', 0)}
+            # Deliberately NOT flooring. reached and onboarded now come from the
+            # same app_sheet rows, so raising reached to onboarded would only
+            # fabricate numbers - it is what pinned every conversion to 100%.
+            return {'reached': cell.get('reached', 0),
+                    'onboarded': cell.get('onboarded', 0)}
 
         def named(bucket):
             out = {}
@@ -4424,12 +4416,28 @@ class GoogleSheetsService:
                 for _k in (_o.get('id'), _o.get('business_name')):
                     if _k:
                         _off_keys.add(str(_k).strip())
-            _organic, _inorganic = self._compute_organic_split(_off_keys)
+            _organic, _inorganic, _dup_pan = self._compute_organic_split(_off_keys)
+            # QA queue rebuilt over the same full universe. The old queue walked
+            # the identity tab, which is missing ~half the onboarded businesses,
+            # so it could only ever flag duplicates among the half it could see.
+            _dup_keys = {d['key'] for d in _dup_pan}
             classification.update({
                 'organic': _organic,
                 'inorganic': _inorganic,
                 'organic_count': len(_organic),
                 'inorganic_count': len(_inorganic),
+                'qa_dup_pan': _dup_pan,
+                'qa_pending': len(_dup_pan),
+                'qa_pending_breakdown': {'dup_pan': len(_dup_pan),
+                                         'dup_gst': 0, 'dup_fssai': 0},
+                'qa_dup_pan_groups': len(_dup_keys),
+                # Superseded by the PAN-only rule the team asked for.
+                'qa_dup_gst': [],
+                'qa_dup_fssai': [],
+                # Superset_v1 carries no DRAFT rows, so the count taken from it
+                # was always 0 while the list below showed 8. Count the list.
+                'onboarding_in_progress_count': len(
+                    classification.get('onboarding_in_progress') or []),
                 # Both buckets now cover the whole universe, so neither the
                 # identity-tab lag bucket nor the unclassified residual applies.
                 'pending_doc_update': [],
@@ -4529,6 +4537,7 @@ class GoogleSheetsService:
             return str(row[i]).strip() if i is not None and i < len(row) else ''
 
         organic, inorganic = [], []
+        by_pan = {}
         for vrow in v1_rows:
             name = vg(vrow, 'business_name')
             if not name or vg(vrow, 'status').upper() != 'ACTIVE':
@@ -4563,15 +4572,31 @@ class GoogleSheetsService:
                 'onboarded_date': vg(vrow, 'updated_day'),
             }
             if hit:
-                inorganic.append({**item, 'matched_via': 'PAN in app_sheet',
-                                  'lead_poc': hit.get('lead_poc', ''),
-                                  'lead_source': hit.get('lead_source', ''),
-                                  'lead_stage': hit.get('lead_stage', ''),
-                                  'app_sheet_name': hit.get('app_sheet_name', '')})
+                entry = {**item, 'matched_via': 'PAN in app_sheet',
+                         'lead_type': 'Inorganic',
+                         'lead_poc': hit.get('lead_poc', ''),
+                         'lead_source': hit.get('lead_source', ''),
+                         'lead_stage': hit.get('lead_stage', ''),
+                         'app_sheet_name': hit.get('app_sheet_name', '')}
+                inorganic.append(entry)
             else:
-                organic.append(item)
+                entry = {**item, 'lead_type': 'Organic'}
+                organic.append(entry)
+            if pan:
+                by_pan.setdefault(pan, []).append(entry)
 
-        return organic, inorganic
+        # QA queue: businesses sharing a PAN with at least one other business.
+        # Deliberately no judgement about whether a shared PAN is a chain or a
+        # data error - the team wants them listed, each tagged Organic/Inorganic.
+        dup_pan = []
+        for pan, members in by_pan.items():
+            if len(members) < 2:
+                continue
+            for m in members:
+                dup_pan.append({**m, 'queue': 'dup_pan', 'key': f'PAN:{pan}',
+                                'dup_count': len(members)})
+
+        return organic, inorganic, dup_pan
 
     def _classify_superset_rows(self, sup_rows, sg, matches, eh, eg,
                                 active_total, draft_total):

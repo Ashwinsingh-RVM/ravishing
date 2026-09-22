@@ -7501,7 +7501,7 @@ function renderHsvKPIs() {
 
         renderHovKpiCard('Inorganic', n(c.inorganic_count), 'PAN found in app_sheet — associate-driven', 'outcome'),
 
-        renderHovKpiCard('QA Review Pending', n(c.qa_pending), 'unique businesses with duplicate-ID issues'),
+        renderHovKpiCard('QA Review Pending', n(c.qa_pending), 'businesses sharing a PAN with another business'),
 
     ];
 
@@ -7901,6 +7901,13 @@ function toggleHsvRaw() {
 }
 
 
+
+function downloadSupersetExport() {
+    // Server streams the full Superset_v1 export (with each row's Organic/
+    // Inorganic tag) as an Excel-openable file. Goes through a normal
+    // navigation so the browser's own download UI handles it.
+    window.location.href = `${API_BASE}/horeca/superset/export`;
+}
 
 async function loadHSupersetList(page) {
 
