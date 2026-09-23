@@ -3974,6 +3974,12 @@ class GoogleSheetsService:
             if 'status' in low or 'business_name' in low:
                 hdr_idx = i
                 break
+        # Row 1 carries Superset's own "Last updated: ..." stamp. Keep it on the
+        # cache entry: re-reading it with a separate acell() call cost a full
+        # API round-trip (~1.3s) on every raw-viewer request.
+        _superset_v1_cache['stamp'] = (
+            str(all_values[0][0]).strip() if all_values and all_values[0] else '')
+
         if hdr_idx is None or len(all_values) <= hdr_idx + 1:
             _superset_v1_cache.update(data=[], headers=[],
                                       expiry=now + _HORECA_CACHE_TTL)
@@ -4152,13 +4158,36 @@ class GoogleSheetsService:
         }
 
     def _superset_v1_last_updated(self):
-        """The 'Last updated: ...' stamp Superset writes into row 1 of the tab."""
+        """The 'Last updated: ...' stamp Superset writes into row 1 of the tab.
+
+        Served from the cache entry populated by _get_superset_v1_cache, so it
+        costs nothing - it used to make its own API call on every request.
+        """
         try:
-            ws = self.gc.open_by_key(self.HORECA_CRM_SHEET_ID).worksheet(
-                self.SUPERSET_V1_TAB_NAME)
-            return str(_gs_retry(ws.acell, 'A1').value or '').strip()
+            self._get_superset_v1_cache()
+            return _superset_v1_cache.get('stamp') or ''
         except Exception:
             return ''
+
+    HORECA_NAME_STOPWORDS = frozenset({
+        'bar', 'restaurant', 'restaurants', 'cafe', 'kitchen', 'resort', 'resorts',
+        'hotel', 'hotels', 'and', 'the', 'by', 'pub', 'lounge', 'grill', 'food',
+        'foods', 'family', 'multi', 'cuisine', 'dine', 'dining', 'deck', 'house',
+        'garden', 'palace', 'corner', 'view', 'point', 'side', 'beach', 'club',
+        'inn', 'bakery', 'bistro', 'shack', 'joint', 'eatery', 'grille', 'grub',
+        'goa', 'goan', 'of', 'at', 'in', 'to', 'near', 'opp', 'road', 'wine',
+        'shop', 'spot', 'zone', 'hub', 'place', 'stop', 'sea', 'ocean',
+        'baga', 'anjuna', 'calangute', 'candolim', 'panaji', 'panjim', 'vagator',
+        'arpora', 'assagao', 'siolim', 'mapusa', 'margao', 'madgaon', 'colva',
+        'benaulim', 'cavelossim', 'varca', 'majorda', 'betalbatim', 'sinquerim',
+        'morjim', 'ashwem', 'mandrem', 'arambol', 'chapora', 'ponda', 'verna',
+        'cortalim', 'bicholim', 'bardez', 'salcete', 'tiswadi', 'pernem',
+        'canacona', 'quepem', 'sanguem', 'dabolim', 'vasco', 'sangolda',
+        'corjuem', 'bambolim', 'mormugaon', 'sancoale', 'upasnagar', 'aldona',
+        'saligao', 'porvorim', 'reis', 'magos', 'santa', 'cruz', 'dona', 'paula',
+    })
+    SUPERSET_NAME_SIM_THRESHOLD = 0.6
+    SUPERSET_MIN_SHARED_TOKENS = 2
 
     @classmethod
     def _distinctive_name_tokens(cls, name):
@@ -5781,7 +5810,7 @@ _HORECA_CACHE_TTL = timedelta(minutes=15)
 _horeca_crm_cache = {'data': None, 'headers': None, 'clusters': None, 'expiry': None}
 _appsheet_cache = {'data': None, 'headers': None, 'expiry': None}
 _superset_cache = {'data': None, 'headers': None, 'expiry': None}
-_superset_v1_cache = {'data': None, 'headers': None, 'expiry': None}
+_superset_v1_cache = {'data': None, 'headers': None, 'expiry': None, 'stamp': ''}
 _superset_validation_cache = {'data': None, 'expiry': None}
 _excise_cache = {'data': None, 'expiry': None}
 
