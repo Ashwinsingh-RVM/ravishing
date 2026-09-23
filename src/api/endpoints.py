@@ -93,13 +93,43 @@ ROLE_TAB_PERMISSIONS = {
     'new_joinee': {'learning'},
 }
 
+def live_role(user: dict) -> str:
+    """The user's CURRENT role from the Authorized-Users sheet.
+
+    The session cookie stamps the role at login and lasts 7 days, so a role
+    changed in the sheet used to take up to a week to reach the person - the
+    usual symptom being "I gave them admin and they still can't see anything".
+    The authorized-users list is already cached for 5 minutes, so re-reading it
+    here costs nothing and makes access changes land within that window.
+
+    Falls back to the cookie's role if the sheet can't be read, so a transient
+    Google outage never locks anyone out.
+    """
+    cookie_role = user.get('role', 'new_joinee')
+    email = (user.get('email') or '').strip().lower()
+    if not email:
+        return cookie_role
+    try:
+        users = AuthService().get_authorized_users()
+        if not users:
+            return cookie_role
+        for u in users:
+            if u.get('email') == email:
+                return u.get('role') or cookie_role
+        # Present in a valid list but no longer listed => access was revoked
+        # (row deleted, or Active set to FALSE, which the parser filters out).
+        return 'new_joinee'
+    except Exception:
+        return cookie_role
+
+
 def require_role(request: Request, allowed_roles: set) -> dict:
     """Require auth + role membership. Returns user or raises 403."""
     user = require_auth(request)
-    role = user.get('role', 'new_joinee')
+    role = live_role(user)
     if role not in allowed_roles:
         raise HTTPException(status_code=403, detail="Access denied for your role")
-    return user
+    return {**user, 'role': role}
 
 
 # GZip compression — cuts static asset transfer size by ~70%
@@ -898,9 +928,11 @@ async def get_current_user(request: Request):
     user = get_session_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    role = user.get('role', 'new_joinee')
+    # Read the role live rather than trusting the 7-day cookie, so a role change
+    # in the sheet reaches the UI without the user logging out and back in.
+    role = live_role(user)
     allowed_tabs = sorted(ROLE_TAB_PERMISSIONS.get(role, {'learning'}))
-    return {"user": {**user, "allowed_tabs": allowed_tabs}}
+    return {"user": {**user, "role": role, "allowed_tabs": allowed_tabs}}
 
 
 @app.post("/api/auth/init")
